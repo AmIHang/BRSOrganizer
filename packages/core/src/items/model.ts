@@ -1,0 +1,115 @@
+import { z } from 'zod';
+import {
+  ACTORS,
+  ITEM_SOURCES,
+  ITEM_STATUSES,
+  ITEM_TYPES,
+  type Actor,
+  type ItemMeta,
+  type ItemRow,
+  type ItemSource,
+  type ItemStatus,
+  type ItemType,
+} from '../db/schema.js';
+
+/** Public item shape (JSON-friendly: dates as ISO strings). */
+export interface Item {
+  id: string;
+  type: ItemType;
+  title: string;
+  notes: string | null;
+  link: string | null;
+  dueAt: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  status: ItemStatus;
+  source: ItemSource;
+  externalId: string | null;
+  meta: ItemMeta | null;
+  createdBy: Actor;
+  updatedBy: Actor;
+  statusChangedBy: Actor;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  lastSeenAt: string | null;
+}
+
+const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+
+export function toItem(row: ItemRow): Item {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    notes: row.notes,
+    link: row.link,
+    dueAt: iso(row.dueAt),
+    startsAt: iso(row.startsAt),
+    endsAt: iso(row.endsAt),
+    status: row.status,
+    source: row.source,
+    externalId: row.externalId,
+    meta: row.meta ?? null,
+    createdBy: row.createdBy,
+    updatedBy: row.updatedBy,
+    statusChangedBy: row.statusChangedBy,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    completedAt: iso(row.completedAt),
+    lastSeenAt: iso(row.lastSeenAt),
+  };
+}
+
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Accepts a Date, an ISO date-time with offset/`Z`, or a plain `YYYY-MM-DD`.
+ * A plain date means "by the end of that day" in local time.
+ */
+export const dateInput = z
+  .union([z.date(), z.iso.date(), z.iso.datetime({ offset: true })])
+  .transform((v) => {
+    if (v instanceof Date) return v;
+    const m = DATE_ONLY.exec(v);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59, 999);
+    return new Date(v);
+  })
+  .refine((d) => !Number.isNaN(d.getTime()), 'invalid date');
+
+const title = z.string().trim().min(1, 'title must not be empty').max(500);
+const notes = z.string().max(10_000);
+const link = z.url({ protocol: /^https?$/, error: 'link must be an http(s) URL' }).max(2048);
+
+export const addTodoInput = z.object({
+  title,
+  notes: notes.nullish(),
+  link: link.nullish(),
+  dueAt: dateInput.nullish(),
+});
+export type AddTodoInput = z.input<typeof addTodoInput>;
+
+export const updateTodoInput = z
+  .object({
+    title: title.optional(),
+    notes: notes.nullable().optional(),
+    link: link.nullable().optional(),
+    dueAt: dateInput.nullable().optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), 'nothing to update');
+export type UpdateTodoInput = z.input<typeof updateTodoInput>;
+
+export const listFilterInput = z.object({
+  type: z.enum(ITEM_TYPES).optional(),
+  /** Default: `open`. `all` includes archived. */
+  status: z
+    .union([z.enum(ITEM_STATUSES), z.array(z.enum(ITEM_STATUSES)), z.literal('all')])
+    .optional(),
+  source: z.enum(ITEM_SOURCES).optional(),
+  /** Items whose due date (todos/PRs) or start (events) is before this instant. */
+  dueBefore: dateInput.optional(),
+  limit: z.number().int().min(1).max(1000).optional(),
+});
+export type ListFilter = z.input<typeof listFilterInput>;
+
+export const actorInput = z.enum(ACTORS);
