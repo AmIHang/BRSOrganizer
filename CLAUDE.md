@@ -23,9 +23,20 @@ pnpm test              # Vitest, alle Pakete
 pnpm typecheck
 pnpm lint
 pnpm --filter @amineeded/core db:generate   # Migration aus src/db/schema.ts erzeugen
+pnpm build && node packages/daemon/dist/main.js --port 47999 --data-dir <tmp> --no-sync   # Daemon lokal
 ```
 
 pnpm liegt unter `%APPDATA%\npm` und ist evtl. nicht im PATH der Shell.
+Beim manuellen Starten des Daemons `AMINEEDED_KEYRING_SERVICE=AmINeeded-dev` setzen und die Einträge danach
+entfernen, damit die echten Credentials unberührt bleiben.
+
+## Daemon-Konventionen
+
+- REST-Mutationen laufen immer als Actor `user`; MCP-Mutationen als Actor des Clients (`actorFromClient`).
+- Neue MCP-Tools: in `packages/daemon/src/mcp/server.ts`, Items immer über `itemResult`/`itemsResult`
+  ausgeben (Externkennzeichnung), Domänenfehler über `guard` als `isError`-Ergebnis. Kein Tool löscht.
+- Daemon-Tests nutzen `test/harness.ts` (echter HTTP-Server auf Port 0, In-Memory-Core) und importieren
+  `@amineeded/core` per Vitest-Alias aus den Quellen – kein Build nötig.
 
 ## Regeln, die nicht gebrochen werden dürfen
 

@@ -30,9 +30,25 @@ export const settingsSchema = z.object({
 });
 
 export type Settings = z.output<typeof settingsSchema>;
-export type SettingsPatch = {
-  [K in keyof Settings]?: Settings[K] extends object ? Partial<Settings[K]> : Settings[K];
-};
+
+/** Shape of a partial update; unknown keys are rejected so typos do not pass silently. */
+export const settingsPatchSchema = z.strictObject({
+  syncIntervalMinutes: z.number().optional(),
+  daemonPort: z.number().optional(),
+  github: z
+    .strictObject({
+      enabled: z.boolean(),
+      includeAuthored: z.boolean(),
+      includeAssigned: z.boolean(),
+    })
+    .partial()
+    .optional(),
+  calendar: z
+    .strictObject({ enabled: z.boolean(), lookAheadDays: z.number() })
+    .partial()
+    .optional(),
+});
+export type SettingsPatch = z.input<typeof settingsPatchSchema>;
 
 const KEY = 'app';
 
@@ -50,7 +66,10 @@ export class SettingsService {
     return parsed.success ? parsed.data : settingsSchema.parse({});
   }
 
-  update(patch: SettingsPatch): Settings {
+  update(input: SettingsPatch): Settings {
+    const p = settingsPatchSchema.safeParse(input);
+    if (!p.success) throw new ValidationError(z.prettifyError(p.error));
+    const patch = p.data;
     const current = this.get();
     const merged = {
       ...current,

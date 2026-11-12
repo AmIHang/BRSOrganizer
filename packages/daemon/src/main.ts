@@ -1,0 +1,130 @@
+#!/usr/bin/env node
+import { mkdirSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { join } from 'node:path';
+import { parseArgs } from 'node:util';
+import {
+  APP_NAME,
+  createCore,
+  databaseFile,
+  dataDir,
+  getOrCreateAccessToken,
+  KeyringSecretStore,
+} from '@amineeded/core';
+import { pino } from 'pino';
+import { createApp } from './app.js';
+import { removeDiscovery, writeDiscovery } from './discovery.js';
+import { DEFAULT_ALLOWED_ORIGINS } from './http/security.js';
+import { createScheduler } from './scheduler.js';
+import { VERSION } from './version.js';
+
+const HOST = '127.0.0.1';
+
+const { values: args } = parseArgs({
+  options: {
+    port: { type: 'string' },
+    'data-dir': { type: 'string' },
+    'migrations-dir': { type: 'string' },
+    'log-level': { type: 'string', default: 'info' },
+    'no-sync': { type: 'boolean', default: false },
+  },
+});
+
+if (args['data-dir']) process.env.AMINEEDED_DATA_DIR = args['data-dir'];
+mkdirSync(join(dataDir(), 'logs'), { recursive: true });
+
+const logger = pino(
+  {
+    name: 'amineeded-daemon',
+    level: args['log-level'],
+    redact: ['*.authorization', '*.token', '*.value'],
+  },
+  pino.multistream([
+    { stream: process.stdout },
+    // Opened synchronously: an async open races with early process.exit() (exit code 1).
+    { stream: pino.destination({ dest: join(dataDir(), 'logs', 'daemon.log'), sync: true }) },
+  ]),
+);
+
+// Separate keyring namespace for development (AMINEEDED_KEYRING_SERVICE=AmINeeded-dev).
+const secrets = new KeyringSecretStore(process.env.AMINEEDED_KEYRING_SERVICE ?? APP_NAME);
+const core = createCore({
+  databaseFile: databaseFile(),
+  secrets,
+  ...(args['migrations-dir'] && { migrationsFolder: args['migrations-dir'] }),
+});
+
+const port = Number(args.port ?? process.env.AMINEEDED_PORT ?? core.settings.get().daemonPort);
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  logger.fatal({ port }, 'invalid port');
+  process.exit(1);
+}
+
+const allowedOrigins = [
+  ...DEFAULT_ALLOWED_ORIGINS,
+  ...(process.env.AMINEEDED_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean),
+];
+
+const token = getOrCreateAccessToken(secrets);
+const scheduler = createScheduler({ core, logger });
+const { app, close: closeApp } = createApp({
+  core,
+  scheduler,
+  logger,
+  token,
+  getPort: () => port,
+  allowedOrigins,
+  version: VERSION,
+  onShutdown: () => void shutdown('api'),
+});
+
+const server = createServer(app);
+
+server.on('error', async (err: NodeJS.ErrnoException) => {
+  if (err.code !== 'EADDRINUSE') {
+    logger.fatal({ err }, 'server error');
+    process.exit(1);
+  }
+  // Single instance: if our own daemon already answers, exit quietly.
+  try {
+    const res = await fetch(`http://${HOST}:${port}/health`, { signal: AbortSignal.timeout(2000) });
+    const body = (await res.json()) as { app?: string };
+    if (body.app === 'AmINeeded') {
+      logger.info({ port }, 'daemon already running, exiting');
+      core.close();
+      process.exit(0);
+    }
+  } catch {
+    // not ours or not answering
+  }
+  logger.fatal({ port }, 'port is used by another program; set another port with --port');
+  process.exit(1);
+});
+
+server.listen(port, HOST, () => {
+  writeDiscovery({ pid: process.pid, port, version: VERSION, startedAt: new Date().toISOString() });
+  logger.info({ port, dataDir: dataDir(), sources: core.sourceStatus() }, 'daemon listening');
+  if (!args['no-sync']) scheduler.start();
+});
+
+let shuttingDown = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info({ signal }, 'shutting down');
+  setTimeout(() => process.exit(1), 5_000).unref();
+  scheduler.stop();
+  await closeApp();
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  removeDiscovery(process.pid);
+  core.close();
+  process.exit(0);
+}
+
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGBREAK'] as const) {
+  process.on(signal, () => void shutdown(signal));
+}

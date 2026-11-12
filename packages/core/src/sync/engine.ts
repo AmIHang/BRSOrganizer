@@ -191,6 +191,7 @@ export class SyncEngine {
           tx.insert(items).values(values).run();
           counts.added++;
           addedIds.push(values.id);
+          changedIds.push(values.id);
           continue;
         }
 

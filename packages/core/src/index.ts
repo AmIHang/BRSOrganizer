@@ -37,7 +37,13 @@ export {
   type SecretKey,
   type SecretStore,
 } from './secrets/store.js';
-export { SettingsService, settingsSchema, type Settings, type SettingsPatch } from './settings.js';
+export {
+  SettingsService,
+  settingsPatchSchema,
+  settingsSchema,
+  type Settings,
+  type SettingsPatch,
+} from './settings.js';
 export {
   SyncEngine,
   type ExternalItem,
