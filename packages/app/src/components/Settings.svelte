@@ -215,6 +215,43 @@
     </section>
 
     <section>
+      <h3>
+        PR-Mails (Outlook) <span class="muted">({SOURCE_TEXT[status?.sources.mail ?? ''] ?? '…'})</span>
+      </h3>
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={settings.mail.enabled}
+          onchange={(e) => patch({ mail: { enabled: e.currentTarget.checked } })}
+        />
+        Offene PRs aus Azure-DevOps-Benachrichtigungen übernehmen
+      </label>
+      <label class="inline">
+        Ordner
+        <input
+          type="text"
+          value={settings.mail.outlookFolder}
+          onchange={(e) => patch({ mail: { outlookFolder: e.currentTarget.value } })}
+        />
+      </label>
+      <label class="inline">
+        Mails der letzten
+        <input
+          type="number"
+          min="1"
+          max="365"
+          value={settings.mail.lookBackDays}
+          onchange={(e) => patch({ mail: { lookBackDays: Number(e.currentTarget.value) } })}
+        />
+        Tage
+      </label>
+      <p class="hint muted">
+        Liest den Ordner im klassischen Outlook (Pfad unter dem Postfach, z. B. „Posteingang/PR“).
+        Ein PR verschwindet, sobald eine Mail „abgeschlossen“ oder „aufgegeben“ meldet.
+      </p>
+    </section>
+
+    <section>
       <h3>Allgemein</h3>
       <label class="inline">
         Sync alle
@@ -317,7 +354,8 @@
     gap: 6px;
     align-items: center;
   }
-  .inline input[type='password'] {
+  .inline input[type='password'],
+  .inline input[type='text'] {
     flex: 1;
     min-width: 0;
   }

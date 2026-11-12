@@ -223,4 +223,17 @@ Kalender“) den Zugriffsschlüssel in der URL tragen.
 - **Kalender:** ICS-Feed, Termine der nächsten 14 Tage (konfigurierbar), inklusive Serien, Ausnahmen und
   Absagen. Vorbei ist erledigt.
 
+- **PR-Mails (Azure DevOps Server über Outlook):** Liest einen Ordner im klassischen Outlook, Standard
+  `Posteingang/PR`, über COM. Dafür ist keine Anmeldung nötig, es wird das laufende Outlook-Profil genutzt.
+  Einschalten in der App unter Einstellungen → „PR-Mails (Outlook)“.
+  - Jede PR-Benachrichtigung von Azure DevOps Server zählt, also z. B. „erstellt“, „Reviewer hinzugefügt“
+    oder „Push“. Ein PR erscheint ab der ersten solchen Mail.
+  - Ein PR verschwindet, sobald eine Mail „abgeschlossen“ meldet, egal in welcher Reihenfolge die Mails
+    ankommen. Bei „aufgegeben“ verschwindet er auch, außer ein späteres „reaktiviert“ hebt das auf.
+  - Erkannt wird, ob du als Reviewer eingetragen bist (`Review`, mit Benachrichtigung), ob der PR von dir ist
+    (`eigener PR`) oder ob du nur informiert wirst (`Info`).
+  - Berücksichtigt werden Mails der letzten 90 Tage (einstellbar). Ein älterer PR ohne Abschluss-Mail fällt
+    aus dem Zeitraum und damit aus der Liste.
+  - Ist Outlook nicht lesbar, wird nichts geschlossen.
+
 Archivierte Einträge bleiben archiviert, auch wenn die Quelle sie weiter liefert.

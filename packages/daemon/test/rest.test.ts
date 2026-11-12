@@ -128,7 +128,7 @@ describe('REST API', () => {
     const r = await call('POST', '/sync');
     expect(r.json()).toEqual({
       results: [],
-      status: { github: 'missing-token', calendar: 'missing-url' },
+      status: { github: 'missing-token', calendar: 'missing-url', mail: 'disabled' },
     });
     expect((await call('GET', '/status')).json()).toMatchObject({
       version: 'test',

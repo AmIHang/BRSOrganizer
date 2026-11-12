@@ -53,4 +53,12 @@ export {
 } from './sync/engine.js';
 export { createGraphqlClient, GithubSource, type GraphqlClient } from './sync/github.js';
 export { defaultFetchText, IcsCalendarSource, parseIcsEvents, type FetchText } from './sync/ics.js';
+export {
+  MailPrSource,
+  openPrsFromMails,
+  type MailboxReader,
+  type PrMail,
+  type PrMailbox,
+} from './sync/mail-prs.js';
+export { outlookComReader } from './sync/outlook.js';
 export { buildSources, type SourceStatus } from './sync/sources.js';

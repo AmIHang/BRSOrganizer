@@ -27,6 +27,16 @@ export const settingsSchema = z.object({
       lookAheadDays: z.number().int().min(1).max(90).default(14),
     })
     .prefault({}),
+  /** PRs from Azure DevOps notification mails in a classic Outlook folder. */
+  mail: z
+    .object({
+      enabled: z.boolean().default(false),
+      /** Path below the mailbox root, e.g. "Posteingang/PR". */
+      outlookFolder: z.string().trim().min(1).max(500).default('Posteingang/PR'),
+      /** Only mails from this many days; older PRs without a closing mail drop out. */
+      lookBackDays: z.number().int().min(1).max(365).default(90),
+    })
+    .prefault({}),
 });
 
 export type Settings = z.output<typeof settingsSchema>;
@@ -45,6 +55,10 @@ export const settingsPatchSchema = z.strictObject({
     .optional(),
   calendar: z
     .strictObject({ enabled: z.boolean(), lookAheadDays: z.number() })
+    .partial()
+    .optional(),
+  mail: z
+    .strictObject({ enabled: z.boolean(), outlookFolder: z.string(), lookBackDays: z.number() })
     .partial()
     .optional(),
 });
@@ -76,6 +90,7 @@ export class SettingsService {
       ...patch,
       github: { ...current.github, ...patch.github },
       calendar: { ...current.calendar, ...patch.calendar },
+      mail: { ...current.mail, ...patch.mail },
     };
     const r = settingsSchema.safeParse(merged);
     if (!r.success) throw new ValidationError(z.prettifyError(r.error));

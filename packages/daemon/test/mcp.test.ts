@@ -188,7 +188,11 @@ describe('MCP server', () => {
     const r = payload<{ sources: unknown }>(
       await c.callTool({ name: 'sync_sources', arguments: {} }),
     );
-    expect(r.sources).toEqual({ github: 'missing-token', calendar: 'missing-url' });
+    expect(r.sources).toEqual({
+      github: 'missing-token',
+      calendar: 'missing-url',
+      mail: 'disabled',
+    });
   });
 
   it('rejects non-initialize requests without a session and unknown sessions', async () => {

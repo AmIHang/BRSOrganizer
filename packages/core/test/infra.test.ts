@@ -66,7 +66,9 @@ describe('settings', () => {
         daemonPort: 47821,
         github: { enabled: true, includeAuthored: true, includeAssigned: true },
         calendar: { enabled: true, lookAheadDays: 14 },
+        mail: { enabled: false, outlookFolder: 'Posteingang/PR', lookBackDays: 90 },
       });
+      expect(() => core.settings.update({ mail: { outlookFolder: '' } })).toThrow(ValidationError);
       core.settings.update({ syncIntervalMinutes: 10, calendar: { lookAheadDays: 7 } });
       expect(core.settings.get()).toMatchObject({
         syncIntervalMinutes: 10,

@@ -205,7 +205,7 @@ describe('SyncEngine', () => {
       const r = await core.syncAll();
       expect(r).toEqual({
         results: [],
-        status: { github: 'missing-token', calendar: 'missing-url' },
+        status: { github: 'missing-token', calendar: 'missing-url', mail: 'disabled' },
       });
     });
 

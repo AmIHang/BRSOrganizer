@@ -19,6 +19,7 @@
     'review-requested': 'Review',
     assigned: 'zugewiesen',
     authored: 'eigener PR',
+    notified: 'Info',
   };
 
   const when = $derived(whenOf(item));

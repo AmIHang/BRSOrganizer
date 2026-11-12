@@ -2,7 +2,7 @@
 
 export type ItemType = 'todo' | 'pr' | 'event';
 export type ItemStatus = 'open' | 'done' | 'archived';
-export type ItemSource = 'manual' | 'github' | 'calendar';
+export type ItemSource = 'manual' | 'github' | 'calendar' | 'mail';
 export type Actor = 'user' | 'claude' | 'copilot' | 'other' | 'sync';
 
 export interface Item {
@@ -32,16 +32,18 @@ export interface Settings {
   daemonPort: number;
   github: { enabled: boolean; includeAuthored: boolean; includeAssigned: boolean };
   calendar: { enabled: boolean; lookAheadDays: number };
+  mail: { enabled: boolean; outlookFolder: string; lookBackDays: number };
 }
 
 export interface SourceStatus {
   github: 'ready' | 'disabled' | 'missing-token';
   calendar: 'ready' | 'disabled' | 'missing-url';
+  mail: 'ready' | 'disabled';
 }
 
 export interface SyncRun {
   id: number;
-  source: 'github' | 'calendar';
+  source: 'github' | 'calendar' | 'mail';
   startedAt: string;
   finishedAt: string | null;
   ok: boolean;
@@ -66,5 +68,5 @@ export interface SecretsStatus {
 
 export type StreamEvent =
   | { type: 'items-changed'; data: { reason: string; actor: Actor; ids: string[] } }
-  | { type: 'items-added'; data: { source: 'github' | 'calendar'; items: Item[] } }
+  | { type: 'items-added'; data: { source: 'github' | 'calendar' | 'mail'; items: Item[] } }
   | { type: 'sync-finished'; data: { source: string; ok: boolean; error: string | null } };

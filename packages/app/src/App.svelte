@@ -20,7 +20,10 @@
 
   const sections = $derived(groupItems(items, now));
   const needsSetup = $derived(
-    sources !== null && sources.github !== 'ready' && sources.calendar !== 'ready',
+    sources !== null &&
+      sources.github !== 'ready' &&
+      sources.calendar !== 'ready' &&
+      sources.mail !== 'ready',
   );
 
   async function refresh() {
@@ -134,7 +137,7 @@
   {/if}
   {#if needsSetup}
     <p class="banner">
-      GitHub und Kalender sind noch nicht eingerichtet.
+      Noch keine Quelle eingerichtet (GitHub, Kalender oder PR-Mails).
       <button class="linkish" onclick={() => (view = 'settings')}>Jetzt einrichten</button>
     </p>
   {/if}
