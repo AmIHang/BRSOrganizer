@@ -17,9 +17,13 @@ export interface Harness {
 }
 
 export async function startHarness(
-  options: { secrets?: Partial<Record<SecretKey, string>> } & Parameters<typeof makeCore>[0] = {},
+  options: {
+    secrets?: Partial<Record<SecretKey, string>>;
+    /** Fixed port (e.g. to simulate a daemon restart); default: random free port. */
+    port?: number;
+  } & Parameters<typeof makeCore>[0] = {},
 ): Promise<Harness> {
-  const { secrets, ...coreOptions } = options;
+  const { secrets, port: fixedPort, ...coreOptions } = options;
   const core = makeCore({ secrets: new MemorySecretStore(secrets ?? {}), ...coreOptions });
   const logger = pino({ level: 'silent' });
   const scheduler = createScheduler({ core, logger });
@@ -34,7 +38,7 @@ export async function startHarness(
     version: 'test',
   });
   const server: Server = createServer(app);
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(fixedPort ?? 0, '127.0.0.1', resolve));
   port = (server.address() as AddressInfo).port;
 
   return {

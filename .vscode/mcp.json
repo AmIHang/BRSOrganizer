@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "amineeded": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/packages/mcp-stdio/dist/main.js", "--client", "copilot"]
+    }
+  }
+}

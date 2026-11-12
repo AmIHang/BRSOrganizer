@@ -30,6 +30,13 @@ pnpm liegt unter `%APPDATA%\npm` und ist evtl. nicht im PATH der Shell.
 Beim manuellen Starten des Daemons `AMINEEDED_KEYRING_SERVICE=AmINeeded-dev` setzen und die Einträge danach
 entfernen, damit die echten Credentials unberührt bleiben.
 
+## mcp-stdio-Konventionen
+
+- stdout ist ausschließlich das MCP-Protokoll; Logs nur nach stderr.
+- Hängt nicht von `core` ab (nur HTTP zum Daemon). Pfade/Keyring-Namen in `src/config.ts` müssen zu
+  `core` passen (`dataDir`, Dienst `AmINeeded`, Konto `local-access-token`).
+- Tests (`test/proxy.test.ts`) starten den echten Daemon-Harness, auch für Neustart, Ausfall und 401.
+
 ## Daemon-Konventionen
 
 - REST-Mutationen laufen immer als Actor `user`; MCP-Mutationen als Actor des Clients (`actorFromClient`).

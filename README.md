@@ -4,9 +4,91 @@ Lokale Windows-App, die eigene Todos, offene GitHub-PRs (vor allem Review-Anfrag
 Kalendertermine in einer Liste zusammenführt. Sie beantwortet die Frage: **„Wo werde ich gerade gebraucht?“**
 Claude und GitHub Copilot lesen und schreiben über MCP.
 
-> Status: `core` und `daemon` (REST, MCP, Sync) sind fertig. `mcp-stdio` und die App folgen.
-> Die empfohlene MCP-Einrichtung über `mcp-stdio` (ohne Token in Konfigurationsdateien, auch aus WSL)
-> kommt mit `mcp-stdio` in diese Datei.
+> Status: `core`, `daemon` (REST, MCP, Sync) und `mcp-stdio` sind fertig. Die App folgt.
+
+## MCP einrichten
+
+Empfohlen ist für alle Clients die stdio-Brücke `mcp-stdio`:
+
+- Sie liest das Zugriffstoken aus der Windows-Anmeldeinformationsverwaltung. **In keiner
+  Client-Konfiguration steht ein Secret.**
+- Läuft der Daemon nicht, startet sie ihn.
+- Startet der Daemon neu, baut sie die Sitzung transparent wieder auf.
+- Sie funktioniert auch aus WSL heraus.
+
+Voraussetzung ist ein Build (`pnpm install && pnpm build`). Im Folgenden steht `<repo>` für den Repo-Pfad,
+z. B. `C:\projects-git\AmINeeded\AmINeeded`.
+
+Die Option `--client claude|copilot` legt fest, was in `created_by` landet. Ohne sie wird der Wert aus dem
+Client-Namen abgeleitet.
+
+### Claude Code (Windows)
+
+```bash
+claude mcp add amineeded --scope user -- node "<repo>\packages\mcp-stdio\dist\main.js" --client claude
+```
+
+### Claude Code in WSL
+
+In WSL zeigt `127.0.0.1` (NAT-Modus) nicht auf Windows. Deshalb startet Claude Code die **Windows**-`node.exe`
+per Interop. Der Pfad zum Skript wird als Windows-Pfad übergeben:
+
+```bash
+claude mcp add amineeded --scope user -- "/mnt/c/Program Files/nodejs/node.exe" 'C:\projects-git\AmINeeded\AmINeeded\packages\mcp-stdio\dist\main.js' --client claude
+```
+
+So laufen Proxy und Daemon in Windows, mit Zugriff auf `%LOCALAPPDATA%` und die Anmeldeinformationsverwaltung.
+Netzwerkkonfiguration ist nicht nötig.
+
+### Claude Desktop
+
+`%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "amineeded": {
+      "command": "node",
+      "args": ["<repo>\\packages\\mcp-stdio\\dist\\main.js", "--client", "claude"]
+    }
+  }
+}
+```
+
+### VS Code / GitHub Copilot
+
+In diesem Repo ist [.vscode/mcp.json](.vscode/mcp.json) schon eingerichtet. Für alle Projekte fügst du den
+Server über „MCP: Open User Configuration“ hinzu:
+
+```json
+{
+  "servers": {
+    "amineeded": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["<repo>\\packages\\mcp-stdio\\dist\\main.js", "--client", "copilot"]
+    }
+  }
+}
+```
+
+### Optionen von `mcp-stdio`
+
+| Option                     | Bedeutung                                                  |
+| -------------------------- | ---------------------------------------------------------- |
+| `--client claude\|copilot` | Wert für `created_by`                                      |
+| `--port <n>`               | Daemon-Port (sonst `AMINEEDED_PORT`, `daemon.json`, 47821) |
+| `--no-start-daemon`        | Daemon nicht automatisch starten                           |
+| `--daemon-main <pfad>`     | Anderer Daemon-Einstiegspunkt (sonst der Build im Repo)    |
+
+Diagnosemeldungen gehen nach stderr, stdout gehört dem Protokoll.
+
+### Alternative: HTTP direkt
+
+Clients mit Streamable-HTTP-Unterstützung können `http://127.0.0.1:47821/mcp` direkt ansprechen.
+Dann muss das Token als Header `Authorization: Bearer <token>` in der Client-Konfiguration stehen, also im
+Klartext (z. B. in `~/.claude.json`). Deshalb ist diese Variante nicht empfohlen. Aus WSL geht sie nur mit
+`networkingMode=mirrored` in `%USERPROFILE%\.wslconfig`.
 
 ## Voraussetzungen
 
