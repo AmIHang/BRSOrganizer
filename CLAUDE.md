@@ -30,6 +30,18 @@ pnpm liegt unter `%APPDATA%\npm` und ist evtl. nicht im PATH der Shell.
 Beim manuellen Starten des Daemons `AMINEEDED_KEYRING_SERVICE=AmINeeded-dev` setzen und die Einträge danach
 entfernen, damit die echten Credentials unberührt bleiben.
 
+## App-Konventionen (`packages/app`)
+
+- UI spricht nur REST/SSE mit dem Daemon (`src/lib/api.ts`), keine Imports aus `core`; Typen in
+  `src/lib/types.ts` spiegeln die REST-Antworten.
+- Rust (`src-tauri/src/daemon.rs`) findet/startet den Daemon und liest das Token aus dem Credential Manager
+  (`keyring` v3, gleiches Ziel `local-access-token.<Dienst>` wie `@napi-rs/keyring`).
+- Debug-Builds nutzen das Profil `AmINeeded-dev` (Datenordner, Credentials, Port 47822) – nie die echte
+  Installation.
+- Externe Texte (PR-Titel, Termine) nur als Text rendern (Svelte-Interpolation), nie `{@html}`.
+- Sidecar-Runtime: `pnpm --filter @amineeded/app sidecar`; läuft ein Daemon aus dieser Runtime, sperrt er
+  `better_sqlite3.node` – vorher `POST /api/shutdown`.
+
 ## mcp-stdio-Konventionen
 
 - stdout ist ausschließlich das MCP-Protokoll; Logs nur nach stderr.

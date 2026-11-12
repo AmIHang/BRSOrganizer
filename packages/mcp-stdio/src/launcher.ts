@@ -7,8 +7,13 @@ export function defaultDaemonMain(
   env: Record<string, string | undefined> = process.env,
 ): string | null {
   if (env.AMINEEDED_DAEMON_MAIN) return env.AMINEEDED_DAEMON_MAIN;
-  const candidate = fileURLToPath(new URL('../../daemon/dist/main.js', import.meta.url));
-  return existsSync(candidate) ? candidate : null;
+  const candidates = [
+    // App install: runtime/daemon.mjs next to runtime/mcp-stdio.mjs
+    new URL('./daemon.mjs', import.meta.url),
+    // Monorepo build
+    new URL('../../daemon/dist/main.js', import.meta.url),
+  ].map((u) => fileURLToPath(u));
+  return candidates.find((c) => existsSync(c)) ?? null;
 }
 
 export async function isDaemonHealthy(port: number, timeoutMs = 1500): Promise<boolean> {

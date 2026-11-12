@@ -80,4 +80,7 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGBREAK'] as const) {
   process.on(signal, () => void proxy.close());
 }
 await proxy.closed;
-process.exit(0);
+// Let pending handles close on their own: an immediate process.exit() while libuv is still
+// closing handles trips an assertion on Windows. The timer is only a safety net.
+process.exitCode = 0;
+setTimeout(() => process.exit(0), 2000).unref();

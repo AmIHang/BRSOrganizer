@@ -1,0 +1,31 @@
+[package]
+name = "amineeded"
+version = "0.1.0"
+description = "Wo werde ich gerade gebraucht? Todos, PRs und Termine in einer Liste."
+edition = "2021"
+publish = false
+
+[lib]
+name = "amineeded_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Same crate family as @napi-rs/keyring used by the daemon: target "<account>.<service>".
+keyring = { version = "3", features = ["windows-native"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

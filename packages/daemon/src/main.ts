@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   APP_NAME,
@@ -48,10 +49,14 @@ const logger = pino(
 
 // Separate keyring namespace for development (AMINEEDED_KEYRING_SERVICE=AmINeeded-dev).
 const secrets = new KeyringSecretStore(process.env.AMINEEDED_KEYRING_SERVICE ?? APP_NAME);
+// Bundled runtime (app install): migrations ship in ./drizzle next to daemon.mjs.
+const bundledMigrations = join(dirname(fileURLToPath(import.meta.url)), 'drizzle');
+const migrationsFolder =
+  args['migrations-dir'] ?? (existsSync(bundledMigrations) ? bundledMigrations : undefined);
 const core = createCore({
   databaseFile: databaseFile(),
   secrets,
-  ...(args['migrations-dir'] && { migrationsFolder: args['migrations-dir'] }),
+  ...(migrationsFolder && { migrationsFolder }),
 });
 
 const port = Number(args.port ?? process.env.AMINEEDED_PORT ?? core.settings.get().daemonPort);

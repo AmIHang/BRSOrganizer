@@ -4,9 +4,54 @@ Lokale Windows-App, die eigene Todos, offene GitHub-PRs (vor allem Review-Anfrag
 Kalendertermine in einer Liste zusammenführt. Sie beantwortet die Frage: **„Wo werde ich gerade gebraucht?“**
 Claude und GitHub Copilot lesen und schreiben über MCP.
 
-> Status: `core`, `daemon` (REST, MCP, Sync) und `mcp-stdio` sind fertig. Die App folgt.
+## App
+
+Die Tauri-App zeigt die Liste, legt Todos an, verwaltet Token und Kalender-URL und sitzt im Tray.
+
+- **Fenster:** Schließen blendet es nur aus. Ein-/Ausblenden mit **Strg+Alt+N** oder Klick aufs Tray-Icon.
+- **Tray-Menü:** Öffnen, Jetzt synchronisieren, Beenden.
+- **Benachrichtigungen:** für neue Review-Anfragen und 10 Minuten vor Terminen.
+- **Autostart:** beim ersten Start eingeschaltet, abschaltbar in den Einstellungen. Die App startet dann
+  unsichtbar im Tray.
+- **Daemon:** Die App startet ihn, falls er nicht läuft. Er läuft auch nach dem Beenden der App weiter,
+  damit MCP-Clients ihn weiter erreichen.
+- **Einstellungen:** zeigen die fertigen MCP-Befehle mit den Pfaden der Installation zum Kopieren.
+
+### Installer bauen
+
+Voraussetzungen: Rust (rustup, Toolchain `stable-x86_64-pc-windows-msvc`) und Visual Studio bzw. Build Tools
+mit „Desktopentwicklung mit C++“ samt Windows SDK. WebView2 ist unter Windows 11 vorinstalliert.
+
+```bash
+pnpm install
+pnpm --filter @amineeded/app tauri:build
+```
+
+`tauri:build` ruft zuerst `scripts/build-sidecar.mjs` auf. Das Skript bündelt Daemon und `mcp-stdio` mit
+esbuild, kopiert die nativen Module (better-sqlite3, keyring) und legt die `node.exe` der Build-Maschine als
+`amineeded-node.exe` bei. Ergebnis ist ein NSIS-Installer unter
+`packages/app/src-tauri/target/release/bundle/nsis/`, der ohne Admin-Rechte nach
+`%LOCALAPPDATA%\AmINeeded` installiert. Nutzer brauchen weder Node noch Rust.
+
+### Entwicklung
+
+```bash
+pnpm --filter @amineeded/app tauri:dev
+```
+
+Debug-Builds sind von der echten Installation getrennt:
+
+- Datenordner `%LOCALAPPDATA%\AmINeeded-dev`
+- Credential-Dienst `AmINeeded-dev`
+- Port 47822
+- Der Vite-Origin `http://127.0.0.1:1420` ist für den Daemon freigeschaltet.
 
 ## MCP einrichten
+
+**Mit installierter App:** In den Einstellungen unter „MCP für Claude & Copilot“ stehen die Befehle mit den
+richtigen Pfaden zum Kopieren. Sie rufen die mitgelieferte `amineeded-node.exe` mit `runtime\mcp-stdio.mjs` auf.
+
+**Aus dem Repo (Entwicklung):** wie folgt beschrieben.
 
 Empfohlen ist für alle Clients die stdio-Brücke `mcp-stdio`:
 

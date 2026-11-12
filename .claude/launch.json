@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "app-ui",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/vite/bin/vite.js"],
+      "cwd": "packages/app",
+      "port": 1420,
+      "url": "http://127.0.0.1:1420"
+    }
+  ]
+}
