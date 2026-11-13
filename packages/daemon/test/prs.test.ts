@@ -198,6 +198,10 @@ describe('PR workspace via REST', () => {
           scriptsDir: 'C:\\app\\runtime\\scripts\\pr',
           tfs: () => ({ transport, sender }),
           sleep: async () => undefined,
+          closeIde: async (clonePath, id) => {
+            launched.push({ kind: 'open', path: `closeIde:${clonePath}:${id}` });
+            return { closed: 1, forced: 0 };
+          },
         }),
     });
     await h.core.sync.run(
@@ -290,6 +294,8 @@ describe('PR workspace via REST', () => {
     expect(launched.map((l) => l.path ?? l.args)).toEqual([
       join(root, 'Community', 'PR4393', 'Community_PR4393.sln'),
       join(root, 'Community', 'PR4393'),
+      // Visual Studio with the PR solution is closed before the checkout gets deleted.
+      `closeIde:${join(root, 'Community', 'PR4393')}:4393`,
       ['-Path', join(root, 'Community', 'PR4393'), '-Force'],
     ]);
   });

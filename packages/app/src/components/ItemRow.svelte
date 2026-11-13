@@ -93,6 +93,15 @@
     }
   }
 
+  async function openSolution() {
+    try {
+      await api.pr.open(item.id, 'solution');
+      flash('Solution wird in Visual Studio geöffnet.');
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), true);
+    }
+  }
+
   const entries = $derived<MenuEntry[]>([
     ...(manageable
       ? [
@@ -101,6 +110,7 @@
             onclick: () => void updateAndBuild(),
             disabled: sync?.remoteGone === true,
           },
+          ...(sync?.cloned ? [{ label: 'Solution öffnen', onclick: () => void openSolution() }] : []),
           { label: 'Accept & Merge', onclick: () => (merging = true) },
           { label: expanded ? 'Details ausblenden' : 'Details', onclick: () => (expanded = !expanded) },
         ]
@@ -142,7 +152,12 @@
         {:else if sync.remoteGone}
           <span class="dot gone" title="Branch existiert auf dem Server nicht mehr"></span>
         {:else}
-          <span class="dot ok" title="Lokal geklont und aktuell"></span>
+          <button
+            class="dot ok"
+            aria-label="Solution öffnen"
+            title="Lokal geklont und aktuell – klicken: Solution öffnen"
+            onclick={openSolution}
+          ></button>
         {/if}
       {/if}
     </div>
@@ -238,20 +253,16 @@
     background: transparent;
     border: 2px solid var(--accent);
   }
+  /* All dots share the 12px size; the ring's border is drawn inside it (border-box). */
   /* server has new commits: filled orange */
   .dot.update {
     background: var(--chip-orange-bg);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--chip-orange-bg) 30%, transparent);
   }
-  /* cloned and up to date: small green, display only */
+  /* cloned and up to date: green (click opens the solution) */
   .dot.ok {
-    width: 8px;
-    height: 8px;
     background: var(--ok);
   }
   .dot.gone {
-    width: 8px;
-    height: 8px;
     background: var(--muted);
   }
   .notice {

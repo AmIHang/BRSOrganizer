@@ -62,6 +62,7 @@ export {
   type PrMailbox,
 } from './sync/mail-prs.js';
 export { outlookCalendarReader, outlookComReader } from './sync/outlook.js';
+export { asArray, runPowerShell } from './sync/powershell.js';
 export {
   appointmentsToItems,
   OutlookCalendarSource,

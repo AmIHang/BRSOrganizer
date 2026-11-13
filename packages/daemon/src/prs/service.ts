@@ -13,6 +13,7 @@ import {
   type TfsSender,
   type TfsTransport,
 } from '@amineeded/core';
+import { closeVisualStudio, type CloseIde } from './ide.js';
 import type { Launcher } from './launcher.js';
 import {
   cloneSync,
@@ -90,6 +91,8 @@ export interface PrWorkspaceDeps {
   tfs?: (pat: string | null) => { transport: TfsTransport; sender: TfsSender };
   sleep?: (ms: number) => Promise<void>;
   pollAttempts?: number;
+  /** Test hook; default closes Visual Studio instances that have the checkout open. */
+  closeIde?: CloseIde;
 }
 
 const strip = (ref: string) => ref.replace(/^refs\/heads\//, '');
@@ -257,18 +260,33 @@ export class PrWorkspace {
   }
 
   /** Deletes the checkout together with its IIS app pool (UAC), in a visible console window. */
-  async removeLocal(itemId: string): Promise<{ clonePath: string }> {
+  /**
+   * Deletes the checkout with its IIS app pool (UAC) in a visible console window. Visual Studio
+   * instances with the PR solution open are closed first, otherwise their file locks would make
+   * the deletion fail.
+   */
+  async removeLocal(
+    itemId: string,
+  ): Promise<{ clonePath: string; ideClosed: number; ideForced: number }> {
     const { ref, repo } = this.requireLocal(itemId);
     const local = await localCheckout(repo, ref.id);
     if (local.cloned && !local.managed) {
       throw new ForbiddenOperationError(`${local.clonePath} was not created by the clone script`);
+    }
+    let ide = { closed: 0, forced: 0 };
+    if (local.cloned) {
+      try {
+        ide = await (this.deps.closeIde ?? closeVisualStudio)(local.clonePath, ref.id);
+      } catch {
+        // Not fatal: Remove-PrClone.ps1 warns about a running Visual Studio itself.
+      }
     }
     this.deps.launcher.runScript(`PR ${ref.id} löschen`, this.script('Remove-PrClone.ps1'), [
       '-Path',
       local.clonePath,
       '-Force',
     ]);
-    return { clonePath: local.clonePath };
+    return { clonePath: local.clonePath, ideClosed: ide.closed, ideForced: ide.forced };
   }
 
   async open(itemId: string, target: 'solution' | 'folder'): Promise<void> {

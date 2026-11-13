@@ -110,7 +110,10 @@ export const api = {
       request<PrDetails>('GET', `/api/prs/${id}${fetch ? '?fetch=1' : ''}`),
     cloneOrUpdate: (id: string) => request<{ clonePath: string }>('POST', `/api/prs/${id}/clone`),
     removeLocal: (id: string) =>
-      request<{ clonePath: string }>('POST', `/api/prs/${id}/remove-local`),
+      request<{ clonePath: string; ideClosed: number; ideForced: number }>(
+        'POST',
+        `/api/prs/${id}/remove-local`,
+      ),
     open: (id: string, target: 'solution' | 'folder') =>
       request<void>('POST', `/api/prs/${id}/open`, { target }),
     complete: (id: string, approve: boolean) =>

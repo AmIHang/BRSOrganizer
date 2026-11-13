@@ -53,7 +53,12 @@
       }
       let text = `Genehmigt und gemergt${r.mergeCommit ? ` (${r.mergeCommit.slice(0, 8)})` : ''}.`;
       if (cloned && removeClone) {
-        await api.pr.removeLocal(item.id);
+        phase = 'merging';
+        message = 'Gemergt – schließe Visual Studio und lösche den lokalen Klon …';
+        const removed = await api.pr.removeLocal(item.id);
+        if (removed.ideClosed) {
+          text += ` Visual Studio mit der PR-Solution wurde geschlossen${removed.ideForced ? ' (musste beendet werden)' : ''}.`;
+        }
         text += ' Der lokale Klon wird im PowerShell-Fenster gelöscht (UAC bestätigen).';
       }
       phase = 'done';
@@ -82,7 +87,8 @@
       {#if cloned}
         <label class="check">
           <input type="checkbox" bind:checked={removeClone} disabled={phase === 'merging'} />
-          lokalen Klon danach löschen (inkl. IIS-App-Pool)
+          lokalen Klon danach löschen – schließt Visual Studio mit der PR-Solution, entfernt den
+          IIS-App-Pool
         </label>
       {/if}
     {/if}
