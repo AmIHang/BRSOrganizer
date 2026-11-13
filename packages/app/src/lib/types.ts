@@ -2,7 +2,9 @@
 
 export type ItemType = 'todo' | 'pr' | 'event';
 export type ItemStatus = 'open' | 'done' | 'archived';
-export type ItemSource = 'manual' | 'github' | 'calendar' | 'mail';
+/** `tfs`: Azure DevOps PRs (API or mail fallback); `mail` is legacy. */
+export type ItemSource = 'manual' | 'github' | 'calendar' | 'tfs' | 'mail';
+export type SyncSourceId = 'github' | 'calendar' | 'tfs' | 'mail';
 export type Actor = 'user' | 'claude' | 'copilot' | 'other' | 'sync';
 
 export interface Item {
@@ -32,18 +34,20 @@ export interface Settings {
   daemonPort: number;
   github: { enabled: boolean; includeAuthored: boolean; includeAssigned: boolean };
   calendar: { enabled: boolean; provider: 'ics' | 'outlook'; lookAheadDays: number };
+  tfs: { enabled: boolean; collectionUrl: string; includeAuthored: boolean };
   mail: { enabled: boolean; outlookFolder: string; lookBackDays: number };
 }
 
 export interface SourceStatus {
   github: 'ready' | 'disabled' | 'missing-token';
   calendar: 'ready' | 'disabled' | 'missing-url';
-  mail: 'ready' | 'disabled';
+  tfs: 'ready' | 'disabled' | 'missing-url';
+  mail: 'ready' | 'disabled' | 'standby';
 }
 
 export interface SyncRun {
   id: number;
-  source: 'github' | 'calendar' | 'mail';
+  source: SyncSourceId;
   startedAt: string;
   finishedAt: string | null;
   ok: boolean;
@@ -64,9 +68,10 @@ export interface DaemonStatus {
 export interface SecretsStatus {
   githubToken: boolean;
   calendarIcsUrl: boolean;
+  tfsToken: boolean;
 }
 
 export type StreamEvent =
   | { type: 'items-changed'; data: { reason: string; actor: Actor; ids: string[] } }
-  | { type: 'items-added'; data: { source: 'github' | 'calendar' | 'mail'; items: Item[] } }
+  | { type: 'items-added'; data: { source: SyncSourceId; items: Item[] } }
   | { type: 'sync-finished'; data: { source: string; ok: boolean; error: string | null } };

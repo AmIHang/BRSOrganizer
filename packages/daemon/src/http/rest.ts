@@ -27,6 +27,12 @@ const WRITABLE_SECRETS = {
     .min(1)
     .max(500)
     .regex(/^\S+$/, 'token must not contain whitespace'),
+  'tfs-token': z
+    .string()
+    .trim()
+    .min(1)
+    .max(500)
+    .regex(/^\S+$/, 'token must not contain whitespace'),
   'calendar-ics-url': z
     .string()
     .trim()
@@ -146,6 +152,7 @@ export function restRouter({ core, scheduler, version, onShutdown }: RestDeps): 
     res.json({
       githubToken: core.secrets.get('github-token') !== null,
       calendarIcsUrl: core.secrets.get('calendar-ics-url') !== null,
+      tfsToken: core.secrets.get('tfs-token') !== null,
     });
   });
 

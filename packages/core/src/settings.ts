@@ -29,7 +29,16 @@ export const settingsSchema = z.object({
       lookAheadDays: z.number().int().min(1).max(90).default(14),
     })
     .prefault({}),
-  /** PRs from Azure DevOps notification mails in a classic Outlook folder. */
+  /** Azure DevOps / TFS pull requests via REST API. */
+  tfs: z
+    .object({
+      enabled: z.boolean().default(false),
+      /** e.g. https://tfs.example.com/tfs/DefaultCollection or https://dev.azure.com/org */
+      collectionUrl: z.union([z.literal(''), z.url({ protocol: /^https?$/ })]).default(''),
+      includeAuthored: z.boolean().default(true),
+    })
+    .prefault({}),
+  /** Fallback when TFS is not configured: PRs from notification mails in an Outlook folder. */
   mail: z
     .object({
       enabled: z.boolean().default(false),
@@ -60,6 +69,14 @@ export const settingsPatchSchema = z.strictObject({
       enabled: z.boolean(),
       provider: z.enum(['ics', 'outlook']),
       lookAheadDays: z.number(),
+    })
+    .partial()
+    .optional(),
+  tfs: z
+    .strictObject({
+      enabled: z.boolean(),
+      collectionUrl: z.string(),
+      includeAuthored: z.boolean(),
     })
     .partial()
     .optional(),
@@ -96,6 +113,7 @@ export class SettingsService {
       ...patch,
       github: { ...current.github, ...patch.github },
       calendar: { ...current.calendar, ...patch.calendar },
+      tfs: { ...current.tfs, ...patch.tfs },
       mail: { ...current.mail, ...patch.mail },
     };
     const r = settingsSchema.safeParse(merged);

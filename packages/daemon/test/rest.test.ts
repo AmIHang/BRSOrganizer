@@ -97,6 +97,7 @@ describe('REST API', () => {
     expect((await call('GET', '/secrets')).json()).toEqual({
       githubToken: false,
       calendarIcsUrl: false,
+      tfsToken: false,
     });
     expect((await call('PUT', '/secrets/github-token', { value: 'ghp_abc' })).status).toBe(204);
     expect(
@@ -105,7 +106,7 @@ describe('REST API', () => {
     ).toBe(204);
 
     const status = await call('GET', '/secrets');
-    expect(status.json()).toEqual({ githubToken: true, calendarIcsUrl: true });
+    expect(status.json()).toEqual({ githubToken: true, calendarIcsUrl: true, tfsToken: false });
     expect(status.body).not.toContain('ghp_abc');
     expect(h.core.secrets.get('github-token')).toBe('ghp_abc');
 
@@ -128,7 +129,12 @@ describe('REST API', () => {
     const r = await call('POST', '/sync');
     expect(r.json()).toEqual({
       results: [],
-      status: { github: 'missing-token', calendar: 'missing-url', mail: 'disabled' },
+      status: {
+        github: 'missing-token',
+        calendar: 'missing-url',
+        tfs: 'disabled',
+        mail: 'disabled',
+      },
     });
     expect((await call('GET', '/status')).json()).toMatchObject({
       version: 'test',

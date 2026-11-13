@@ -21,6 +21,7 @@
   let autostart = $state(false);
   let githubToken = $state('');
   let icsUrl = $state('');
+  let tfsToken = $state('');
   let message = $state<{ text: string; error: boolean } | null>(null);
   let copied = $state<string | null>(null);
 
@@ -65,6 +66,11 @@
   async function saveIcs() {
     await run(() => api.setSecret('calendar-ics-url', icsUrl.trim()), 'Kalender-URL gespeichert');
     icsUrl = '';
+  }
+
+  async function saveTfsToken() {
+    await run(() => api.setSecret('tfs-token', tfsToken.trim()), 'TFS-Token gespeichert');
+    tfsToken = '';
   }
 
   async function toggleAutostart() {
@@ -112,6 +118,7 @@
     disabled: 'deaktiviert',
     'missing-token': 'Token fehlt',
     'missing-url': 'URL fehlt',
+    standby: 'Fallback, ruht – TFS ist aktiv',
   };
 </script>
 
@@ -244,6 +251,56 @@
 
     <section>
       <h3>
+        TFS / Azure DevOps <span class="muted">({SOURCE_TEXT[status?.sources.tfs ?? ''] ?? '…'})</span>
+      </h3>
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={settings.tfs.enabled}
+          onchange={(e) => patch({ tfs: { enabled: e.currentTarget.checked } })}
+        />
+        Pull Requests abrufen
+      </label>
+      <label class="inline">
+        Collection
+        <input
+          type="text"
+          placeholder="https://tfs.example.com/tfs/DefaultCollection"
+          value={settings.tfs.collectionUrl}
+          onchange={(e) => patch({ tfs: { collectionUrl: e.currentTarget.value.trim() } })}
+        />
+      </label>
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={settings.tfs.includeAuthored}
+          onchange={(e) => patch({ tfs: { includeAuthored: e.currentTarget.checked } })}
+        />
+        Eigene PRs
+      </label>
+      <div class="inline">
+        <input
+          type="password"
+          placeholder={secrets.tfsToken ? 'Token gesetzt – neu eingeben zum Ersetzen' : 'Personal Access Token (optional)'}
+          bind:value={tfsToken}
+          autocomplete="off"
+        />
+        <button onclick={saveTfsToken} disabled={!tfsToken.trim()}>Speichern</button>
+        {#if secrets.tfsToken}
+          <button onclick={() => run(() => api.deleteSecret('tfs-token'), 'Token entfernt')}
+            >Entfernen</button
+          >
+        {/if}
+      </div>
+      <p class="hint muted">
+        Ohne Token wird deine Windows-Anmeldung verwendet. Ein Token (Lesezugriff „Code“) braucht
+        es nur außerhalb der Domäne oder für dev.azure.com. Solange TFS aktiv ist, ruht die
+        Mail-Quelle.
+      </p>
+    </section>
+
+    <section>
+      <h3>
         PR-Mails (Outlook) <span class="muted">({SOURCE_TEXT[status?.sources.mail ?? ''] ?? '…'})</span>
       </h3>
       <label class="check">
@@ -275,7 +332,8 @@
       </label>
       <p class="hint muted">
         Liest den Ordner im klassischen Outlook (Pfad unter dem Postfach, z. B. „Posteingang/PR“).
-        Ein PR verschwindet, sobald eine Mail „abgeschlossen“ oder „aufgegeben“ meldet.
+        Ein PR verschwindet, sobald eine Mail „abgeschlossen“ oder „aufgegeben“ meldet. Fallback:
+        läuft nur, solange TFS nicht eingerichtet ist.
       </p>
     </section>
 

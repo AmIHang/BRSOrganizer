@@ -7,6 +7,7 @@ import { IcsCalendarSource, type FetchText } from './ics.js';
 import { MailPrSource, type MailboxReader } from './mail-prs.js';
 import { outlookCalendarReader, outlookComReader } from './outlook.js';
 import { OutlookCalendarSource, type CalendarReader } from './outlook-calendar.js';
+import { patTransport, TfsSource, windowsAuthTransport, type TfsTransport } from './tfs.js';
 
 export interface SourceDeps {
   clock: Clock;
@@ -15,12 +16,16 @@ export interface SourceDeps {
   fetchText?: FetchText;
   mailboxReader?: MailboxReader;
   calendarReader?: CalendarReader;
+  /** Test hook: transport for the TFS source (receives the PAT, if any). */
+  tfsTransport?: (pat: string | null) => TfsTransport;
 }
 
 export interface SourceStatus {
   github: 'ready' | 'disabled' | 'missing-token';
   calendar: 'ready' | 'disabled' | 'missing-url';
-  mail: 'ready' | 'disabled';
+  tfs: 'ready' | 'disabled' | 'missing-url';
+  /** `standby`: enabled, but not used because the TFS API is configured. */
+  mail: 'ready' | 'disabled' | 'standby';
 }
 
 /** Builds the sources that are enabled and configured. Re-run after settings/secrets change. */
@@ -29,7 +34,12 @@ export function buildSources(
   deps: SourceDeps,
 ): { sources: SyncSource[]; status: SourceStatus } {
   const sources: SyncSource[] = [];
-  const status: SourceStatus = { github: 'disabled', calendar: 'disabled', mail: 'disabled' };
+  const status: SourceStatus = {
+    github: 'disabled',
+    calendar: 'disabled',
+    tfs: 'disabled',
+    mail: 'disabled',
+  };
 
   if (settings.github.enabled) {
     const token = deps.secrets.get('github-token');
@@ -71,16 +81,34 @@ export function buildSources(
     }
   }
 
-  if (settings.mail.enabled) {
+  // Azure DevOps PRs: the API when configured, otherwise the mail folder as fallback.
+  // Both use the source id `tfs`, so at most one of them may run.
+  const tfsConfigured = settings.tfs.enabled && settings.tfs.collectionUrl !== '';
+  if (tfsConfigured) {
+    const pat = deps.secrets.get('tfs-token');
     sources.push(
-      new MailPrSource({
-        reader: deps.mailboxReader ?? outlookComReader,
-        folderPath: settings.mail.outlookFolder,
-        lookBackDays: settings.mail.lookBackDays,
-        clock: deps.clock,
+      new TfsSource({
+        collectionUrl: settings.tfs.collectionUrl,
+        includeAuthored: settings.tfs.includeAuthored,
+        transport: deps.tfsTransport?.(pat) ?? (pat ? patTransport(pat) : windowsAuthTransport),
+        cacheKey: pat ? 'pat' : 'windows',
       }),
     );
-    status.mail = 'ready';
+    status.tfs = 'ready';
+    if (settings.mail.enabled) status.mail = 'standby';
+  } else {
+    if (settings.tfs.enabled) status.tfs = 'missing-url';
+    if (settings.mail.enabled) {
+      sources.push(
+        new MailPrSource({
+          reader: deps.mailboxReader ?? outlookComReader,
+          folderPath: settings.mail.outlookFolder,
+          lookBackDays: settings.mail.lookBackDays,
+          clock: deps.clock,
+        }),
+      );
+      status.mail = 'ready';
+    }
   }
 
   return { sources, status };

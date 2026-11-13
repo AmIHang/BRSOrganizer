@@ -1,58 +1,20 @@
-import { execFile } from 'node:child_process';
 import type { MailboxReader, PrMailbox } from './mail-prs.js';
 import type { CalendarReader, OutlookAppointment } from './outlook-calendar.js';
+import { asArray, runPowerShell } from './powershell.js';
 
 /**
  * Access to the classic Outlook desktop client via COM (PowerShell).
  * No credentials involved: it uses the logged-in user's Outlook profile. If Outlook is not
  * running, COM starts it in the background.
- *
- * Parameters are passed as environment variables, never interpolated into the scripts.
  */
 
-const TIMEOUT_MS = 90_000;
-
-function runOutlookScript(
-  script: string,
-  env: Record<string, string>,
-  what: string,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (process.platform !== 'win32') {
-      reject(new Error('Outlook sources are only available on Windows'));
-      return;
-    }
-    const prelude = String.raw`
-$ErrorActionPreference = 'Stop'
-[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+const OUTLOOK_PRELUDE = String.raw`
 $ol = New-Object -ComObject Outlook.Application
 $ns = $ol.GetNamespace('MAPI')
 `;
-    const encoded = Buffer.from(prelude + script, 'utf16le').toString('base64');
-    execFile(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
-      {
-        env: { ...process.env, ...env },
-        timeout: TIMEOUT_MS,
-        windowsHide: true,
-        maxBuffer: 64 * 1024 * 1024,
-        encoding: 'utf8',
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          const detail = (stderr || error.message).split(/\r?\n/).find((l) => l.trim()) ?? '';
-          reject(new Error(`${what} could not be read: ${detail.trim()}`));
-          return;
-        }
-        resolve(stdout.trim());
-      },
-    );
-  });
-}
 
-/** ConvertTo-Json turns single-element arrays into objects and empty ones into nothing. */
-const asArray = <T>(v: T | T[] | null | undefined): T[] => (v == null ? [] : ([] as T[]).concat(v));
+const runOutlookScript = (script: string, env: Record<string, string>, what: string) =>
+  runPowerShell(OUTLOOK_PRELUDE + script, env, what);
 
 const MAIL_SCRIPT = String.raw`
 $folder = $ns.DefaultStore.GetRootFolder()

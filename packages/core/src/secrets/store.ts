@@ -1,6 +1,12 @@
 import { randomBytes } from 'node:crypto';
 
-export const SECRET_KEYS = ['github-token', 'calendar-ics-url', 'local-access-token'] as const;
+export const SECRET_KEYS = [
+  'github-token',
+  'calendar-ics-url',
+  'local-access-token',
+  /** Optional Azure DevOps PAT; without it the Windows login is used. */
+  'tfs-token',
+] as const;
 export type SecretKey = (typeof SECRET_KEYS)[number];
 
 /** Storage for secrets. Production: Windows Credential Manager. Never the DB. */

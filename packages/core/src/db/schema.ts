@@ -3,8 +3,11 @@ import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqli
 
 export const ITEM_TYPES = ['todo', 'pr', 'event'] as const;
 export const ITEM_STATUSES = ['open', 'done', 'archived'] as const;
-/** `mail` = pull requests found in notification mails (Azure DevOps Server via Outlook). */
-export const ITEM_SOURCES = ['manual', 'github', 'calendar', 'mail'] as const;
+/**
+ * `tfs` = Azure DevOps pull requests, via REST API or, as fallback, notification mails.
+ * `mail` is legacy (0.1 builds used it for mail PRs before both shared `tfs`).
+ */
+export const ITEM_SOURCES = ['manual', 'github', 'calendar', 'tfs', 'mail'] as const;
 export const ACTORS = ['user', 'claude', 'copilot', 'other', 'sync'] as const;
 
 export type ItemType = (typeof ITEM_TYPES)[number];
@@ -53,7 +56,7 @@ export const items = sqliteTable(
 
 export const syncRuns = sqliteTable('sync_runs', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  source: text('source', { enum: ['github', 'calendar', 'mail'] }).notNull(),
+  source: text('source', { enum: ['github', 'calendar', 'tfs', 'mail'] }).notNull(),
   startedAt: integer('started_at', { mode: 'timestamp_ms' }).notNull(),
   finishedAt: integer('finished_at', { mode: 'timestamp_ms' }),
   ok: integer('ok', { mode: 'boolean' }).notNull().default(false),

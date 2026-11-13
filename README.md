@@ -227,7 +227,16 @@ Kalender“) den Zugriffsschlüssel in der URL tragen.
     verschobene Termine werden aktualisiert.
   - **ICS-Feed:** eine URL aus der Anmeldeinformationsverwaltung, inklusive Serien, Ausnahmen und Absagen.
 
-- **PR-Mails (Azure DevOps Server über Outlook):** Liest einen Ordner im klassischen Outlook, Standard
+- **TFS / Azure DevOps:** aktive PRs über die REST-API, mit zwei Abfragen auf Collection-Ebene (du als
+  Reviewer, eigene PRs). Ein Abschluss oder Abbruch entfernt den PR beim nächsten Sync.
+  - **Anmeldung:** Ohne Token wird die Windows-Anmeldung genutzt (integrierte Authentifizierung), es ist
+    also kein Secret nötig. Ein optionaler PAT kommt in die Anmeldeinformationsverwaltung, etwa für
+    dev.azure.com oder außerhalb der Domäne.
+  - **Kennzeichnung:** `Review`, solange du noch nicht abgestimmt hast; danach `abgestimmt` mit deiner
+    Stimme. Eigene PRs heißen `eigener PR`. Dass du dich selbst als Reviewer einträgst, zählt dabei nicht
+    als Review-Anfrage.
+- **PR-Mails (Fallback, Azure DevOps Server über Outlook):** läuft nur, solange TFS nicht eingerichtet ist.
+  Beide Quellen verwenden dieselben IDs, beim Umschalten entstehen also keine doppelten Einträge. Liest einen Ordner im klassischen Outlook, Standard
   `Posteingang/PR`, über COM. Dafür ist keine Anmeldung nötig, es wird das laufende Outlook-Profil genutzt.
   Einschalten in der App unter Einstellungen → „PR-Mails (Outlook)“.
   - Jede PR-Benachrichtigung von Azure DevOps Server zählt, also z. B. „erstellt“, „Reviewer hinzugefügt“

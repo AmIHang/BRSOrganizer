@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { DaemonStatus, Item, SecretsStatus, Settings, StreamEvent } from './types';
 
+type WritableSecret = 'github-token' | 'calendar-ics-url' | 'tfs-token';
+
 interface Connection {
   baseUrl: string;
   token: string;
@@ -92,10 +94,9 @@ export const api = {
   updateSettings: (patch: Record<string, unknown>) =>
     request<Settings>('PATCH', '/api/settings', patch),
   secrets: () => request<SecretsStatus>('GET', '/api/secrets'),
-  setSecret: (name: 'github-token' | 'calendar-ics-url', value: string) =>
+  setSecret: (name: WritableSecret, value: string) =>
     request<void>('PUT', `/api/secrets/${name}`, { value }),
-  deleteSecret: (name: 'github-token' | 'calendar-ics-url') =>
-    request<void>('DELETE', `/api/secrets/${name}`),
+  deleteSecret: (name: WritableSecret) => request<void>('DELETE', `/api/secrets/${name}`),
 };
 
 /**

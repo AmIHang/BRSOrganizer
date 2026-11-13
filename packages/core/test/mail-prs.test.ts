@@ -200,10 +200,10 @@ describe('mail source via sync', () => {
     try {
       expect(core.sourceStatus().mail).toBe('ready');
       const first = await core.syncAll();
-      expect(first.results).toMatchObject([{ source: 'mail', ok: true, added: 1 }]);
+      expect(first.results).toMatchObject([{ source: 'tfs', ok: true, added: 1 }]);
       expect(folders).toEqual(['Posteingang/PR']);
       const [pr] = core.items.list({ type: 'pr' });
-      expect(pr).toMatchObject({ source: 'mail', meta: { reasons: ['review-requested'] } });
+      expect(pr).toMatchObject({ source: 'tfs', meta: { reasons: ['review-requested'] } });
 
       // Idempotent while nothing changes.
       expect((await core.syncAll()).results).toMatchObject([{ added: 0, updated: 0, closed: 0 }]);

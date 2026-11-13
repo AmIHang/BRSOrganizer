@@ -23,6 +23,7 @@
     sources !== null &&
       sources.github !== 'ready' &&
       sources.calendar !== 'ready' &&
+      sources.tfs !== 'ready' &&
       sources.mail !== 'ready',
   );
 
@@ -137,7 +138,7 @@
   {/if}
   {#if needsSetup}
     <p class="banner">
-      Noch keine Quelle eingerichtet (GitHub, Kalender oder PR-Mails).
+      Noch keine Quelle eingerichtet (GitHub, TFS, Kalender oder PR-Mails).
       <button class="linkish" onclick={() => (view = 'settings')}>Jetzt einrichten</button>
     </p>
   {/if}

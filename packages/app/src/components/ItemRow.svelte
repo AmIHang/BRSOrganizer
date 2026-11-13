@@ -20,7 +20,17 @@
     assigned: 'zugewiesen',
     authored: 'eigener PR',
     notified: 'Info',
+    reviewed: 'abgestimmt',
   };
+  const VOTE_LABELS: Record<string, string> = {
+    approved: 'genehmigt',
+    'approved-with-suggestions': 'genehmigt mit Vorschlägen',
+    'waiting-for-author': 'wartet auf Autor',
+    rejected: 'abgelehnt',
+  };
+  const vote = $derived(
+    typeof item.meta?.myVote === 'string' ? (VOTE_LABELS[item.meta.myVote] ?? null) : null,
+  );
 
   const when = $derived(whenOf(item));
   const allDay = $derived(item.meta?.allDay === true);
@@ -71,6 +81,7 @@
       {#each reasons as r (r)}
         <span class="chip" class:strong={r === 'review-requested'}>{REASON_LABELS[r] ?? r}</span>
       {/each}
+      {#if vote}<span class="chip">{vote}</span>{/if}
       {#if item.meta?.draft === true}<span class="chip">Entwurf</span>{/if}
       {#if location}<span>{location}</span>{/if}
       {#if byAssistant}<span class="chip">von {item.createdBy}</span>{/if}

@@ -67,4 +67,11 @@ export {
   type CalendarReader,
   type OutlookAppointment,
 } from './sync/outlook-calendar.js';
+export {
+  normalizeCollectionUrl,
+  patTransport,
+  TfsSource,
+  windowsAuthTransport,
+  type TfsTransport,
+} from './sync/tfs.js';
 export { buildSources, type SourceStatus } from './sync/sources.js';

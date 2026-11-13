@@ -11,6 +11,7 @@ import type { GraphqlClient } from './sync/github.js';
 import type { FetchText } from './sync/ics.js';
 import type { MailboxReader } from './sync/mail-prs.js';
 import type { CalendarReader } from './sync/outlook-calendar.js';
+import type { TfsTransport } from './sync/tfs.js';
 import { buildSources, type SourceStatus } from './sync/sources.js';
 
 export interface CoreOptions {
@@ -23,6 +24,7 @@ export interface CoreOptions {
   fetchText?: FetchText;
   mailboxReader?: MailboxReader;
   calendarReader?: CalendarReader;
+  tfsTransport?: (pat: string | null) => TfsTransport;
 }
 
 export interface Core {
@@ -57,6 +59,7 @@ export function createCore(options: CoreOptions = {}): Core {
       ...(options.fetchText && { fetchText: options.fetchText }),
       ...(options.mailboxReader && { mailboxReader: options.mailboxReader }),
       ...(options.calendarReader && { calendarReader: options.calendarReader }),
+      ...(options.tfsTransport && { tfsTransport: options.tfsTransport }),
     });
 
   return {

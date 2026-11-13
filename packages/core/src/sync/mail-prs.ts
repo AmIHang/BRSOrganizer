@@ -192,8 +192,9 @@ export function openPrsFromMails(mailbox: PrMailbox): ExternalItem[] {
             (e.event === 'reviewer-added' || e.event === 'reviewer-removed') && e.line.includes(me),
         )
         .sort((a, b) => a.at - b.at);
-      if (reviewerChanges.at(-1)?.event === 'reviewer-added') reasons.push('review-requested');
+      // On my own PR my reviewer entry is self-added bookkeeping, not a review request.
       if (author && author.toLowerCase() === me) reasons.push('authored');
+      else if (reviewerChanges.at(-1)?.event === 'reviewer-added') reasons.push('review-requested');
     }
     if (reasons.length === 0) reasons.push('notified');
 
@@ -229,8 +230,12 @@ export interface MailPrSourceOptions {
   clock: Clock;
 }
 
+/**
+ * Fallback for the TFS API source: same source id and external ids, so a PR keeps its item
+ * when the user switches between mail and API.
+ */
 export class MailPrSource implements SyncSource {
-  readonly id = 'mail' as const;
+  readonly id = 'tfs' as const;
 
   constructor(private readonly options: MailPrSourceOptions) {}
 
