@@ -31,7 +31,7 @@ export interface Settings {
   syncIntervalMinutes: number;
   daemonPort: number;
   github: { enabled: boolean; includeAuthored: boolean; includeAssigned: boolean };
-  calendar: { enabled: boolean; lookAheadDays: number };
+  calendar: { enabled: boolean; provider: 'ics' | 'outlook'; lookAheadDays: number };
   mail: { enabled: boolean; outlookFolder: string; lookBackDays: number };
 }
 

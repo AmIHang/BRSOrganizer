@@ -220,8 +220,12 @@ Kalender“) den Zugriffsschlüssel in der URL tragen.
 - **GitHub:** GraphQL-Suche nach offenen PRs mit `review-requested:@me` und optional `assignee:@me` und
   `author:@me`. PRs, die nicht mehr in der Suche auftauchen (gemergt, Review erledigt), werden automatisch
   erledigt.
-- **Kalender:** ICS-Feed, Termine der nächsten 14 Tage (konfigurierbar), inklusive Serien, Ausnahmen und
-  Absagen. Vorbei ist erledigt.
+- **Kalender:** Termine der nächsten 14 Tage (konfigurierbar). Vorbei ist erledigt. Zwei Quellen stehen zur
+  Wahl (Einstellungen → Kalender → Quelle):
+  - **Outlook:** der Standardkalender im klassischen Outlook, gelesen über COM ohne Anmeldung. Serien werden
+    aufgelöst, abgesagte Termine und abgelehnte Einladungen ausgelassen. Ein Teams-Link wird zum Klick-Ziel,
+    verschobene Termine werden aktualisiert.
+  - **ICS-Feed:** eine URL aus der Anmeldeinformationsverwaltung, inklusive Serien, Ausnahmen und Absagen.
 
 - **PR-Mails (Azure DevOps Server über Outlook):** Liest einen Ordner im klassischen Outlook, Standard
   `Posteingang/PR`, über COM. Dafür ist keine Anmeldung nötig, es wird das laufende Outlook-Profil genutzt.

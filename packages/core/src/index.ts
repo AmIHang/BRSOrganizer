@@ -60,5 +60,11 @@ export {
   type PrMail,
   type PrMailbox,
 } from './sync/mail-prs.js';
-export { outlookComReader } from './sync/outlook.js';
+export { outlookCalendarReader, outlookComReader } from './sync/outlook.js';
+export {
+  appointmentsToItems,
+  OutlookCalendarSource,
+  type CalendarReader,
+  type OutlookAppointment,
+} from './sync/outlook-calendar.js';
 export { buildSources, type SourceStatus } from './sync/sources.js';

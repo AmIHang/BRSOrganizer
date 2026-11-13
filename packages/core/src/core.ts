@@ -10,6 +10,7 @@ import { SyncEngine, type SyncResult } from './sync/engine.js';
 import type { GraphqlClient } from './sync/github.js';
 import type { FetchText } from './sync/ics.js';
 import type { MailboxReader } from './sync/mail-prs.js';
+import type { CalendarReader } from './sync/outlook-calendar.js';
 import { buildSources, type SourceStatus } from './sync/sources.js';
 
 export interface CoreOptions {
@@ -21,6 +22,7 @@ export interface CoreOptions {
   graphqlFactory?: (token: string) => GraphqlClient;
   fetchText?: FetchText;
   mailboxReader?: MailboxReader;
+  calendarReader?: CalendarReader;
 }
 
 export interface Core {
@@ -54,6 +56,7 @@ export function createCore(options: CoreOptions = {}): Core {
       ...(options.graphqlFactory && { graphqlFactory: options.graphqlFactory }),
       ...(options.fetchText && { fetchText: options.fetchText }),
       ...(options.mailboxReader && { mailboxReader: options.mailboxReader }),
+      ...(options.calendarReader && { calendarReader: options.calendarReader }),
     });
 
   return {

@@ -187,21 +187,49 @@
         />
         Termine abrufen
       </label>
-      <div class="inline">
-        <input
-          type="password"
-          placeholder={secrets.calendarIcsUrl ? 'ICS-URL gesetzt – neu eingeben zum Ersetzen' : 'ICS-Feed-URL (https:// oder webcal://)'}
-          bind:value={icsUrl}
-          autocomplete="off"
-        />
-        <button onclick={saveIcs} disabled={!icsUrl.trim()}>Speichern</button>
-        {#if secrets.calendarIcsUrl}
-          <button
-            onclick={() => run(() => api.deleteSecret('calendar-ics-url'), 'URL entfernt')}
-            >Entfernen</button
-          >
-        {/if}
+      <div class="inline" role="radiogroup" aria-label="Kalenderquelle">
+        Quelle:
+        <label class="check">
+          <input
+            type="radio"
+            name="calendar-provider"
+            checked={settings.calendar.provider === 'outlook'}
+            onchange={() => patch({ calendar: { provider: 'outlook' } })}
+          />
+          Outlook
+        </label>
+        <label class="check">
+          <input
+            type="radio"
+            name="calendar-provider"
+            checked={settings.calendar.provider === 'ics'}
+            onchange={() => patch({ calendar: { provider: 'ics' } })}
+          />
+          ICS-Feed
+        </label>
       </div>
+      {#if settings.calendar.provider === 'ics'}
+        <div class="inline">
+          <input
+            type="password"
+            placeholder={secrets.calendarIcsUrl ? 'ICS-URL gesetzt – neu eingeben zum Ersetzen' : 'ICS-Feed-URL (https:// oder webcal://)'}
+            bind:value={icsUrl}
+            autocomplete="off"
+          />
+          <button onclick={saveIcs} disabled={!icsUrl.trim()}>Speichern</button>
+          {#if secrets.calendarIcsUrl}
+            <button
+              onclick={() => run(() => api.deleteSecret('calendar-ics-url'), 'URL entfernt')}
+              >Entfernen</button
+            >
+          {/if}
+        </div>
+      {:else}
+        <p class="hint muted">
+          Standardkalender im klassischen Outlook, inklusive Serien. Abgesagte und abgelehnte
+          Termine werden ausgelassen; ein Teams-Link wird zum Klick-Ziel.
+        </p>
+      {/if}
       <label class="inline">
         Tage im Voraus
         <input

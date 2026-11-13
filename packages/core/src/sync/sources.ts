@@ -5,7 +5,8 @@ import type { SyncSource } from './engine.js';
 import { createGraphqlClient, GithubSource, type GraphqlClient } from './github.js';
 import { IcsCalendarSource, type FetchText } from './ics.js';
 import { MailPrSource, type MailboxReader } from './mail-prs.js';
-import { outlookComReader } from './outlook.js';
+import { outlookCalendarReader, outlookComReader } from './outlook.js';
+import { OutlookCalendarSource, type CalendarReader } from './outlook-calendar.js';
 
 export interface SourceDeps {
   clock: Clock;
@@ -13,6 +14,7 @@ export interface SourceDeps {
   graphqlFactory?: (token: string) => GraphqlClient;
   fetchText?: FetchText;
   mailboxReader?: MailboxReader;
+  calendarReader?: CalendarReader;
 }
 
 export interface SourceStatus {
@@ -44,7 +46,16 @@ export function buildSources(
     }
   }
 
-  if (settings.calendar.enabled) {
+  if (settings.calendar.enabled && settings.calendar.provider === 'outlook') {
+    sources.push(
+      new OutlookCalendarSource({
+        reader: deps.calendarReader ?? outlookCalendarReader,
+        lookAheadDays: settings.calendar.lookAheadDays,
+        clock: deps.clock,
+      }),
+    );
+    status.calendar = 'ready';
+  } else if (settings.calendar.enabled) {
     if (deps.secrets.get('calendar-ics-url')) {
       sources.push(
         new IcsCalendarSource({

@@ -24,6 +24,8 @@ export const settingsSchema = z.object({
   calendar: z
     .object({
       enabled: z.boolean().default(true),
+      /** `ics`: feed URL from the Credential Manager; `outlook`: default calendar via COM. */
+      provider: z.enum(['ics', 'outlook']).default('ics'),
       lookAheadDays: z.number().int().min(1).max(90).default(14),
     })
     .prefault({}),
@@ -54,7 +56,11 @@ export const settingsPatchSchema = z.strictObject({
     .partial()
     .optional(),
   calendar: z
-    .strictObject({ enabled: z.boolean(), lookAheadDays: z.number() })
+    .strictObject({
+      enabled: z.boolean(),
+      provider: z.enum(['ics', 'outlook']),
+      lookAheadDays: z.number(),
+    })
     .partial()
     .optional(),
   mail: z
