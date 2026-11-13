@@ -40,6 +40,7 @@ export interface Settings {
   github: { enabled: boolean; includeAuthored: boolean; includeAssigned: boolean };
   calendar: { enabled: boolean; provider: 'ics' | 'outlook'; lookAheadDays: number };
   tfs: { enabled: boolean; collectionUrl: string; includeAuthored: boolean };
+  workspace: { projectsRoot: string };
   mail: { enabled: boolean; outlookFolder: string; lookBackDays: number };
 }
 
@@ -74,6 +75,45 @@ export interface SecretsStatus {
   githubToken: boolean;
   calendarIcsUrl: boolean;
   tfsToken: boolean;
+}
+
+/** GET /api/prs/:id – PR details from TFS plus the local checkout. */
+export interface PrDetails {
+  pr: {
+    id: number;
+    title: string;
+    status: string;
+    isDraft: boolean;
+    mergeStatus: string | null;
+    sourceBranch: string;
+    targetBranch: string;
+    author: string | null;
+    reviewers: Array<{ name: string; vote: string; isGroup: boolean; isMe: boolean }>;
+    webUrl: string;
+  };
+  local:
+    | { state: 'not-configured' }
+    | { state: 'no-repo'; projectsRoot: string }
+    | {
+        state: 'ok';
+        customer: string;
+        repoName: string;
+        clonePath: string;
+        cloned: boolean;
+        managed: boolean;
+        solution: string | null;
+        webUrls: string[];
+        head: { sha: string; subject: string; when: string } | null;
+        behind: number | null;
+        remoteGone: boolean;
+      };
+}
+
+export interface CompleteResult {
+  status: string;
+  mergeStatus: string | null;
+  mergeCommit: string | null;
+  approved: boolean;
 }
 
 export type StreamEvent =

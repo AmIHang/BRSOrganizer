@@ -5,6 +5,7 @@ import { errorHandler } from './http/errors.js';
 import { restRouter } from './http/rest.js';
 import { bearerAuth, hostCheck, originCheck } from './http/security.js';
 import { mcpRouter } from './mcp/http.js';
+import type { PrWorkspace } from './prs/service.js';
 import type { Scheduler } from './scheduler.js';
 
 export interface AppDeps {
@@ -18,6 +19,8 @@ export interface AppDeps {
   allowedOrigins: readonly string[];
   version: string;
   onShutdown?: () => void;
+  /** PR workspace (clone/open/remove/complete); REST only, never exposed to MCP. */
+  prWorkspace?: PrWorkspace;
 }
 
 export function createApp(deps: AppDeps): { app: Express; close(): Promise<void> } {

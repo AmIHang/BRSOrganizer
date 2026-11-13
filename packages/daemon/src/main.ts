@@ -16,6 +16,8 @@ import { pino } from 'pino';
 import { createApp } from './app.js';
 import { removeDiscovery, writeDiscovery } from './discovery.js';
 import { DEFAULT_ALLOWED_ORIGINS } from './http/security.js';
+import { windowsLauncher } from './prs/launcher.js';
+import { PrWorkspace } from './prs/service.js';
 import { createScheduler } from './scheduler.js';
 import { VERSION } from './version.js';
 
@@ -75,6 +77,15 @@ const allowedOrigins = [
 
 const token = getOrCreateAccessToken(secrets);
 const scheduler = createScheduler({ core, logger });
+
+// PR scripts: runtime\scripts\pr next to daemon.mjs (app install) or packages\daemon\scripts\pr (repo).
+const here = dirname(fileURLToPath(import.meta.url));
+const scriptsDir =
+  [join(here, 'scripts', 'pr'), join(here, '..', 'scripts', 'pr')].find((d) =>
+    existsSync(join(d, 'Clone-Branch.ps1')),
+  ) ?? null;
+if (!scriptsDir) logger.warn('PR scripts not found; clone/remove actions are unavailable');
+const prWorkspace = new PrWorkspace({ core, launcher: windowsLauncher, scriptsDir });
 const { app, close: closeApp } = createApp({
   core,
   scheduler,
@@ -84,6 +95,7 @@ const { app, close: closeApp } = createApp({
   allowedOrigins,
   version: VERSION,
   onShutdown: () => void shutdown('api'),
+  prWorkspace,
 });
 
 const server = createServer(app);

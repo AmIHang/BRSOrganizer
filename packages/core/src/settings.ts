@@ -38,6 +38,13 @@ export const settingsSchema = z.object({
       includeAuthored: z.boolean().default(true),
     })
     .prefault({}),
+  /** Local PR checkouts (clone, build, IIS) under <projectsRoot>\<customer>\PR<nr>. */
+  workspace: z
+    .object({
+      /** e.g. C:\projects-git; empty = feature off. Customer folders hold the repos. */
+      projectsRoot: z.string().trim().max(260).default(''),
+    })
+    .prefault({}),
   /** Fallback when TFS is not configured: PRs from notification mails in an Outlook folder. */
   mail: z
     .object({
@@ -80,6 +87,7 @@ export const settingsPatchSchema = z.strictObject({
     })
     .partial()
     .optional(),
+  workspace: z.strictObject({ projectsRoot: z.string() }).partial().optional(),
   mail: z
     .strictObject({ enabled: z.boolean(), outlookFolder: z.string(), lookBackDays: z.number() })
     .partial()
@@ -114,6 +122,7 @@ export class SettingsService {
       github: { ...current.github, ...patch.github },
       calendar: { ...current.calendar, ...patch.calendar },
       tfs: { ...current.tfs, ...patch.tfs },
+      workspace: { ...current.workspace, ...patch.workspace },
       mail: { ...current.mail, ...patch.mail },
     };
     const r = settingsSchema.safeParse(merged);

@@ -1,4 +1,4 @@
-import { CoreError } from '@amineeded/core';
+import { CoreError, TfsRequestError } from '@amineeded/core';
 import type { ErrorRequestHandler } from 'express';
 import type { Logger } from 'pino';
 
@@ -26,6 +26,15 @@ export function errorHandler(logger: Logger): ErrorRequestHandler {
     }
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.code, message: err.message });
+      return;
+    }
+    // Errors from Azure DevOps (e.g. a branch policy blocking the merge) or from the TFS/script
+    // plumbing: the message is meant for the user and contains no secrets.
+    if (
+      err instanceof TfsRequestError ||
+      (err instanceof Error && /^(Azure DevOps|PR scripts)/.test(err.message))
+    ) {
+      res.status(502).json({ error: 'upstream', message: (err as Error).message });
       return;
     }
     // body-parser errors (invalid JSON, too large) carry a status.

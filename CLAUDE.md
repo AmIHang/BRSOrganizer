@@ -42,6 +42,15 @@ entfernen, damit die echten Credentials unberührt bleiben.
 - Sidecar-Runtime: `pnpm --filter @amineeded/app sidecar`; läuft ein Daemon aus dieser Runtime, sperrt er
   `better_sqlite3.node` – vorher `POST /api/shutdown`.
 
+## PR-Arbeitsbereich (`packages/daemon/src/prs`, `packages/daemon/scripts/pr`)
+
+- Klonen, Aktualisieren, Löschen, Öffnen und PR-Abschluss nur über REST (`/api/prs/...`), nie über MCP:
+  das sind Aktionen mit Außenwirkung (Merge, Branch löschen, UAC, Ordner löschen).
+- Die PowerShell-Skripte bleiben für Windows PowerShell 5.1 lesbar (ASCII oder UTF-8 mit BOM) und werden
+  immer mit `-Root <Projektordner>` aufgerufen; nichts darf in den Programmordner schreiben.
+- Tests nutzen einen Fake-`Launcher` und Fake-TFS (`tfs`-Hook) – in Tests wird nie wirklich geklont,
+  gemergt oder gelöscht.
+
 ## mcp-stdio-Konventionen
 
 - stdout ist ausschließlich das MCP-Protokoll; Logs nur nach stderr.

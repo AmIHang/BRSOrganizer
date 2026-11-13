@@ -46,6 +46,29 @@ Debug-Builds sind von der echten Installation getrennt:
 - Port 47822
 - Der Vite-Origin `http://127.0.0.1:1420` ist für den Daemon freigeschaltet.
 
+### PR-Arbeitsbereich (PR-Manager)
+
+Ein TFS-PR lässt sich in der Liste über ▸ aufklappen. Dort stehen:
+
+- **Details:** Branch → Ziel, Status, Merge-Status, Autor, Reviewer mit Stimme
+- **Lokaler Stand:** geklont oder nicht, letzter Commit, neue Commits auf dem Server, Solution und Web-Apps
+- **Aktionen:**
+  - **Klonen & bauen / Aktualisieren & bauen:** `Clone-Branch.ps1` in einem eigenen PowerShell-Fenster.
+    Es klont nach `<Kunde>\PR<Nr>`, richtet den IIS-App-Pool `PR<Nr>` ein (UAC), holt die
+    BORA-Referenzen (Cache `_refcache`), stellt NuGet wieder her und baut.
+  - **Solution, Ordner, Web-App:** öffnen
+  - **Lokal löschen:** `Remove-PrClone.ps1` (UAC). Betroffen sind nur Ordner, die das Skript angelegt hat.
+  - **PR abschließen:** optional vorher genehmigen, dann Squash-Merge in den Ziel-Branch und Source-Branch
+    löschen. Danach bietet die App an, den Klon zu löschen.
+
+Voraussetzung ist der **Projektordner** in den Einstellungen, z. B. `C:\projects-git`. Darunter liegt pro Kunde
+ein Ordner mit dem Repo. Der passende Kundenordner wird über die Remote-URL gefunden, die Ordnernamen
+sind also frei wählbar.
+
+Die Skripte werden mit der App ausgeliefert (`packages/daemon/scripts/pr`), es muss nichts kopiert werden.
+Diese Aktionen gibt es nur in der App. Claude und Copilot können über MCP weder Skripte starten noch mergen
+oder löschen.
+
 ## MCP einrichten
 
 **Mit installierter App:** In den Einstellungen unter „MCP für Claude & Copilot“ stehen die Befehle mit den

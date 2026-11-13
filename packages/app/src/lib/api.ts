@@ -1,5 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { DaemonStatus, Item, SecretsStatus, Settings, StreamEvent } from './types';
+import type {
+  CompleteResult,
+  DaemonStatus,
+  Item,
+  PrDetails,
+  SecretsStatus,
+  Settings,
+  StreamEvent,
+} from './types';
 
 type WritableSecret = 'github-token' | 'calendar-ics-url' | 'tfs-token';
 
@@ -91,6 +99,17 @@ export const api = {
   archive: (id: string) => request<Item>('POST', `/api/items/${id}/archive`),
   reopen: (id: string) => request<Item>('POST', `/api/items/${id}/reopen`),
   sync: () => request<unknown>('POST', '/api/sync'),
+  pr: {
+    details: (id: string, fetch = false) =>
+      request<PrDetails>('GET', `/api/prs/${id}${fetch ? '?fetch=1' : ''}`),
+    cloneOrUpdate: (id: string) => request<{ clonePath: string }>('POST', `/api/prs/${id}/clone`),
+    removeLocal: (id: string) =>
+      request<{ clonePath: string }>('POST', `/api/prs/${id}/remove-local`),
+    open: (id: string, target: 'solution' | 'folder') =>
+      request<void>('POST', `/api/prs/${id}/open`, { target }),
+    complete: (id: string, approve: boolean) =>
+      request<CompleteResult>('POST', `/api/prs/${id}/complete`, { approve }),
+  },
   status: () => request<DaemonStatus>('GET', '/api/status'),
   settings: () => request<Settings>('GET', '/api/settings'),
   updateSettings: (patch: Record<string, unknown>) =>

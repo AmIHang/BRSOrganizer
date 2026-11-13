@@ -212,6 +212,7 @@
         {now}
         oncomplete={(i) => act(() => (i.status === 'done' ? api.reopen(i.id) : api.complete(i.id)))}
         onarchive={(i) => act(() => api.archive(i.id))}
+        onchanged={() => void refresh()}
       />
     {/each}
   </ul>

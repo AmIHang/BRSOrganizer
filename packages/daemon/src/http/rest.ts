@@ -8,6 +8,8 @@ import {
 } from '@amineeded/core';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
+import { prRouter } from '../prs/routes.js';
+import type { PrWorkspace } from '../prs/service.js';
 import type { Scheduler } from '../scheduler.js';
 import { sseHandler } from './sse.js';
 
@@ -17,6 +19,7 @@ export interface RestDeps {
   version: string;
   /** Graceful stop requested by the app (a hard kill would skip cleanup). */
   onShutdown?: () => void;
+  prWorkspace?: PrWorkspace;
 }
 
 /** Secrets the UI may write (never read back). The local access token is not among them. */
@@ -72,8 +75,16 @@ function secretName(req: Request): WritableSecret {
 const id = (req: Request) => String(req.params.id);
 
 /** REST API for the app. Every mutation here is attributed to the actor `user`. */
-export function restRouter({ core, scheduler, version, onShutdown }: RestDeps): Router {
+export function restRouter({
+  core,
+  scheduler,
+  version,
+  onShutdown,
+  prWorkspace,
+}: RestDeps): Router {
   const r = Router();
+
+  if (prWorkspace) r.use('/prs', prRouter(prWorkspace, scheduler));
 
   r.post('/shutdown', (_req, res) => {
     if (!onShutdown) {

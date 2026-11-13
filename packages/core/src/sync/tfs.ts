@@ -53,6 +53,112 @@ export function patTransport(pat: string, fetchImpl: typeof fetch = fetch): TfsT
     );
 }
 
+/** A single write request (PATCH/PUT/POST) with a JSON body; returns the parsed response. */
+export type TfsSender = (request: {
+  method: 'PATCH' | 'PUT' | 'POST';
+  url: string;
+  body: unknown;
+}) => Promise<unknown>;
+
+/** Error from Azure DevOps with its own message (e.g. a policy blocking a merge). */
+export class TfsRequestError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'TfsRequestError';
+  }
+}
+
+/** Windows integrated authentication for writes. */
+export const windowsAuthSender: TfsSender = async ({ method, url, body }) => {
+  const script = String.raw`
+$bytes = [Text.Encoding]::UTF8.GetBytes($env:AMINEEDED_TFS_BODY)
+try {
+  $r = Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri $env:AMINEEDED_TFS_URL -Method $env:AMINEEDED_TFS_METHOD -Body $bytes -ContentType 'application/json; charset=utf-8' -TimeoutSec 60
+  [pscustomobject]@{ status = [int]$r.StatusCode; body = [string]$r.Content } | ConvertTo-Json -Compress
+} catch {
+  $status = 0
+  if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
+  [pscustomobject]@{ status = $status; body = [string]$_.ErrorDetails.Message; error = $_.Exception.Message } | ConvertTo-Json -Compress
+}
+`;
+  const stdout = await runPowerShell(
+    script,
+    {
+      AMINEEDED_TFS_URL: url,
+      AMINEEDED_TFS_METHOD: method,
+      AMINEEDED_TFS_BODY: JSON.stringify(body),
+    },
+    'Azure DevOps (Windows login)',
+  );
+  const r = JSON.parse(stdout) as { status: number; body: string; error?: string };
+  return parseTfsResponse(r.status, r.body, r.error);
+};
+
+export function patSender(pat: string, fetchImpl: typeof fetch = fetch): TfsSender {
+  const auth = `Basic ${Buffer.from(`:${pat}`).toString('base64')}`;
+  return async ({ method, url, body }) => {
+    const res = await fetchImpl(url, {
+      method,
+      headers: {
+        Authorization: auth,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60_000),
+    });
+    return parseTfsResponse(res.status, await res.text());
+  };
+}
+
+function parseTfsResponse(status: number, body: string, error?: string): unknown {
+  let json: unknown = null;
+  try {
+    json = body ? JSON.parse(body) : null;
+  } catch {
+    // not JSON
+  }
+  if (status >= 200 && status < 300) return json;
+  const message =
+    (json as { message?: string } | null)?.message ?? error ?? `HTTP ${status || 'error'}`;
+  throw new TfsRequestError(status, message);
+}
+
+/**
+ * Splits a PR web URL (as stored in item.link) into the repository API base and id:
+ * https://host/tfs/coll/Project/_git/Repo/pullrequest/42
+ *   -> https://host/tfs/coll/Project/_apis/git/repositories/Repo/pullrequests/42
+ */
+export function pullRequestApiUrl(prWebUrl: string): {
+  api: string;
+  repoUrl: string;
+  collectionUrl: string;
+  project: string;
+  repo: string;
+  id: number;
+} | null {
+  const m = /^(https?:\/\/.+?)\/([^/]+)\/_git\/([^/?#]+)\/pullrequest\/(\d+)/i.exec(prWebUrl);
+  if (!m) return null;
+  const [, collectionUrl, project, repo, id] = m as unknown as [
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
+  return {
+    api: `${collectionUrl}/${project}/_apis/git/repositories/${repo}/pullrequests/${id}`,
+    repoUrl: `${collectionUrl}/${project}/_git/${repo}`,
+    collectionUrl,
+    project: decodeURIComponent(project),
+    repo: decodeURIComponent(repo),
+    id: Number(id),
+  };
+}
+
 export function normalizeCollectionUrl(url: string): string {
   const u = new URL(url.trim());
   if (u.protocol !== 'https:' && u.protocol !== 'http:') {

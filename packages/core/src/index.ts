@@ -70,9 +70,14 @@ export {
 } from './sync/outlook-calendar.js';
 export {
   normalizeCollectionUrl,
+  patSender,
   patTransport,
+  pullRequestApiUrl,
+  TfsRequestError,
   TfsSource,
+  windowsAuthSender,
   windowsAuthTransport,
+  type TfsSender,
   type TfsTransport,
 } from './sync/tfs.js';
 export { buildSources, type SourceStatus } from './sync/sources.js';

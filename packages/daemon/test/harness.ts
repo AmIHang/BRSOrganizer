@@ -5,6 +5,7 @@ import { pino } from 'pino';
 import { makeCore } from '../../core/test/helpers.js';
 import { createApp } from '../src/app.js';
 import { DEFAULT_ALLOWED_ORIGINS } from '../src/http/security.js';
+import type { PrWorkspace } from '../src/prs/service.js';
 import { createScheduler } from '../src/scheduler.js';
 
 export const TOKEN = 'test-token-0123456789abcdefghijklmnopqrstuv';
@@ -21,12 +22,15 @@ export async function startHarness(
     secrets?: Partial<Record<SecretKey, string>>;
     /** Fixed port (e.g. to simulate a daemon restart); default: random free port. */
     port?: number;
+    /** Builds the PR workspace from the harness core (default: none). */
+    prWorkspace?: (core: ReturnType<typeof makeCore>) => PrWorkspace;
   } & Parameters<typeof makeCore>[0] = {},
 ): Promise<Harness> {
-  const { secrets, port: fixedPort, ...coreOptions } = options;
+  const { secrets, port: fixedPort, prWorkspace, ...coreOptions } = options;
   const core = makeCore({ secrets: new MemorySecretStore(secrets ?? {}), ...coreOptions });
   const logger = pino({ level: 'silent' });
   const scheduler = createScheduler({ core, logger });
+  const workspace = prWorkspace?.(core);
   let port = 0;
   const { app, close } = createApp({
     core,
@@ -36,6 +40,7 @@ export async function startHarness(
     getPort: () => port,
     allowedOrigins: [...DEFAULT_ALLOWED_ORIGINS, 'http://localhost:1420'],
     version: 'test',
+    ...(workspace && { prWorkspace: workspace }),
   });
   const server: Server = createServer(app);
   await new Promise<void>((resolve) => server.listen(fixedPort ?? 0, '127.0.0.1', resolve));

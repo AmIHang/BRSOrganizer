@@ -86,6 +86,12 @@ cpSync(nativeDir, join(out, 'node_modules', '@napi-rs', 'keyring-win32-x64-msvc'
 
 cpSync(join(coreDir, 'drizzle'), join(out, 'drizzle'), { recursive: true });
 
+// PR workspace scripts (clone/update/remove local PR checkouts), started by the daemon.
+cpSync(join(root, 'packages', 'daemon', 'scripts', 'pr'), join(out, 'scripts', 'pr'), {
+  recursive: true,
+  filter: (src) => !src.endsWith('.md'),
+});
+
 const binDir = join(tauriDir, 'binaries');
 mkdirSync(binDir, { recursive: true });
 cpSync(process.execPath, join(binDir, `amineeded-node-${TRIPLE}.exe`));

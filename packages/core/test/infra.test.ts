@@ -81,6 +81,7 @@ describe('settings', () => {
         github: { enabled: true, includeAuthored: true, includeAssigned: true },
         calendar: { enabled: true, provider: 'ics', lookAheadDays: 14 },
         tfs: { enabled: false, collectionUrl: '', includeAuthored: true },
+        workspace: { projectsRoot: '' },
         mail: { enabled: false, outlookFolder: 'Posteingang/PR', lookBackDays: 90 },
       });
       expect(() => core.settings.update({ tfs: { collectionUrl: 'not a url' } })).toThrow(

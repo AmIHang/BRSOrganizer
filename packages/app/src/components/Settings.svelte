@@ -300,6 +300,25 @@
     </section>
 
     <section>
+      <h3>PR-Arbeitsbereich</h3>
+      <label class="inline">
+        Projektordner
+        <input
+          type="text"
+          placeholder="z. B. C:\projects-git"
+          value={settings.workspace.projectsRoot}
+          onchange={(e) => patch({ workspace: { projectsRoot: e.currentTarget.value.trim() } })}
+        />
+      </label>
+      <p class="hint muted">
+        Darunter liegt pro Kunde ein Ordner mit dem Repo, z. B. <code>Community\Community</code>.
+        Ein PR wird über die Remote-URL dem Kundenordner zugeordnet und nach
+        <code>&lt;Kunde&gt;\PR&lt;Nr&gt;</code> geklont, mit IIS-App-Pool, BORA-Referenzen, NuGet und
+        Build. Leer = aus. Bei einem PR über ▸ aufklappen.
+      </p>
+    </section>
+
+    <section>
       <h3>
         PR-Mails (Outlook) <span class="muted">({SOURCE_TEXT[status?.sources.mail ?? ''] ?? '…'})</span>
       </h3>

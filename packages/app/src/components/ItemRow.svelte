@@ -2,17 +2,21 @@
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { formatWhen, whenOf } from '../lib/group';
   import type { Item } from '../lib/types';
+  import PrPanel from './PrPanel.svelte';
 
   let {
     item,
     now,
     oncomplete,
     onarchive,
+    onchanged,
   }: {
     item: Item;
     now: Date;
     oncomplete: (item: Item) => void;
     onarchive: (item: Item) => void;
+    /** Something changed outside the list (e.g. a PR was merged): refresh. */
+    onchanged?: () => void;
   } = $props();
 
   const REASON_LABELS: Record<string, string> = {
@@ -49,6 +53,10 @@
   function open() {
     if (item.link) void openUrl(item.link);
   }
+
+  /** Azure DevOps / TFS pull requests get the PR-Manager panel. */
+  const manageable = $derived(item.type === 'pr' && !!item.link && /\/_git\/[^/]+\/pullrequest\/\d+/i.test(item.link));
+  let expanded = $state(false);
 </script>
 
 <li class="row" class:done={item.status !== 'open'}>
@@ -93,8 +101,19 @@
     {#if item.notes && item.type === 'todo'}
       <div class="notes">{item.notes}</div>
     {/if}
+    {#if expanded}
+      <PrPanel {item} onchanged={() => onchanged?.()} />
+    {/if}
   </div>
 
+  {#if manageable}
+    <button
+      class="expand"
+      title={expanded ? 'Details schließen' : 'Details, Klonen, Abschließen'}
+      aria-expanded={expanded}
+      onclick={() => (expanded = !expanded)}>{expanded ? '▾' : '▸'}</button
+    >
+  {/if}
   <button class="icon" title="Archivieren" aria-label="Archivieren" onclick={() => onarchive(item)}
     >✕</button
   >
@@ -117,6 +136,16 @@
   .row:hover .icon,
   .row .icon:focus-visible {
     visibility: visible;
+  }
+  .expand {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    padding: 0 4px;
+    font-size: 14px;
+  }
+  .expand:hover {
+    color: var(--accent);
   }
   .done .title {
     text-decoration: line-through;
