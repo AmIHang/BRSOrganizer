@@ -8,6 +8,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -108,12 +109,46 @@ fn is_healthy(port: u16) -> bool {
     response.starts_with("HTTP/1.1 200") && response.contains("\"app\":\"AmINeeded\"")
 }
 
+/// Tauri returns verbatim paths (`\\?\C:\...`). Node cannot resolve a main script given that
+/// way (EISDIR on `lstat 'C:'`), and they look odd in the MCP setup snippets, so drive paths
+/// are turned back into plain ones.
+fn plain_path(path: PathBuf) -> PathBuf {
+    let s = path.to_string_lossy();
+    match s.strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),
+        _ => path,
+    }
+}
+
 /// Node runtime shipped as externalBin (next to the app exe) and the bundled scripts.
 fn runtime(app: &AppHandle) -> Option<(PathBuf, PathBuf)> {
-    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let exe_dir = plain_path(std::env::current_exe().ok()?.parent()?.to_path_buf());
     let node = exe_dir.join("amineeded-node.exe");
-    let runtime_dir = app.path().resource_dir().ok()?.join("runtime");
+    let runtime_dir = plain_path(app.path().resource_dir().ok()?).join("runtime");
     Some((node, runtime_dir))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plain_path;
+    use std::path::PathBuf;
+
+    #[test]
+    fn strips_verbatim_prefix_from_drive_paths_only() {
+        assert_eq!(
+            plain_path(PathBuf::from(r"\\?\C:\Apps\AmINeeded")),
+            PathBuf::from(r"C:\Apps\AmINeeded")
+        );
+        assert_eq!(
+            plain_path(PathBuf::from(r"C:\Apps\AmINeeded")),
+            PathBuf::from(r"C:\Apps\AmINeeded")
+        );
+        // UNC verbatim paths stay as they are.
+        assert_eq!(
+            plain_path(PathBuf::from(r"\\?\UNC\server\share")),
+            PathBuf::from(r"\\?\UNC\server\share")
+        );
+    }
 }
 
 pub fn mcp_paths(app: &AppHandle) -> Option<McpPaths> {
@@ -136,11 +171,20 @@ fn spawn_daemon(app: &AppHandle) -> Result<(), String> {
         ));
     }
 
+    // Early crashes (before the daemon's own logger is up) end up here instead of nowhere.
+    let logs = data_dir().join("logs");
+    let _ = std::fs::create_dir_all(&logs);
+    let start_log = std::fs::File::create(logs.join("daemon-start.log"))
+        .map_err(|e| format!("cannot create daemon start log: {e}"))?;
+    let start_log_err = start_log
+        .try_clone()
+        .map_err(|e| format!("cannot create daemon start log: {e}"))?;
+
     let mut cmd = Command::new(&node);
     cmd.arg(&script)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(Stdio::from(start_log))
+        .stderr(Stdio::from(start_log_err))
         .env("AMINEEDED_DATA_DIR", data_dir())
         .env("AMINEEDED_KEYRING_SERVICE", keyring_service())
         .creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
@@ -155,8 +199,13 @@ fn spawn_daemon(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Serializes `ensure_running`: setup and the UI call it at the same time on startup, and two
+/// concurrent calls would each spawn a daemon.
+static ENSURE_LOCK: Mutex<()> = Mutex::new(());
+
 /// Returns a connection to a healthy daemon, starting it if needed (blocking, up to ~15 s).
 pub fn ensure_running(app: &AppHandle) -> Result<Connection, String> {
+    let _guard = ENSURE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut port = current_port();
     if !is_healthy(port) {
         spawn_daemon(app)?;

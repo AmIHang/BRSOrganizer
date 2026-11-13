@@ -30,6 +30,20 @@ describe('database', () => {
     }
   });
 
+  it('lets a second connection open the same file while the first holds it', () => {
+    dir = mkdtempSync(join(tmpdir(), 'amineeded-'));
+    const file = join(dir, 'race.db');
+    const first = openDatabase({ file });
+    try {
+      // Two daemons starting at once both run the WAL pragma and the migrations.
+      const second = openDatabase({ file });
+      expect(second.sqlite.pragma('busy_timeout', { simple: true })).toBe(5000);
+      second.close();
+    } finally {
+      first.close();
+    }
+  });
+
   it('can be reopened (migrations are applied once)', () => {
     dir = mkdtempSync(join(tmpdir(), 'amineeded-'));
     const file = join(dir, 'test.db');

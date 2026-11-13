@@ -29,10 +29,12 @@ export function openDatabase(options: OpenDatabaseOptions): DatabaseHandle {
     mkdirSync(dirname(options.file), { recursive: true });
   }
   const sqlite = new Database(options.file);
-  // WAL lets the UI read while a sync writes; busy_timeout covers the rare writer overlap.
+  // busy_timeout first: switching to WAL needs a lock, and a second process starting at the
+  // same moment (app + mcp-stdio) must wait instead of failing with SQLITE_BUSY.
+  sqlite.pragma('busy_timeout = 5000');
+  // WAL lets the UI read while a sync writes.
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('synchronous = NORMAL');
-  sqlite.pragma('busy_timeout = 5000');
   sqlite.pragma('foreign_keys = ON');
 
   const db = drizzle(sqlite, { schema });
