@@ -8,6 +8,7 @@
   import { api, subscribe } from './lib/api';
   import { groupItems } from './lib/group';
   import { announceNewItems, remindUpcoming } from './lib/notify';
+  import { savedAlwaysOnTop, setAlwaysOnTop } from './lib/pin';
   import type { Item, SourceStatus } from './lib/types';
 
   let items = $state<Item[]>([]);
@@ -17,6 +18,17 @@
   let syncing = $state(false);
   let sources = $state<SourceStatus | null>(null);
   let lastSyncError = $state<string | null>(null);
+  let pinned = $state(savedAlwaysOnTop());
+
+  async function togglePinned() {
+    const next = !pinned;
+    try {
+      await setAlwaysOnTop(next);
+      pinned = next;
+    } catch (e) {
+      error = `Immer im Vordergrund: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
 
   const sections = $derived(groupItems(items, now));
   const needsSetup = $derived(
@@ -72,6 +84,7 @@
   onMount(() => {
     void refresh();
     void refreshStatus();
+    if (pinned) void setAlwaysOnTop(true).catch(() => (pinned = false));
 
     // Autostart is on by default for installed (release) builds; the user can turn it off in the
     // settings. Never in development: it would register the debug exe from target/.
@@ -117,6 +130,21 @@
   <header>
     <h1>Todos</h1>
     <div class="actions">
+      <button
+        class="icon pin"
+        class:active={pinned}
+        title={pinned ? 'Immer im Vordergrund: an' : 'Immer im Vordergrund'}
+        aria-label="Immer im Vordergrund"
+        aria-pressed={pinned}
+        onclick={togglePinned}
+      >
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M10.97 1.47a.75.75 0 0 1 1.06 0l2.5 2.5a.75.75 0 0 1-1.06 1.06l-.47-.47-2.6 2.6.53 2.12a.75.75 0 0 1-.2.71l-1 1a.75.75 0 0 1-1.06 0L6.5 9.81l-3.72 3.72a.75.75 0 0 1-1.06-1.06L5.44 8.75 3.28 6.59a.75.75 0 0 1 0-1.06l1-1a.75.75 0 0 1 .71-.2l2.12.53 2.6-2.6-.47-.47a.75.75 0 0 1 0-1.06l1.73-.27z"
+          />
+        </svg>
+      </button>
       <button class="icon" title="Jetzt synchronisieren" onclick={syncNow} disabled={syncing}>
         <span class:spin={syncing}>⟳</span>
       </button>
@@ -194,6 +222,16 @@
   h1 {
     font-size: 16px;
     margin: 0;
+  }
+  .pin {
+    display: inline-flex;
+    align-items: center;
+    transform: rotate(45deg);
+    transition: transform 0.15s;
+  }
+  .pin.active {
+    color: var(--accent);
+    transform: none;
   }
   h3.customer {
     font-size: 12px;
