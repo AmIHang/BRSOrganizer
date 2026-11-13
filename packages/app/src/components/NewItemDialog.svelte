@@ -19,6 +19,8 @@
   let title = $state('');
   let when = $state('');
   let minutes = $state(30);
+  let bsm = $state('');
+  let otma = $state('');
   let busy = $state(false);
   let error = $state<string | null>(null);
 
@@ -38,6 +40,8 @@
       title = '';
       when = '';
       minutes = 30;
+      bsm = '';
+      otma = '';
       error = null;
       dialog.showModal();
       queueMicrotask(() => titleInput?.focus());
@@ -65,6 +69,8 @@
           type: 'todo',
           title: title.trim(),
           dueAt: when ? new Date(when).toISOString() : null,
+          bsmUrl: bsm.trim() || null,
+          otmaUrl: otma.trim() || null,
         });
       } else {
         const start = new Date(when);
@@ -139,6 +145,19 @@
         </label>
       {/if}
     </div>
+
+    {#if type === 'todo'}
+      <div class="row">
+        <label class="grow">
+          BSM-Ticket (optional)
+          <input type="text" bind:value={bsm} placeholder="BRS_PWg0127 oder URL" />
+        </label>
+        <label class="grow">
+          OTMA-Ticket (optional)
+          <input type="text" bind:value={otma} placeholder="https://…" />
+        </label>
+      </div>
+    {/if}
 
     {#if error}<p class="error">{error}</p>{/if}
 

@@ -47,6 +47,7 @@ describe('MCP server', () => {
       'complete_todo',
       'get_item',
       'list_items',
+      'set_tickets',
       'sync_sources',
       'update_todo',
     ]);
@@ -168,6 +169,27 @@ describe('MCP server', () => {
       status: 'archived',
       statusChangedBy: 'claude',
     });
+  });
+
+  it('sets ticket links, also on synced PRs', async () => {
+    await h.core.sync.run(new StaticSource('github', [pr('1')]));
+    const [p] = h.core.items.list({ type: 'pr' });
+    const c = await open('claude-code');
+    const r = payload<{ item: { bsm_url: string; otma_url: string | null; origin: string } }>(
+      await c.callTool({ name: 'set_tickets', arguments: { id: p!.id, bsm_url: 'BRS_PWg0127' } }),
+    );
+    expect(r.item).toMatchObject({
+      origin: 'external:github',
+      bsm_url: 'https://bsm.boomsoftware.com/indication/BRS_PWg0127',
+      otma_url: null,
+    });
+    const todo = payload<{ item: { otma_url: string } }>(
+      await c.callTool({
+        name: 'add_todo',
+        arguments: { title: 't', otma_url: 'https://otma.example.com/1' },
+      }),
+    );
+    expect(todo.item.otma_url).toBe('https://otma.example.com/1');
   });
 
   it('filters list_items', async () => {

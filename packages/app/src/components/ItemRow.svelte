@@ -6,6 +6,8 @@
   import MergeDialog from './MergeDialog.svelte';
   import PrPanel from './PrPanel.svelte';
   import RowMenu from './RowMenu.svelte';
+  import TicketDialog from './TicketDialog.svelte';
+  import { ticketLabel } from '../lib/tickets';
 
   let {
     item,
@@ -115,8 +117,12 @@
           { label: expanded ? 'Details ausblenden' : 'Details', onclick: () => (expanded = !expanded) },
         ]
       : []),
+    ...(item.type === 'todo' || item.type === 'pr'
+      ? [{ label: 'Tickets …', onclick: () => (editingTickets = true) }]
+      : []),
     { label: 'Archivieren', onclick: () => onarchive(item) },
   ]);
+  let editingTickets = $state(false);
 </script>
 
 <li class="row" class:done={item.status !== 'open'}>
@@ -185,6 +191,20 @@
       {/each}
       {#if vote}<span class="chip">{vote}</span>{/if}
       {#if item.meta?.draft === true}<span class="chip draft">Entwurf</span>{/if}
+      {#if item.bsmUrl}
+        <button
+          class="chip ticket bsm"
+          title="BSM-Ticket öffnen: {item.bsmUrl}"
+          onclick={() => item.bsmUrl && openUrl(item.bsmUrl)}>{ticketLabel(item.bsmUrl)}</button
+        >
+      {/if}
+      {#if item.otmaUrl}
+        <button
+          class="chip ticket otma"
+          title="OTMA-Ticket öffnen: {item.otmaUrl}"
+          onclick={() => item.otmaUrl && openUrl(item.otmaUrl)}>OTMA {ticketLabel(item.otmaUrl)}</button
+        >
+      {/if}
       {#if location}<span>{location}</span>{/if}
       {#if byAssistant}<span class="chip">von {item.createdBy}</span>{/if}
     </div>
@@ -199,6 +219,16 @@
 
   <RowMenu {entries} />
 </li>
+
+{#if editingTickets}
+  <TicketDialog
+    {item}
+    onclose={() => {
+      editingTickets = false;
+      onchanged?.();
+    }}
+  />
+{/if}
 
 {#if merging}
   <MergeDialog
@@ -219,6 +249,24 @@
   }
   .row:hover {
     background: var(--bg-soft);
+  }
+  .chip.ticket {
+    border: none;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .chip.ticket.bsm {
+    background: var(--chip-teal-bg);
+    color: var(--chip-teal-fg);
+  }
+  .chip.ticket.otma {
+    background: var(--chip-pink-bg);
+    color: var(--chip-pink-fg);
+  }
+  .chip.ticket:hover {
+    filter: brightness(1.1);
+    text-decoration: underline;
   }
   /* Left column: type icon, below it the local-clone status dot (PRs only). */
   .lead {

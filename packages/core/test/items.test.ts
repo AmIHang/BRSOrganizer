@@ -70,6 +70,50 @@ describe('ItemService', () => {
     });
   });
 
+  describe('tickets', () => {
+    it('stores BSM and OTMA links on todos; a BSM key becomes the ticket URL', () => {
+      const t = core.items.addTodo(
+        { title: 'Fix', bsmUrl: 'BRS_PWg0127', otmaUrl: 'https://otma.example.com/t/42' },
+        'user',
+      );
+      expect(t).toMatchObject({
+        bsmUrl: 'https://bsm.boomsoftware.com/indication/BRS_PWg0127',
+        otmaUrl: 'https://otma.example.com/t/42',
+      });
+      const cleared = core.items.setTickets(t.id, { otmaUrl: null }, 'claude');
+      expect(cleared).toMatchObject({ bsmUrl: t.bsmUrl, otmaUrl: null, updatedBy: 'claude' });
+    });
+
+    it('validates input', () => {
+      const t = core.items.addTodo({ title: 'x' }, 'user');
+      expect(() => core.items.setTickets(t.id, {}, 'user')).toThrow(ValidationError);
+      expect(() => core.items.setTickets(t.id, { bsmUrl: 'javascript:alert(1)' }, 'user')).toThrow(
+        ValidationError,
+      );
+      expect(() => core.items.setTickets(t.id, { otmaUrl: 'nur-text' }, 'user')).toThrow(
+        ValidationError,
+      );
+      const e = core.items.addEvent({ title: 'x', startsAt: '2026-11-14T08:00:00Z' }, 'user');
+      expect(() => core.items.setTickets(e.id, { bsmUrl: 'BRS_PWg1' }, 'user')).toThrow(
+        ForbiddenOperationError,
+      );
+    });
+
+    it('keeps tickets on synced PRs across syncs', async () => {
+      const source = new StaticSource('github', [pr('1')]);
+      await core.sync.run(source);
+      const [p] = core.items.list({ type: 'pr' });
+      core.items.setTickets(p!.id, { bsmUrl: 'SBRSg1234' }, 'user');
+
+      source.snapshot = [pr('1', { title: 'renamed' })];
+      await core.sync.run(source);
+      expect(core.items.get(p!.id)).toMatchObject({
+        title: 'renamed',
+        bsmUrl: 'https://bsm.boomsoftware.com/indication/SBRSg1234',
+      });
+    });
+  });
+
   describe('addEvent', () => {
     it('creates a manual event, 30 minutes long by default', () => {
       const e = core.items.addEvent(

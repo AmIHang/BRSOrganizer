@@ -46,6 +46,18 @@ Debug-Builds sind von der echten Installation getrennt:
 - Port 47822
 - Der Vite-Origin `http://127.0.0.1:1420` ist für den Daemon freigeschaltet.
 
+### Tickets (BSM / OTMA)
+
+An Todos und PRs lassen sich ein BSM- und ein OTMA-Ticket hinterlegen: über „…“ → „Tickets …“, beim
+Anlegen eines Todos oder per MCP (`set_tickets`, `add_todo`).
+
+- **BSM:** Es genügt der Schlüssel, z. B. `BRS_PWg0127`. Daraus wird
+  `https://bsm.boomsoftware.com/indication/BRS_PWg0127`.
+- **OTMA:** erwartet eine URL.
+- **Anzeige:** Beide erscheinen als Bubble in der Zeile, BSM mit dem Schlüssel, OTMA mit „OTMA …“. Ein Klick
+  öffnet das Ticket.
+- **Sync:** Ticket-Links bleiben bei jedem Sync erhalten, auch an PRs aus TFS oder GitHub.
+
 ### PR-Arbeitsbereich (PR-Manager)
 
 Ein TFS-PR lässt sich in der Liste über ▸ aufklappen. Dort stehen:

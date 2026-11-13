@@ -27,6 +27,8 @@ export interface Item {
   updatedAt: string;
   completedAt: string | null;
   lastSeenAt: string | null;
+  bsmUrl: string | null;
+  otmaUrl: string | null;
 }
 
 /** One entry of a row's "…" menu. */
@@ -48,7 +50,13 @@ export interface CloneSync {
 
 /** What the "new" dialog creates. */
 export type NewItem =
-  | { type: 'todo'; title: string; dueAt: string | null }
+  | {
+      type: 'todo';
+      title: string;
+      dueAt: string | null;
+      bsmUrl: string | null;
+      otmaUrl: string | null;
+    }
   | { type: 'event'; title: string; startsAt: string; endsAt: string };
 
 export interface Settings {

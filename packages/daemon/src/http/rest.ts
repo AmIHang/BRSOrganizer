@@ -132,6 +132,10 @@ export function restRouter({
     res.json(core.items.updateTodo(id(req), req.body ?? {}, 'user'));
   });
 
+  r.patch('/items/:id/tickets', (req, res) => {
+    res.json(core.items.setTickets(id(req), req.body ?? {}, 'user'));
+  });
+
   r.post('/items/:id/complete', (req, res) => {
     res.json(core.items.completeTodo(id(req), 'user'));
   });

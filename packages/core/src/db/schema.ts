@@ -36,6 +36,9 @@ export const items = sqliteTable(
     externalId: text('external_id'),
     /** Source-specific details (repo, review state, location, ...). */
     meta: text('meta', { mode: 'json' }).$type<ItemMeta>(),
+    /** User-entered ticket links (BSM / OTMA); never touched by a sync. */
+    bsmUrl: text('bsm_url'),
+    otmaUrl: text('otma_url'),
     createdBy: text('created_by', { enum: ACTORS }).notNull(),
     updatedBy: text('updated_by', { enum: ACTORS }).notNull(),
     statusChangedBy: text('status_changed_by', { enum: ACTORS }).notNull(),

@@ -22,10 +22,12 @@ export {
 export { CoreError, ForbiddenOperationError, NotFoundError, ValidationError } from './errors.js';
 export { CoreEvents, type CoreEventMap, type ItemsChangedEvent } from './events.js';
 export {
+  BSM_TICKET_BASE,
   type AddEventInput,
   type AddTodoInput,
   type Item,
   type ListFilter,
+  type TicketsInput,
   type UpdateTodoInput,
 } from './items/model.js';
 export { ItemService } from './items/service.js';

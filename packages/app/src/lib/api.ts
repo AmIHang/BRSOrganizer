@@ -91,7 +91,12 @@ export const api = {
     dueAt?: string | null;
     notes?: string | null;
     link?: string | null;
+    bsmUrl?: string | null;
+    otmaUrl?: string | null;
   }) => request<Item>('POST', '/api/todos', input),
+  /** BSM accepts a URL or just the ticket key; null clears. */
+  setTickets: (id: string, tickets: { bsmUrl?: string | null; otmaUrl?: string | null }) =>
+    request<Item>('PATCH', `/api/items/${id}/tickets`, tickets),
   addEvent: (input: { title: string; startsAt: string; endsAt?: string | null }) =>
     request<Item>('POST', '/api/events', input),
   updateTodo: (id: string, patch: Partial<Pick<Item, 'title' | 'notes' | 'link' | 'dueAt'>>) =>

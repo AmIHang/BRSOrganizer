@@ -13,7 +13,9 @@ import {
   DEFAULT_EVENT_MINUTES,
   type AddEventInput,
   listFilterInput,
+  ticketsInput,
   toItem,
+  type TicketsInput,
   updateTodoInput,
   type AddTodoInput,
   type Item,
@@ -82,6 +84,8 @@ export class ItemService {
         notes: v.notes ?? null,
         link: v.link ?? null,
         dueAt: v.dueAt ?? null,
+        bsmUrl: v.bsmUrl ?? null,
+        otmaUrl: v.otmaUrl ?? null,
         status: 'open',
         createdBy: a,
         updatedBy: a,
@@ -123,6 +127,32 @@ export class ItemService {
       .get();
     this.events.emit('items-changed', { reason: 'created', actor: a, ids: [row.id] });
     return toItem(row);
+  }
+
+  /**
+   * Sets or clears (null) the BSM / OTMA ticket links of a todo or pull request. Works on
+   * synced PRs too: the sync never writes these columns, so they survive every sync.
+   */
+  setTickets(id: string, input: TicketsInput, actor: Actor): Item {
+    const a = parse(actorInput, actor);
+    const v = parse(ticketsInput, input);
+    const row = this.getRow(id);
+    if (row.type !== 'todo' && row.type !== 'pr') {
+      throw new ForbiddenOperationError(`tickets can only be set on todos and pull requests`);
+    }
+    const updated = this.db
+      .update(items)
+      .set({
+        ...(v.bsmUrl !== undefined && { bsmUrl: v.bsmUrl }),
+        ...(v.otmaUrl !== undefined && { otmaUrl: v.otmaUrl }),
+        updatedBy: a,
+        updatedAt: this.clock.now(),
+      })
+      .where(eq(items.id, id))
+      .returning()
+      .get();
+    this.events.emit('items-changed', { reason: 'updated', actor: a, ids: [id] });
+    return toItem(updated);
   }
 
   updateTodo(id: string, patch: UpdateTodoInput, actor: Actor): Item {

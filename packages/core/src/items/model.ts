@@ -33,6 +33,9 @@ export interface Item {
   updatedAt: string;
   completedAt: string | null;
   lastSeenAt: string | null;
+  /** User-entered ticket links; kept across syncs. */
+  bsmUrl: string | null;
+  otmaUrl: string | null;
 }
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
@@ -58,6 +61,8 @@ export function toItem(row: ItemRow): Item {
     updatedAt: row.updatedAt.toISOString(),
     completedAt: iso(row.completedAt),
     lastSeenAt: iso(row.lastSeenAt),
+    bsmUrl: row.bsmUrl ?? null,
+    otmaUrl: row.otmaUrl ?? null,
   };
 }
 
@@ -81,11 +86,35 @@ const title = z.string().trim().min(1, 'title must not be empty').max(500);
 const notes = z.string().max(10_000);
 const link = z.url({ protocol: /^https?$/, error: 'link must be an http(s) URL' }).max(2048);
 
+/** BSM tickets live at <base><key>, e.g. https://bsm.boomsoftware.com/indication/BRS_PWg0127. */
+export const BSM_TICKET_BASE = 'https://bsm.boomsoftware.com/indication/';
+const BSM_KEY = /^[A-Za-z][A-Za-z0-9_]*\d+$/;
+
+/** A BSM ticket: full URL, or just the key ("BRS_PWg0127"), which is expanded to the URL. */
+export const bsmTicketInput = z
+  .string()
+  .trim()
+  .transform((v) => (BSM_KEY.test(v) ? `${BSM_TICKET_BASE}${v}` : v))
+  .pipe(link);
+
+/** An OTMA ticket: URL only (no known key format). */
+export const otmaTicketInput = link;
+
+export const ticketsInput = z
+  .object({
+    bsmUrl: bsmTicketInput.nullable().optional(),
+    otmaUrl: otmaTicketInput.nullable().optional(),
+  })
+  .refine((v) => v.bsmUrl !== undefined || v.otmaUrl !== undefined, 'nothing to update');
+export type TicketsInput = z.input<typeof ticketsInput>;
+
 export const addTodoInput = z.object({
   title,
   notes: notes.nullish(),
   link: link.nullish(),
   dueAt: dateInput.nullish(),
+  bsmUrl: bsmTicketInput.nullish(),
+  otmaUrl: otmaTicketInput.nullish(),
 });
 export type AddTodoInput = z.input<typeof addTodoInput>;
 

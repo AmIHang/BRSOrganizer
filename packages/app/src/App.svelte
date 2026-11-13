@@ -23,7 +23,14 @@
 
   async function createItem(input: NewItem) {
     // Errors propagate to the dialog, which shows them and stays open.
-    if (input.type === 'todo') await api.addTodo({ title: input.title, dueAt: input.dueAt });
+    if (input.type === 'todo') {
+      await api.addTodo({
+        title: input.title,
+        dueAt: input.dueAt,
+        bsmUrl: input.bsmUrl,
+        otmaUrl: input.otmaUrl,
+      });
+    }
     else await api.addEvent({ title: input.title, startsAt: input.startsAt, endsAt: input.endsAt });
     await refresh();
   }

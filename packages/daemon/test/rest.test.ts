@@ -26,6 +26,17 @@ describe('REST API', () => {
     expect(list.json<{ items: Item[] }>().items).toHaveLength(1);
   });
 
+  it('sets ticket links', async () => {
+    const t = (await call('POST', '/todos', { title: 'a', bsmUrl: 'SBRSg42' })).json<Item>();
+    expect(t.bsmUrl).toBe('https://bsm.boomsoftware.com/indication/SBRSg42');
+    const r = await call('PATCH', `/items/${t.id}/tickets`, {
+      bsmUrl: null,
+      otmaUrl: 'https://otma.example.com/9',
+    });
+    expect(r.json<Item>()).toMatchObject({ bsmUrl: null, otmaUrl: 'https://otma.example.com/9' });
+    expect((await call('PATCH', `/items/${t.id}/tickets`, { otmaUrl: 'x' })).status).toBe(400);
+  });
+
   it('creates manual events', async () => {
     const r = await call('POST', '/events', {
       title: 'Zahnarzt',

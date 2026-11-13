@@ -19,6 +19,9 @@ export interface McpItem {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  /** Ticket links entered in AmINeeded (also on external items; not third-party text). */
+  bsm_url: string | null;
+  otma_url: string | null;
   /** Local items only. */
   title?: string;
   notes?: string | null;
@@ -44,6 +47,8 @@ export function toMcpItem(item: Item): McpItem {
     created_at: item.createdAt,
     updated_at: item.updatedAt,
     completed_at: item.completedAt,
+    bsm_url: item.bsmUrl,
+    otma_url: item.otmaUrl,
   };
   if (item.source === 'manual') {
     return { ...base, origin: 'local', title: item.title, notes: item.notes, link: item.link };

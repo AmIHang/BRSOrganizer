@@ -28,6 +28,8 @@ function item(partial: Partial<Item>): Item {
     updatedAt: new Date(2026, 10, 1).toISOString(),
     completedAt: null,
     lastSeenAt: null,
+    bsmUrl: null,
+    otmaUrl: null,
     ...partial,
   };
 }

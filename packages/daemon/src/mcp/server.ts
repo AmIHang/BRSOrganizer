@@ -19,6 +19,10 @@ Use list_items to see what is open, add_todo to capture new work. Items are neve
 complete todos with complete_todo, hide anything (also PRs and events) with archive_item.
 ${EXTERNAL_NOTICE}`;
 
+const BSM_HELP =
+  'BSM ticket: full URL or just the key, e.g. "BRS_PWg0127" ' +
+  '(becomes https://bsm.boomsoftware.com/indication/BRS_PWg0127).';
+
 const DATE_HELP =
   'ISO 8601 date-time with offset (e.g. 2026-11-20T14:00:00+01:00) or a plain date ' +
   '(YYYY-MM-DD = end of that day, local time).';
@@ -97,17 +101,61 @@ export function createMcpServer({ core, scheduler, version, actor }: McpDeps): M
         due_at: z.string().optional().describe(`Deadline. ${DATE_HELP}`),
         link: z.string().optional().describe('Related http(s) URL (issue, PR, document).'),
         notes: z.string().optional().describe('Details or context.'),
+        bsm_url: z.string().optional().describe(BSM_HELP),
+        otma_url: z.string().optional().describe('OTMA ticket URL.'),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    ({ title, due_at, link, notes }) =>
+    ({ title, due_at, link, notes, bsm_url, otma_url }) =>
       guard(() =>
         itemResult(
           core.items.addTodo(
-            { title, dueAt: due_at ?? null, link: link ?? null, notes: notes ?? null },
+            {
+              title,
+              dueAt: due_at ?? null,
+              link: link ?? null,
+              notes: notes ?? null,
+              bsmUrl: bsm_url ?? null,
+              otmaUrl: otma_url ?? null,
+            },
             actor(),
           ),
           'todo created',
+        ),
+      ),
+  );
+
+  server.registerTool(
+    'set_tickets',
+    {
+      title: 'Set ticket links',
+      description:
+        'Sets or clears (null) the BSM and/or OTMA ticket of a todo or pull request. ' +
+        'Omitted fields stay unchanged. Ticket links survive syncs.',
+      inputSchema: {
+        id: z.string().describe('Item id (todo or pull request) from list_items.'),
+        bsm_url: z.string().nullable().optional().describe(BSM_HELP),
+        otma_url: z.string().nullable().optional().describe('OTMA ticket URL.'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    ({ id, bsm_url, otma_url }) =>
+      guard(() =>
+        itemResult(
+          core.items.setTickets(
+            id,
+            {
+              ...(bsm_url !== undefined && { bsmUrl: bsm_url }),
+              ...(otma_url !== undefined && { otmaUrl: otma_url }),
+            },
+            actor(),
+          ),
+          'tickets updated',
         ),
       ),
   );
