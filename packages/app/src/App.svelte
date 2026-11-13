@@ -115,7 +115,7 @@
   />
 {:else}
   <header>
-    <h1>Wo werde ich gebraucht?</h1>
+    <h1>Todos</h1>
     <div class="actions">
       <button class="icon" title="Jetzt synchronisieren" onclick={syncNow} disabled={syncing}>
         <span class:spin={syncing}>⟳</span>
