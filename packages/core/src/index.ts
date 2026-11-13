@@ -23,6 +23,7 @@ export { CoreError, ForbiddenOperationError, NotFoundError, ValidationError } fr
 export { CoreEvents, type CoreEventMap, type ItemsChangedEvent } from './events.js';
 export {
   BSM_TICKET_BASE,
+  OTMA_TICKET_BASE,
   type AddEventInput,
   type AddTodoInput,
   type Item,

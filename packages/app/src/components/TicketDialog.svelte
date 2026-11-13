@@ -44,7 +44,7 @@
     </label>
     <label>
       OTMA-Ticket
-      <input type="text" bind:value={otma} placeholder="https://…" />
+      <input type="text" bind:value={otma} placeholder="148082 oder URL" />
     </label>
     <p class="hint muted">Leer lassen entfernt das Ticket.</p>
     {#if error}<p class="error">{error}</p>{/if}

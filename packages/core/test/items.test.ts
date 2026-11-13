@@ -80,6 +80,13 @@ describe('ItemService', () => {
         bsmUrl: 'https://bsm.boomsoftware.com/indication/BRS_PWg0127',
         otmaUrl: 'https://otma.example.com/t/42',
       });
+      // OTMA: the number alone (also with #) becomes the ticket URL.
+      expect(core.items.setTickets(t.id, { otmaUrl: '148082' }, 'user').otmaUrl).toBe(
+        'https://otma.boomsoftware.com/ap/148082',
+      );
+      expect(core.items.setTickets(t.id, { otmaUrl: '#148083' }, 'user').otmaUrl).toBe(
+        'https://otma.boomsoftware.com/ap/148083',
+      );
       const cleared = core.items.setTickets(t.id, { otmaUrl: null }, 'claude');
       expect(cleared).toMatchObject({ bsmUrl: t.bsmUrl, otmaUrl: null, updatedBy: 'claude' });
     });

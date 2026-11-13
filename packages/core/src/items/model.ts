@@ -97,8 +97,15 @@ export const bsmTicketInput = z
   .transform((v) => (BSM_KEY.test(v) ? `${BSM_TICKET_BASE}${v}` : v))
   .pipe(link);
 
-/** An OTMA ticket: URL only (no known key format). */
-export const otmaTicketInput = link;
+/** OTMA tickets live at <base><number>, e.g. https://otma.boomsoftware.com/ap/148082. */
+export const OTMA_TICKET_BASE = 'https://otma.boomsoftware.com/ap/';
+
+/** An OTMA ticket: full URL, or just the number ("148082"), which is expanded to the URL. */
+export const otmaTicketInput = z
+  .string()
+  .trim()
+  .transform((v) => (/^#?\d+$/.test(v) ? `${OTMA_TICKET_BASE}${v.replace(/^#/, '')}` : v))
+  .pipe(link);
 
 export const ticketsInput = z
   .object({

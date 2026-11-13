@@ -53,7 +53,7 @@ Anlegen eines Todos oder per MCP (`set_tickets`, `add_todo`).
 
 - **BSM:** Es genügt der Schlüssel, z. B. `BRS_PWg0127`. Daraus wird
   `https://bsm.boomsoftware.com/indication/BRS_PWg0127`.
-- **OTMA:** erwartet eine URL.
+- **OTMA:** Es genügt die Nummer, z. B. `148082`. Daraus wird `https://otma.boomsoftware.com/ap/148082`.
 - **Anzeige:** Beide erscheinen als Bubble in der Zeile, BSM mit dem Schlüssel, OTMA mit „OTMA …“. Ein Klick
   öffnet das Ticket.
 - **Sync:** Ticket-Links bleiben bei jedem Sync erhalten, auch an PRs aus TFS oder GitHub.

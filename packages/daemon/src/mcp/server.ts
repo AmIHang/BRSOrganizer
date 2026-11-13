@@ -23,6 +23,10 @@ const BSM_HELP =
   'BSM ticket: full URL or just the key, e.g. "BRS_PWg0127" ' +
   '(becomes https://bsm.boomsoftware.com/indication/BRS_PWg0127).';
 
+const OTMA_HELP =
+  'OTMA ticket: full URL or just the number, e.g. "148082" ' +
+  '(becomes https://otma.boomsoftware.com/ap/148082).';
+
 const DATE_HELP =
   'ISO 8601 date-time with offset (e.g. 2026-11-20T14:00:00+01:00) or a plain date ' +
   '(YYYY-MM-DD = end of that day, local time).';
@@ -102,7 +106,7 @@ export function createMcpServer({ core, scheduler, version, actor }: McpDeps): M
         link: z.string().optional().describe('Related http(s) URL (issue, PR, document).'),
         notes: z.string().optional().describe('Details or context.'),
         bsm_url: z.string().optional().describe(BSM_HELP),
-        otma_url: z.string().optional().describe('OTMA ticket URL.'),
+        otma_url: z.string().optional().describe(OTMA_HELP),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
@@ -135,7 +139,7 @@ export function createMcpServer({ core, scheduler, version, actor }: McpDeps): M
       inputSchema: {
         id: z.string().describe('Item id (todo or pull request) from list_items.'),
         bsm_url: z.string().nullable().optional().describe(BSM_HELP),
-        otma_url: z.string().nullable().optional().describe('OTMA ticket URL.'),
+        otma_url: z.string().nullable().optional().describe(OTMA_HELP),
       },
       annotations: {
         readOnlyHint: false,
