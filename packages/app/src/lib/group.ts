@@ -6,6 +6,41 @@ export interface Section {
   key: SectionKey;
   title: string;
   items: Item[];
+  /** Pull requests only: the same items, grouped by customer. */
+  groups?: CustomerGroup[];
+}
+
+export interface CustomerGroup {
+  customer: string;
+  items: Item[];
+}
+
+/**
+ * Customer of a PR: the Azure DevOps project (one project per customer, e.g. "STB"), or the
+ * owner part of a GitHub "owner/repo".
+ */
+export function customerOf(item: Item): string {
+  const project = item.meta?.project;
+  if (typeof project === 'string' && project.trim()) return project.trim();
+  const repo = item.meta?.repo;
+  if (typeof repo === 'string' && repo.includes('/')) return repo.split('/')[0]!;
+  if (typeof repo === 'string' && repo.trim()) return repo.trim();
+  return 'Sonstige';
+}
+
+/**
+ * Groups already sorted PRs by customer. A group is placed where its most urgent PR stands, so
+ * customers with active review requests come before those with only drafts.
+ */
+export function groupByCustomer(sorted: Item[]): CustomerGroup[] {
+  const groups = new Map<string, Item[]>();
+  for (const item of sorted) {
+    const customer = customerOf(item);
+    const list = groups.get(customer) ?? [];
+    list.push(item);
+    groups.set(customer, list);
+  }
+  return [...groups].map(([customer, items]) => ({ customer, items }));
 }
 
 const TITLES: Record<SectionKey, string> = {
@@ -74,11 +109,15 @@ export function groupItems(items: Item[], now: Date): Section[] {
       Number(prReasons(a).includes('review-requested')) ||
     b.createdAt.localeCompare(a.createdAt);
 
-  return ORDER.map((key) => ({
-    key,
-    title: TITLES[key],
-    items: [...buckets.get(key)!].sort(key === 'reviews' ? reviewFirst : byWhen),
-  })).filter((s) => s.items.length > 0);
+  return ORDER.map((key): Section => {
+    const sorted = [...buckets.get(key)!].sort(key === 'reviews' ? reviewFirst : byWhen);
+    return {
+      key,
+      title: TITLES[key],
+      items: sorted,
+      ...(key === 'reviews' && { groups: groupByCustomer(sorted) }),
+    };
+  }).filter((s) => s.items.length > 0);
 }
 
 /** Short German label like "heute 14:30", "Mo 9:00", "12.12." */

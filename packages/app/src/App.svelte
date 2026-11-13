@@ -152,19 +152,32 @@
       <h2 class:alert={section.key === 'overdue' || section.key === 'now'}>
         {section.title} <span class="count">{section.items.length}</span>
       </h2>
-      <ul>
-        {#each section.items as item (item.id)}
-          <ItemRow
-            {item}
-            {now}
-            oncomplete={(i) => act(() => (i.status === 'done' ? api.reopen(i.id) : api.complete(i.id)))}
-            onarchive={(i) => act(() => api.archive(i.id))}
-          />
+      {#if section.groups}
+        {#each section.groups as group (group.customer)}
+          <h3 class="customer">
+            {group.customer} <span class="count">{group.items.length}</span>
+          </h3>
+          {@render rows(group.items)}
         {/each}
-      </ul>
+      {:else}
+        {@render rows(section.items)}
+      {/if}
     </section>
   {/each}
 {/if}
+
+{#snippet rows(list: Item[])}
+  <ul>
+    {#each list as item (item.id)}
+      <ItemRow
+        {item}
+        {now}
+        oncomplete={(i) => act(() => (i.status === 'done' ? api.reopen(i.id) : api.complete(i.id)))}
+        onarchive={(i) => act(() => api.archive(i.id))}
+      />
+    {/each}
+  </ul>
+{/snippet}
 
 <style>
   header {
@@ -181,6 +194,14 @@
   h1 {
     font-size: 16px;
     margin: 0;
+  }
+  h3.customer {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 0;
+    padding: 8px 12px 2px;
+    border-top: 1px solid var(--border);
   }
   .actions {
     display: flex;

@@ -83,6 +83,35 @@ describe('groupItems', () => {
     ]);
   });
 
+  it('groups pull requests by customer, most urgent customer first', () => {
+    const items = [
+      item({ type: 'pr', title: 'stb draft', meta: { project: 'STB', repo: 'STB', draft: true } }),
+      item({
+        type: 'pr',
+        title: 'brs active',
+        meta: { project: 'BRSProduktion', repo: 'Community' },
+      }),
+      item({
+        type: 'pr',
+        title: 'stb review',
+        meta: { project: 'STB', repo: 'STB', reasons: ['review-requested'] },
+      }),
+      item({ type: 'pr', title: 'gh', meta: { repo: 'acme/app' } }),
+      item({ type: 'pr', title: 'unknown', meta: null }),
+    ];
+    const [reviews] = groupItems(items, NOW);
+    // PR order: review request, then active ones newest first (unknown, gh, brs), then drafts.
+    // Each customer group sits where its first PR stands.
+    expect(reviews!.groups!.map((g) => [g.customer, g.items.map((i) => i.title)])).toEqual([
+      ['STB', ['stb review', 'stb draft']],
+      ['Sonstige', ['unknown']],
+      ['acme', ['gh']],
+      ['BRSProduktion', ['brs active']],
+    ]);
+    // Grouping only rearranges: all PRs are still there.
+    expect(reviews!.groups!.flatMap((g) => g.items)).toHaveLength(5);
+  });
+
   it('omits empty sections', () => {
     expect(groupItems([item({ title: 'x' })], NOW).map((s) => s.key)).toEqual(['undated']);
   });
