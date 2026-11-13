@@ -118,9 +118,34 @@
       onchange={() => oncomplete(item)}
     />
   {:else}
-    <span class="kind" title={item.type === 'pr' ? 'Pull Request' : 'Termin'}>
-      {item.type === 'pr' ? '⇄' : '◷'}
-    </span>
+    <div class="lead">
+      <span class="kind" title={item.type === 'pr' ? 'Pull Request' : 'Termin'}>
+        {item.type === 'pr' ? '⇄' : '◷'}
+      </span>
+      {#if manageable && sync}
+        {#if !sync.cloned}
+          <button
+            class="dot clone"
+            disabled={starting}
+            aria-label="Clone + Build"
+            title="Noch nicht geklont – klicken: Clone + Build ({item.meta?.project ?? 'Kunde'}\PR{item.meta?.number ?? ''}, IIS, Referenzen, NuGet, Build)"
+            onclick={updateAndBuild}
+          ></button>
+        {:else if sync.behind}
+          <button
+            class="dot update"
+            disabled={starting}
+            aria-label="Update + Build"
+            title="{sync.behind} neue(r) Commit(s) auf dem Server – klicken: Update + Build"
+            onclick={updateAndBuild}
+          ></button>
+        {:else if sync.remoteGone}
+          <span class="dot gone" title="Branch existiert auf dem Server nicht mehr"></span>
+        {:else}
+          <span class="dot ok" title="Lokal geklont und aktuell"></span>
+        {/if}
+      {/if}
+    </div>
   {/if}
 
   <div class="body">
@@ -145,25 +170,6 @@
       {/each}
       {#if vote}<span class="chip">{vote}</span>{/if}
       {#if item.meta?.draft === true}<span class="chip draft">Entwurf</span>{/if}
-      {#if manageable && sync && !sync.cloned}
-        <button
-          class="chip action"
-          disabled={starting}
-          title="PR nach {item.meta?.project ?? 'Kunde'}\PR{item.meta?.number ?? ''} klonen, IIS einrichten, Referenzen, NuGet, Build"
-          onclick={updateAndBuild}>Clone + Build</button
-        >
-      {:else if manageable && sync?.behind}
-        <button
-          class="chip behind action"
-          disabled={starting}
-          title="Auf dem Server gibt es {sync.behind} Commit(s), die dein lokaler Klon noch nicht hat – holen und neu bauen"
-          onclick={updateAndBuild}>↓ {sync.behind} neu · Update + Build</button
-        >
-      {:else if sync?.remoteGone}
-        <span class="chip gone" title="Der Branch existiert auf dem Server nicht mehr.">Branch weg</span>
-      {:else if sync?.cloned}
-        <span class="chip local" title="Lokal geklont und aktuell.">lokal</span>
-      {/if}
       {#if location}<span>{location}</span>{/if}
       {#if byAssistant}<span class="chip">von {item.createdBy}</span>{/if}
     </div>
@@ -199,37 +205,54 @@
   .row:hover {
     background: var(--bg-soft);
   }
-  .chip.behind {
-    background: var(--chip-orange-bg);
-    color: var(--chip-orange-fg);
-    font-weight: 600;
+  /* Left column: type icon, below it the local-clone status dot (PRs only). */
+  .lead {
+    width: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
   }
-  .chip.action {
+  .dot {
+    display: block;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border-radius: 50%;
     border: none;
-    font: inherit;
-    font-size: 12px;
+  }
+  button.dot {
     cursor: pointer;
-    background: var(--accent);
-    color: #fff;
+    transition: transform 0.12s;
   }
-  .chip.action.behind {
-    background: var(--chip-orange-bg);
-    color: var(--chip-orange-fg);
+  button.dot:hover:not(:disabled) {
+    transform: scale(1.3);
   }
-  .chip.action:hover:not(:disabled) {
-    filter: brightness(1.12);
-  }
-  .chip.action:disabled {
-    opacity: 0.6;
+  button.dot:disabled {
+    opacity: 0.5;
     cursor: default;
   }
-  .chip.gone {
-    background: var(--chip);
-    color: var(--danger);
-  }
-  .chip.local {
+  /* not cloned: ring in the accent color */
+  .dot.clone {
     background: transparent;
-    border: 1px solid var(--border);
+    border: 2px solid var(--accent);
+  }
+  /* server has new commits: filled orange */
+  .dot.update {
+    background: var(--chip-orange-bg);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--chip-orange-bg) 30%, transparent);
+  }
+  /* cloned and up to date: small green, display only */
+  .dot.ok {
+    width: 8px;
+    height: 8px;
+    background: var(--ok);
+  }
+  .dot.gone {
+    width: 8px;
+    height: 8px;
+    background: var(--muted);
   }
   .notice {
     margin-top: 4px;
@@ -252,6 +275,7 @@
     width: 16px;
     text-align: center;
     color: var(--muted);
+    line-height: 1.4;
   }
   .body {
     flex: 1;

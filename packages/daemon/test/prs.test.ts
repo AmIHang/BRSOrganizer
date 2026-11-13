@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { TfsSender, TfsTransport } from '@amineeded/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StaticSource } from '../../core/test/helpers.js';
-import { scriptCommand, type Launcher } from '../src/prs/launcher.js';
+import { scriptCommand, startArguments, type Launcher } from '../src/prs/launcher.js';
 import { PrWorkspace, type PrDetails } from '../src/prs/service.js';
 import { cloneSync, findRepo, normalizeRemote, scanRepos } from '../src/prs/workspace.js';
 import { auth, raw, startHarness, type Harness } from './harness.js';
@@ -112,6 +112,20 @@ describe('cloneSync with real git', () => {
 });
 
 describe('script launcher', () => {
+  it('opens a new console via cmd start with the script base64-encoded', () => {
+    const line = startArguments('PR 4393 – Community', 'C:\\x\\Clone-Branch.ps1', [
+      '-Root',
+      'C:\\a&b',
+    ]);
+    expect(line).toMatch(
+      /^\/d \/c start "PR 4393 _ Community" powershell\.exe -NoProfile -ExecutionPolicy Bypass -NoExit -EncodedCommand [A-Za-z0-9+/=]+$/,
+    );
+    // Nothing from the paths reaches cmd.exe unencoded (no & or quotes to misinterpret).
+    expect(line).not.toContain('a&b');
+    const encoded = line.split(' ').at(-1)!;
+    expect(Buffer.from(encoded, 'base64').toString('utf16le')).toContain("-Root 'C:\\a&b'");
+  });
+
   it('quotes arguments for PowerShell and keeps flags bare', () => {
     expect(
       scriptCommand("PR 1 – O'Brien", 'C:\\Program Files\\AmINeeded\\Clone-Branch.ps1', [
