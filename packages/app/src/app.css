@@ -4,7 +4,7 @@
   --fg: #1f2328;
   --muted: #656d76;
   --border: #d8dee4;
-  --accent: #1f6feb;
+  --accent: #8250df;
   --danger: #cf222e;
   --ok: #1a7f37;
   --chip: #eef1f5;
@@ -21,7 +21,8 @@
     --fg: #e6e8eb;
     --muted: #9198a1;
     --border: #353a41;
-    --accent: #4c8dff;
+    /* Dark enough for white text on chips and the primary button (contrast ≥ 4.5:1). */
+    --accent: #8957e5;
     --danger: #ff6b6b;
     --ok: #3fb950;
     --chip: #2d3138;
