@@ -73,7 +73,13 @@
     setTimeout(() => (notice = null), error ? 8000 : 5000);
   }
 
+  /** Prevents double clicks starting two script windows. */
+  let starting = $state(false);
+
   async function updateAndBuild() {
+    if (starting) return;
+    starting = true;
+    setTimeout(() => (starting = false), 5000);
     try {
       await api.pr.cloneOrUpdate(item.id);
       flash(
@@ -139,11 +145,19 @@
       {/each}
       {#if vote}<span class="chip">{vote}</span>{/if}
       {#if item.meta?.draft === true}<span class="chip draft">Entwurf</span>{/if}
-      {#if sync?.behind}
-        <span
-          class="chip behind"
-          title="Auf dem Server gibt es {sync.behind} Commit(s), die dein lokaler Klon noch nicht hat. Update + Build holt sie."
-          >↓ {sync.behind} neu</span
+      {#if manageable && sync && !sync.cloned}
+        <button
+          class="chip action"
+          disabled={starting}
+          title="PR nach {item.meta?.project ?? 'Kunde'}\PR{item.meta?.number ?? ''} klonen, IIS einrichten, Referenzen, NuGet, Build"
+          onclick={updateAndBuild}>Clone + Build</button
+        >
+      {:else if manageable && sync?.behind}
+        <button
+          class="chip behind action"
+          disabled={starting}
+          title="Auf dem Server gibt es {sync.behind} Commit(s), die dein lokaler Klon noch nicht hat – holen und neu bauen"
+          onclick={updateAndBuild}>↓ {sync.behind} neu · Update + Build</button
         >
       {:else if sync?.remoteGone}
         <span class="chip gone" title="Der Branch existiert auf dem Server nicht mehr.">Branch weg</span>
@@ -189,6 +203,25 @@
     background: var(--chip-orange-bg);
     color: var(--chip-orange-fg);
     font-weight: 600;
+  }
+  .chip.action {
+    border: none;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+  }
+  .chip.action.behind {
+    background: var(--chip-orange-bg);
+    color: var(--chip-orange-fg);
+  }
+  .chip.action:hover:not(:disabled) {
+    filter: brightness(1.12);
+  }
+  .chip.action:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
   .chip.gone {
     background: var(--chip);
