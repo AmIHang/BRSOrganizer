@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
+  CloneSync,
   CompleteResult,
   DaemonStatus,
   Item,
@@ -100,6 +101,11 @@ export const api = {
   reopen: (id: string) => request<Item>('POST', `/api/items/${id}/reopen`),
   sync: () => request<unknown>('POST', '/api/sync'),
   pr: {
+    cloneSync: (refresh = false) =>
+      request<Record<string, CloneSync>>(
+        'GET',
+        `/api/prs/clone-sync${refresh ? '?refresh=1' : ''}`,
+      ),
     details: (id: string, fetch = false) =>
       request<PrDetails>('GET', `/api/prs/${id}${fetch ? '?fetch=1' : ''}`),
     cloneOrUpdate: (id: string) => request<{ clonePath: string }>('POST', `/api/prs/${id}/clone`),

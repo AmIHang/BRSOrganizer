@@ -15,9 +15,11 @@ import {
 } from '@amineeded/core';
 import type { Launcher } from './launcher.js';
 import {
+  cloneSync,
   findRepo,
   localCheckout,
   scanRepos,
+  type CloneSync,
   type LocalCheckout,
   type RepoInfo,
 } from './workspace.js';
@@ -97,7 +99,44 @@ const strip = (ref: string) => ref.replace(/^refs\/heads\//, '');
  * complete. Available through REST (the user) only, never through MCP.
  */
 export class PrWorkspace {
+  private syncCache: { at: number; value: Record<string, CloneSync> } | null = null;
+  private syncRunning: Promise<Record<string, CloneSync>> | null = null;
+
   constructor(private readonly deps: PrWorkspaceDeps) {}
+
+  /**
+   * Clone state of every open TFS PR (cloned? commits on the server not yet local?), for the
+   * list. git fetch per clone, so results are cached for a minute and concurrent calls share
+   * one run.
+   */
+  async cloneSyncAll(options: { refresh?: boolean } = {}): Promise<Record<string, CloneSync>> {
+    const fresh = this.syncCache && Date.now() - this.syncCache.at < 60_000;
+    if (fresh && !options.refresh) return this.syncCache!.value;
+    if (this.syncRunning) return this.syncRunning;
+
+    this.syncRunning = (async () => {
+      const root = this.deps.core.settings.get().workspace.projectsRoot;
+      const out: Record<string, CloneSync> = {};
+      const repos = root ? scanRepos(root) : [];
+      for (const item of repos.length
+        ? this.deps.core.items.list({ type: 'pr', limit: 500 })
+        : []) {
+        const ref = item.link ? pullRequestApiUrl(item.link) : null;
+        const repo = ref ? findRepo(repos, ref.repoUrl) : null;
+        if (ref && repo) out[item.id] = await cloneSync(repo, ref.id);
+      }
+      this.syncCache = { at: Date.now(), value: out };
+      return out;
+    })().finally(() => {
+      this.syncRunning = null;
+    });
+    return this.syncRunning;
+  }
+
+  /** Forget cached clone states (after clone/update/remove/merge). */
+  invalidateCloneSync(): void {
+    this.syncCache = null;
+  }
 
   private tfs() {
     const pat = this.deps.core.secrets.get('tfs-token');

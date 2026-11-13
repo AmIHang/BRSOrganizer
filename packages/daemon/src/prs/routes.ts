@@ -19,6 +19,17 @@ function body<S extends z.ZodType>(schema: S, value: unknown): z.output<S> {
 export function prRouter(workspace: PrWorkspace, scheduler: Scheduler): Router {
   const r = Router();
 
+  // Before /:id. Clone state of all PRs for the list (cached a minute; ?refresh=1 forces).
+  r.get('/clone-sync', async (req, res) => {
+    res.json(await workspace.cloneSyncAll({ refresh: req.query.refresh === '1' }));
+  });
+
+  // Anything that changes a clone or the PR invalidates the cached clone states.
+  r.use((req, _res, next) => {
+    if (req.method !== 'GET') workspace.invalidateCloneSync();
+    next();
+  });
+
   r.get('/:id', async (req, res) => {
     res.json(await workspace.details(itemId(req), { fetch: req.query.fetch === '1' }));
   });

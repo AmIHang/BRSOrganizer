@@ -12,6 +12,8 @@
   --chip-purple-fg: #ffffff;
   --chip-blue-bg: #ddf4ff;
   --chip-blue-fg: #0550ae;
+  --chip-orange-bg: #fb8f44;
+  --chip-orange-fg: #1f2328;
   color-scheme: light dark;
   font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   font-size: 14px;
@@ -34,6 +36,8 @@
     --chip-purple-fg: #ffffff;
     --chip-blue-bg: #1b3a5c;
     --chip-blue-fg: #9cd1ff;
+    --chip-orange-bg: #db6d28;
+    --chip-orange-fg: #ffffff;
   }
 }
 

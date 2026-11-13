@@ -9,7 +9,7 @@
   import { groupItems } from './lib/group';
   import { announceNewItems, remindUpcoming } from './lib/notify';
   import { savedAlwaysOnTop, setAlwaysOnTop } from './lib/pin';
-  import type { Item, NewItem, SourceStatus } from './lib/types';
+  import type { CloneSync, Item, NewItem, SourceStatus } from './lib/types';
 
   let items = $state<Item[]>([]);
   let now = $state(new Date());
@@ -53,6 +53,16 @@
       error = null;
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  /** Local clone state per PR (git fetch on the daemon side, cached there for a minute). */
+  let cloneSync = $state<Record<string, CloneSync>>({});
+  async function refreshCloneSync(force = false) {
+    try {
+      cloneSync = await api.pr.cloneSync(force);
+    } catch {
+      // optional feature: no projects folder, daemon too old, git missing …
     }
   }
 
@@ -107,21 +117,28 @@
       (event) => {
         if (event.type === 'items-changed') void refresh();
         if (event.type === 'items-added') void announceNewItems(event.data.items);
-        if (event.type === 'sync-finished') void refreshStatus();
+        if (event.type === 'sync-finished') {
+          void refreshStatus();
+          void refreshCloneSync();
+        }
       },
       () => void refresh(),
     );
+    void refreshCloneSync();
 
     const tick = setInterval(() => {
       now = new Date();
       void remindUpcoming(items, now);
     }, 30_000);
+    // New commits on PR branches show up without waiting for the next sync.
+    const cloneTick = setInterval(() => void refreshCloneSync(), 3 * 60_000);
 
     const unlisten = listen('tray-sync', () => void syncNow()).catch(() => () => undefined);
 
     return () => {
       unsubscribe();
       clearInterval(tick);
+      clearInterval(cloneTick);
       void unlisten.then((f) => f());
     };
   });
@@ -212,7 +229,11 @@
         {now}
         oncomplete={(i) => act(() => (i.status === 'done' ? api.reopen(i.id) : api.complete(i.id)))}
         onarchive={(i) => act(() => api.archive(i.id))}
-        onchanged={() => void refresh()}
+        onchanged={() => {
+          void refresh();
+          void refreshCloneSync(true);
+        }}
+        sync={cloneSync[item.id]}
       />
     {/each}
   </ul>

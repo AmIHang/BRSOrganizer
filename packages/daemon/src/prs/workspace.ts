@@ -145,6 +145,40 @@ async function findWebUrls(clonePath: string, prId: number): Promise<string[]> {
   return urls;
 }
 
+export interface CloneSync {
+  cloned: boolean;
+  /** Commits on the server the clone does not have yet; null when unknown. */
+  behind: number | null;
+  remoteGone: boolean;
+}
+
+/**
+ * Light check for the list: is the PR cloned, and is the server ahead? Uses the branch the
+ * clone has checked out (Clone-Branch.ps1 checks out the PR branch), so no TFS call is needed.
+ */
+export async function cloneSync(repo: RepoInfo, prId: number): Promise<CloneSync> {
+  const clonePath = clonePathFor(repo, prId);
+  if (!isDir(join(clonePath, '.git'))) return { cloned: false, behind: null, remoteGone: false };
+  let branch: string;
+  try {
+    branch = await git(clonePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  } catch {
+    return { cloned: true, behind: null, remoteGone: false };
+  }
+  if (!branch || branch === 'HEAD') return { cloned: true, behind: null, remoteGone: false };
+  try {
+    await git(clonePath, ['fetch', '-q', 'origin', branch], 60_000);
+  } catch {
+    return { cloned: true, behind: null, remoteGone: true };
+  }
+  try {
+    const behind = Number(await git(clonePath, ['rev-list', '--count', `HEAD..origin/${branch}`]));
+    return { cloned: true, behind: Number.isFinite(behind) ? behind : null, remoteGone: false };
+  } catch {
+    return { cloned: true, behind: null, remoteGone: false };
+  }
+}
+
 /** Local state of the PR checkout. `branch` + `fetch` also compares with the server (slower). */
 export async function localCheckout(
   repo: RepoInfo,

@@ -1,8 +1,11 @@
 <script lang="ts">
   import { openUrl } from '@tauri-apps/plugin-opener';
+  import { api } from '../lib/api';
   import { formatWhen, whenOf } from '../lib/group';
-  import type { Item } from '../lib/types';
+  import type { CloneSync, Item, MenuEntry } from '../lib/types';
+  import MergeDialog from './MergeDialog.svelte';
   import PrPanel from './PrPanel.svelte';
+  import RowMenu from './RowMenu.svelte';
 
   let {
     item,
@@ -10,11 +13,14 @@
     oncomplete,
     onarchive,
     onchanged,
+    sync,
   }: {
     item: Item;
     now: Date;
     oncomplete: (item: Item) => void;
     onarchive: (item: Item) => void;
+    /** Local clone state (PRs only). */
+    sync?: CloneSync;
     /** Something changed outside the list (e.g. a PR was merged): refresh. */
     onchanged?: () => void;
   } = $props();
@@ -54,9 +60,47 @@
     if (item.link) void openUrl(item.link);
   }
 
-  /** Azure DevOps / TFS pull requests get the PR-Manager panel. */
-  const manageable = $derived(item.type === 'pr' && !!item.link && /\/_git\/[^/]+\/pullrequest\/\d+/i.test(item.link));
+  /** Azure DevOps / TFS pull requests get the PR-Manager actions. */
+  const manageable = $derived(
+    item.type === 'pr' && !!item.link && /\/_git\/[^/]+\/pullrequest\/\d+/i.test(item.link),
+  );
   let expanded = $state(false);
+  let merging = $state(false);
+  let notice = $state<{ text: string; error: boolean } | null>(null);
+
+  function flash(text: string, error = false) {
+    notice = { text, error };
+    setTimeout(() => (notice = null), error ? 8000 : 5000);
+  }
+
+  async function updateAndBuild() {
+    try {
+      await api.pr.cloneOrUpdate(item.id);
+      flash(
+        sync?.cloned
+          ? 'Update + Build läuft im PowerShell-Fenster.'
+          : 'Klonen + Build läuft im PowerShell-Fenster (UAC für den IIS bestätigen).',
+      );
+      onchanged?.();
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), true);
+    }
+  }
+
+  const entries = $derived<MenuEntry[]>([
+    ...(manageable
+      ? [
+          {
+            label: sync?.cloned ? 'Update + Build' : 'Klonen + Build',
+            onclick: () => void updateAndBuild(),
+            disabled: sync?.remoteGone === true,
+          },
+          { label: 'Accept & Merge', onclick: () => (merging = true) },
+          { label: expanded ? 'Details ausblenden' : 'Details', onclick: () => (expanded = !expanded) },
+        ]
+      : []),
+    { label: 'Archivieren', onclick: () => onarchive(item) },
+  ]);
 </script>
 
 <li class="row" class:done={item.status !== 'open'}>
@@ -95,29 +139,40 @@
       {/each}
       {#if vote}<span class="chip">{vote}</span>{/if}
       {#if item.meta?.draft === true}<span class="chip draft">Entwurf</span>{/if}
+      {#if sync?.behind}
+        <span
+          class="chip behind"
+          title="Auf dem Server gibt es {sync.behind} Commit(s), die dein lokaler Klon noch nicht hat. Update + Build holt sie."
+          >↓ {sync.behind} neu</span
+        >
+      {:else if sync?.remoteGone}
+        <span class="chip gone" title="Der Branch existiert auf dem Server nicht mehr.">Branch weg</span>
+      {:else if sync?.cloned}
+        <span class="chip local" title="Lokal geklont und aktuell.">lokal</span>
+      {/if}
       {#if location}<span>{location}</span>{/if}
       {#if byAssistant}<span class="chip">von {item.createdBy}</span>{/if}
     </div>
     {#if item.notes && item.type === 'todo'}
       <div class="notes">{item.notes}</div>
     {/if}
+    {#if notice}<div class="notice" class:error={notice.error}>{notice.text}</div>{/if}
     {#if expanded}
       <PrPanel {item} onchanged={() => onchanged?.()} />
     {/if}
   </div>
 
-  {#if manageable}
-    <button
-      class="expand"
-      title={expanded ? 'Details schließen' : 'Details, Klonen, Abschließen'}
-      aria-expanded={expanded}
-      onclick={() => (expanded = !expanded)}>{expanded ? '▾' : '▸'}</button
-    >
-  {/if}
-  <button class="icon" title="Archivieren" aria-label="Archivieren" onclick={() => onarchive(item)}
-    >✕</button
-  >
+  <RowMenu {entries} />
 </li>
+
+{#if merging}
+  <MergeDialog
+    {item}
+    cloned={sync?.cloned === true}
+    onclose={() => (merging = false)}
+    ondone={() => onchanged?.()}
+  />
+{/if}
 
 <style>
   .row {
@@ -130,22 +185,26 @@
   .row:hover {
     background: var(--bg-soft);
   }
-  .row .icon {
-    visibility: hidden;
+  .chip.behind {
+    background: var(--chip-orange-bg);
+    color: var(--chip-orange-fg);
+    font-weight: 600;
   }
-  .row:hover .icon,
-  .row .icon:focus-visible {
-    visibility: visible;
+  .chip.gone {
+    background: var(--chip);
+    color: var(--danger);
   }
-  .expand {
-    border: none;
+  .chip.local {
     background: transparent;
-    color: var(--muted);
-    padding: 0 4px;
-    font-size: 14px;
+    border: 1px solid var(--border);
   }
-  .expand:hover {
-    color: var(--accent);
+  .notice {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--ok);
+  }
+  .notice.error {
+    color: var(--danger);
   }
   .done .title {
     text-decoration: line-through;

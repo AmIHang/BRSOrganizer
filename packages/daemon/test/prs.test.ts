@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StaticSource } from '../../core/test/helpers.js';
 import { scriptCommand, type Launcher } from '../src/prs/launcher.js';
 import { PrWorkspace, type PrDetails } from '../src/prs/service.js';
-import { findRepo, normalizeRemote, scanRepos } from '../src/prs/workspace.js';
+import { cloneSync, findRepo, normalizeRemote, scanRepos } from '../src/prs/workspace.js';
 import { auth, raw, startHarness, type Harness } from './harness.js';
 
 const COLLECTION = 'https://tfs.example.com/tfs/boom';
@@ -53,6 +54,60 @@ describe('workspace scan', () => {
     expect(normalizeRemote('https://user@TFS.example.com/tfs/boom/Pro%20jekt/_git/Repo.git/')).toBe(
       'https://tfs.example.com/tfs/boom/pro jekt/_git/repo',
     );
+  });
+});
+
+describe('cloneSync with real git', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'amineeded-git-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  const sh = (cwd: string, ...args: string[]) =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+      cwd,
+      stdio: 'pipe',
+    });
+
+  it('counts commits on the server that the clone does not have, and notices a deleted branch', async () => {
+    // "server": a bare repo with branch feature/x
+    const server = join(dir, 'server.git');
+    const work = join(dir, 'work');
+    sh(dir, 'init', '-q', '--bare', server);
+    sh(dir, 'clone', '-q', server, work);
+    sh(work, 'checkout', '-q', '-b', 'feature/x');
+    writeFileSync(join(work, 'a.txt'), '1');
+    sh(work, 'add', '.');
+    sh(work, 'commit', '-q', '-m', 'one');
+    sh(work, 'push', '-q', 'origin', 'feature/x');
+
+    // PR clone as Clone-Branch.ps1 would make it: <customer>\PR7 on the PR branch
+    const customerDir = join(dir, 'Kunde');
+    sh(dir, 'clone', '-q', '--branch', 'feature/x', server, join(customerDir, 'PR7'));
+    const repo = {
+      customer: 'Kunde',
+      customerDir,
+      repoName: 'Kunde',
+      repoDir: '',
+      remoteUrl: server,
+    };
+
+    expect(await cloneSync(repo, 7)).toEqual({ cloned: true, behind: 0, remoteGone: false });
+
+    writeFileSync(join(work, 'b.txt'), '2');
+    sh(work, 'add', '.');
+    sh(work, 'commit', '-q', '-m', 'two');
+    writeFileSync(join(work, 'c.txt'), '3');
+    sh(work, 'add', '.');
+    sh(work, 'commit', '-q', '-m', 'three');
+    sh(work, 'push', '-q', 'origin', 'feature/x');
+    expect(await cloneSync(repo, 7)).toEqual({ cloned: true, behind: 2, remoteGone: false });
+
+    sh(work, 'push', '-q', 'origin', '--delete', 'feature/x');
+    expect(await cloneSync(repo, 7)).toMatchObject({ cloned: true, remoteGone: true });
+
+    expect(await cloneSync(repo, 8)).toEqual({ cloned: false, behind: null, remoteGone: false });
   });
 });
 
@@ -247,6 +302,28 @@ describe('PR workspace via REST', () => {
 
     // Already completed: refused.
     expect((await call('POST', '/complete', {})).status).toBe(409);
+  });
+
+  it('reports the clone state of all PRs for the list', async () => {
+    const list = () =>
+      raw(h.port, { path: '/api/prs/clone-sync', headers: auth }).then((r) =>
+        r.json<Record<string, { cloned: boolean; behind: number | null }>>(),
+      );
+    expect(await list()).toEqual({}); // no projects folder yet
+
+    h.core.settings.update({ workspace: { projectsRoot: root } });
+    expect(await list()).toEqual({}); // cached for a minute: still the old answer
+
+    // Writes invalidate the cache; a fake clone without a real git branch counts as cloned.
+    await raw(h.port, {
+      method: 'POST',
+      path: `/api/prs/${prId()}/open`,
+      headers: auth,
+      body: { target: 'folder' },
+    });
+    makeRepo(join(root, 'Community', 'PR4393'), REPO_URL, true);
+    const r = await raw(h.port, { path: '/api/prs/clone-sync?refresh=1', headers: auth });
+    expect(r.json()).toEqual({ [prId()]: { cloned: true, behind: null, remoteGone: false } });
   });
 
   it('rejects non-PR items', async () => {

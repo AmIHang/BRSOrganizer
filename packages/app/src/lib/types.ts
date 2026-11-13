@@ -29,6 +29,23 @@ export interface Item {
   lastSeenAt: string | null;
 }
 
+/** One entry of a row's "…" menu. */
+export interface MenuEntry {
+  label: string;
+  onclick: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+  title?: string;
+}
+
+/** GET /api/prs/clone-sync – per PR item id. */
+export interface CloneSync {
+  cloned: boolean;
+  /** Commits on the server not yet in the local clone. */
+  behind: number | null;
+  remoteGone: boolean;
+}
+
 /** What the "new" dialog creates. */
 export type NewItem =
   | { type: 'todo'; title: string; dueAt: string | null }
