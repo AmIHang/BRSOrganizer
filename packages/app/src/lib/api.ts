@@ -83,6 +83,8 @@ export const api = {
     notes?: string | null;
     link?: string | null;
   }) => request<Item>('POST', '/api/todos', input),
+  addEvent: (input: { title: string; startsAt: string; endsAt?: string | null }) =>
+    request<Item>('POST', '/api/events', input),
   updateTodo: (id: string, patch: Partial<Pick<Item, 'title' | 'notes' | 'link' | 'dueAt'>>) =>
     request<Item>('PATCH', `/api/todos/${id}`, patch),
   complete: (id: string) => request<Item>('POST', `/api/items/${id}/complete`),

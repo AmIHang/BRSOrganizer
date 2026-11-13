@@ -2,14 +2,14 @@
   import { listen } from '@tauri-apps/api/event';
   import { enable, isEnabled } from '@tauri-apps/plugin-autostart';
   import { onMount } from 'svelte';
-  import AddTodo from './components/AddTodo.svelte';
   import ItemRow from './components/ItemRow.svelte';
+  import NewItemDialog from './components/NewItemDialog.svelte';
   import Settings from './components/Settings.svelte';
   import { api, subscribe } from './lib/api';
   import { groupItems } from './lib/group';
   import { announceNewItems, remindUpcoming } from './lib/notify';
   import { savedAlwaysOnTop, setAlwaysOnTop } from './lib/pin';
-  import type { Item, SourceStatus } from './lib/types';
+  import type { Item, NewItem, SourceStatus } from './lib/types';
 
   let items = $state<Item[]>([]);
   let now = $state(new Date());
@@ -19,6 +19,14 @@
   let sources = $state<SourceStatus | null>(null);
   let lastSyncError = $state<string | null>(null);
   let pinned = $state(savedAlwaysOnTop());
+  let creating = $state(false);
+
+  async function createItem(input: NewItem) {
+    // Errors propagate to the dialog, which shows them and stays open.
+    if (input.type === 'todo') await api.addTodo({ title: input.title, dueAt: input.dueAt });
+    else await api.addEvent({ title: input.title, startsAt: input.startsAt, endsAt: input.endsAt });
+    await refresh();
+  }
 
   async function togglePinned() {
     const next = !pinned;
@@ -152,11 +160,10 @@
     </div>
   </header>
 
-  <AddTodo
-    onadd={async (title, dueAt) => {
-      await act(() => api.addTodo({ title, dueAt }));
-    }}
-  />
+  <button class="fab" title="Neu (Todo oder Termin)" aria-label="Neu" onclick={() => (creating = true)}
+    >+</button
+  >
+  <NewItemDialog open={creating} oncreate={createItem} onclose={() => (creating = false)} />
 
   {#if error}
     <p class="banner error">{error}</p>
@@ -222,6 +229,37 @@
   h1 {
     font-size: 16px;
     margin: 0;
+  }
+  .fab {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 2;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    background: var(--accent);
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    transition:
+      transform 0.12s,
+      box-shadow 0.12s;
+  }
+  .fab:hover {
+    transform: scale(1.06);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  }
+  .fab:focus-visible {
+    outline: 2px solid var(--fg);
+    outline-offset: 2px;
+  }
+  /* Keep the last row reachable above the button. */
+  :global(body) {
+    padding-bottom: 84px;
   }
   .pin {
     display: inline-flex;

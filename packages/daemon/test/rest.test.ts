@@ -26,6 +26,21 @@ describe('REST API', () => {
     expect(list.json<{ items: Item[] }>().items).toHaveLength(1);
   });
 
+  it('creates manual events', async () => {
+    const r = await call('POST', '/events', {
+      title: 'Zahnarzt',
+      startsAt: '2026-11-14T08:00:00.000Z',
+    });
+    expect(r.status).toBe(201);
+    expect(r.json<Item>()).toMatchObject({
+      type: 'event',
+      source: 'manual',
+      createdBy: 'user',
+      endsAt: '2026-11-14T08:30:00.000Z',
+    });
+    expect((await call('POST', '/events', { title: 'x' })).status).toBe(400);
+  });
+
   it('maps domain errors to HTTP status codes', async () => {
     expect((await call('POST', '/todos', { title: '' })).status).toBe(400);
     expect((await call('POST', '/items/nope/complete')).status).toBe(404);

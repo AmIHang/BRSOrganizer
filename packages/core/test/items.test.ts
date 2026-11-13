@@ -70,6 +70,51 @@ describe('ItemService', () => {
     });
   });
 
+  describe('addEvent', () => {
+    it('creates a manual event, 30 minutes long by default', () => {
+      const e = core.items.addEvent(
+        { title: 'Zahnarzt', startsAt: '2026-11-14T09:00:00+01:00' },
+        'user',
+      );
+      expect(e).toMatchObject({
+        type: 'event',
+        source: 'manual',
+        status: 'open',
+        title: 'Zahnarzt',
+        startsAt: '2026-11-14T08:00:00.000Z',
+        endsAt: '2026-11-14T08:30:00.000Z',
+        dueAt: null,
+        createdBy: 'user',
+      });
+    });
+
+    it('takes an explicit end and validates it', () => {
+      const e = core.items.addEvent(
+        { title: 'Workshop', startsAt: '2026-11-14T08:00:00Z', endsAt: '2026-11-14T12:00:00Z' },
+        'claude',
+      );
+      expect(e.endsAt).toBe('2026-11-14T12:00:00.000Z');
+      expect(() =>
+        core.items.addEvent(
+          { title: 'x', startsAt: '2026-11-14T08:00:00Z', endsAt: '2026-11-14T07:00:00Z' },
+          'user',
+        ),
+      ).toThrow(ValidationError);
+      // A plain date has no time: not a valid start for an appointment.
+      expect(() => core.items.addEvent({ title: 'x', startsAt: '2026-11-14' }, 'user')).toThrow(
+        ValidationError,
+      );
+    });
+
+    it('is left alone by calendar syncs and cannot be completed like a todo', async () => {
+      const e = core.items.addEvent({ title: 'Privat', startsAt: '2026-11-14T08:00:00Z' }, 'user');
+      await core.sync.run(new StaticSource('calendar', []));
+      expect(core.items.get(e.id).status).toBe('open');
+      expect(() => core.items.completeTodo(e.id, 'user')).toThrow(ForbiddenOperationError);
+      expect(core.items.archiveItem(e.id, 'user').status).toBe('archived');
+    });
+  });
+
   describe('updateTodo', () => {
     it('updates given fields, clears with null and tracks updated_by', () => {
       const t = core.items.addTodo({ title: 'a', notes: 'old', dueAt: '2026-11-20' }, 'user');

@@ -112,6 +112,15 @@ describe('groupItems', () => {
     expect(reviews!.groups!.flatMap((g) => g.items)).toHaveLength(5);
   });
 
+  it('hides events that are over', () => {
+    const items = [
+      item({ type: 'event', title: 'yesterday', startsAt: at(9, 0, -1), endsAt: at(10, 0, -1) }),
+      item({ type: 'event', title: 'this morning', startsAt: at(8), endsAt: at(9) }),
+      item({ type: 'event', title: 'later', startsAt: at(15), endsAt: at(16) }),
+    ];
+    expect(groupItems(items, NOW).flatMap((s) => s.items.map((i) => i.title))).toEqual(['later']);
+  });
+
   it('omits empty sections', () => {
     expect(groupItems([item({ title: 'x' })], NOW).map((s) => s.key)).toEqual(['undated']);
   });

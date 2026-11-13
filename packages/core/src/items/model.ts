@@ -89,6 +89,30 @@ export const addTodoInput = z.object({
 });
 export type AddTodoInput = z.input<typeof addTodoInput>;
 
+/** An instant: Date or ISO 8601 date-time with offset/`Z` (no date-only: events need a time). */
+const instantInput = z
+  .union([z.date(), z.iso.datetime({ offset: true })])
+  .transform((v) => (v instanceof Date ? v : new Date(v)))
+  .refine((d) => !Number.isNaN(d.getTime()), 'invalid date');
+
+export const DEFAULT_EVENT_MINUTES = 30;
+
+/** A manually entered appointment (not from a calendar sync). */
+export const addEventInput = z
+  .object({
+    title,
+    notes: notes.nullish(),
+    link: link.nullish(),
+    startsAt: instantInput,
+    /** Default: start + 30 minutes. */
+    endsAt: instantInput.nullish(),
+  })
+  .refine((v) => !v.endsAt || v.endsAt.getTime() >= v.startsAt.getTime(), {
+    message: 'endsAt must not be before startsAt',
+    path: ['endsAt'],
+  });
+export type AddEventInput = z.input<typeof addEventInput>;
+
 export const updateTodoInput = z
   .object({
     title: title.optional(),

@@ -113,6 +113,10 @@ export function restRouter({ core, scheduler, version, onShutdown }: RestDeps): 
     res.status(201).json(core.items.addTodo(req.body ?? {}, 'user'));
   });
 
+  r.post('/events', (req, res) => {
+    res.status(201).json(core.items.addEvent(req.body ?? {}, 'user'));
+  });
+
   r.patch('/todos/:id', (req, res) => {
     res.json(core.items.updateTodo(id(req), req.body ?? {}, 'user'));
   });

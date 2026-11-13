@@ -82,6 +82,8 @@ export function groupItems(items: Item[], now: Date): Section[] {
     } else if (item.type === 'event') {
       const start = item.startsAt ? Date.parse(item.startsAt) : NaN;
       const end = item.endsAt ? Date.parse(item.endsAt) : start;
+      // Over: synced events get closed by the next sync, manual ones simply drop out of view.
+      if (!Number.isNaN(end) && end <= t) continue;
       if (Number.isNaN(start)) key = 'undated';
       else if (start <= t + HOUR && end > t) key = 'now';
       else if (start <= endOfDay(now)) key = 'today';

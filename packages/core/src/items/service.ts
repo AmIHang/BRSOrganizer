@@ -8,7 +8,10 @@ import { ForbiddenOperationError, NotFoundError, ValidationError } from '../erro
 import type { CoreEvents } from '../events.js';
 import {
   actorInput,
+  addEventInput,
   addTodoInput,
+  DEFAULT_EVENT_MINUTES,
+  type AddEventInput,
   listFilterInput,
   toItem,
   updateTodoInput,
@@ -79,6 +82,36 @@ export class ItemService {
         notes: v.notes ?? null,
         link: v.link ?? null,
         dueAt: v.dueAt ?? null,
+        status: 'open',
+        createdBy: a,
+        updatedBy: a,
+        statusChangedBy: a,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning()
+      .get();
+    this.events.emit('items-changed', { reason: 'created', actor: a, ids: [row.id] });
+    return toItem(row);
+  }
+
+  /** A manual appointment. Calendar syncs never touch it (they only manage their own source). */
+  addEvent(input: AddEventInput, actor: Actor): Item {
+    const a = parse(actorInput, actor);
+    const v = parse(addEventInput, input);
+    const now = this.clock.now();
+    const endsAt = v.endsAt ?? new Date(v.startsAt.getTime() + DEFAULT_EVENT_MINUTES * 60_000);
+    const row = this.db
+      .insert(items)
+      .values({
+        id: ulid(now.getTime()),
+        type: 'event',
+        source: 'manual',
+        title: v.title,
+        notes: v.notes ?? null,
+        link: v.link ?? null,
+        startsAt: v.startsAt,
+        endsAt,
         status: 'open',
         createdBy: a,
         updatedBy: a,

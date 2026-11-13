@@ -22,6 +22,7 @@ export {
 export { CoreError, ForbiddenOperationError, NotFoundError, ValidationError } from './errors.js';
 export { CoreEvents, type CoreEventMap, type ItemsChangedEvent } from './events.js';
 export {
+  type AddEventInput,
   type AddTodoInput,
   type Item,
   type ListFilter,

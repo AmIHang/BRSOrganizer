@@ -29,6 +29,11 @@ export interface Item {
   lastSeenAt: string | null;
 }
 
+/** What the "new" dialog creates. */
+export type NewItem =
+  | { type: 'todo'; title: string; dueAt: string | null }
+  | { type: 'event'; title: string; startsAt: string; endsAt: string };
+
 export interface Settings {
   syncIntervalMinutes: number;
   daemonPort: number;
