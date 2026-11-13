@@ -8,6 +8,10 @@
   --danger: #cf222e;
   --ok: #1a7f37;
   --chip: #eef1f5;
+  --chip-purple-bg: #8250df;
+  --chip-purple-fg: #ffffff;
+  --chip-blue-bg: #ddf4ff;
+  --chip-blue-fg: #0550ae;
   color-scheme: light dark;
   font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   font-size: 14px;
@@ -26,6 +30,10 @@
     --danger: #ff6b6b;
     --ok: #3fb950;
     --chip: #2d3138;
+    --chip-purple-bg: #8957e5;
+    --chip-purple-fg: #ffffff;
+    --chip-blue-bg: #1b3a5c;
+    --chip-blue-fg: #9cd1ff;
   }
 }
 

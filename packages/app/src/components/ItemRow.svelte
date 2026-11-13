@@ -79,10 +79,14 @@
       {/if}
       {#if prRef}<span>{prRef}</span>{/if}
       {#each reasons as r (r)}
-        <span class="chip" class:strong={r === 'review-requested'}>{REASON_LABELS[r] ?? r}</span>
+        <span
+          class="chip"
+          class:strong={r === 'review-requested'}
+          class:authored={r === 'authored'}>{REASON_LABELS[r] ?? r}</span
+        >
       {/each}
       {#if vote}<span class="chip">{vote}</span>{/if}
-      {#if item.meta?.draft === true}<span class="chip">Entwurf</span>{/if}
+      {#if item.meta?.draft === true}<span class="chip draft">Entwurf</span>{/if}
       {#if location}<span>{location}</span>{/if}
       {#if byAssistant}<span class="chip">von {item.createdBy}</span>{/if}
     </div>
@@ -159,6 +163,14 @@
   .chip.strong {
     background: var(--accent);
     color: #fff;
+  }
+  .chip.authored {
+    background: var(--chip-purple-bg);
+    color: var(--chip-purple-fg);
+  }
+  .chip.draft {
+    background: var(--chip-blue-bg);
+    color: var(--chip-blue-fg);
   }
   .overdue {
     color: var(--danger);

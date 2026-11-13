@@ -63,6 +63,26 @@ describe('groupItems', () => {
     ]);
   });
 
+  it('puts draft PRs below active ones', () => {
+    const items = [
+      item({
+        type: 'pr',
+        title: 'draft review',
+        meta: { reasons: ['review-requested'], draft: true },
+      }),
+      item({ type: 'pr', title: 'my draft', meta: { reasons: ['authored'], draft: true } }),
+      item({ type: 'pr', title: 'my active', meta: { reasons: ['authored'], draft: false } }),
+      item({ type: 'pr', title: 'active review', meta: { reasons: ['review-requested'] } }),
+    ];
+    const [reviews] = groupItems(items, NOW);
+    expect(reviews!.items.map((i) => i.title)).toEqual([
+      'active review',
+      'my active',
+      'draft review',
+      'my draft',
+    ]);
+  });
+
   it('omits empty sections', () => {
     expect(groupItems([item({ title: 'x' })], NOW).map((s) => s.key)).toEqual(['undated']);
   });

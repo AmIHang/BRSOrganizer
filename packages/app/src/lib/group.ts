@@ -66,9 +66,13 @@ export function groupItems(items: Item[], now: Date): Section[] {
 
   const byWhen = (a: Item, b: Item) =>
     (whenOf(a)?.getTime() ?? Infinity) - (whenOf(b)?.getTime() ?? Infinity);
+  // Active PRs before drafts; within each, review requests first, then newest first.
+  const isDraft = (i: Item) => i.meta?.draft === true;
   const reviewFirst = (a: Item, b: Item) =>
+    Number(isDraft(a)) - Number(isDraft(b)) ||
     Number(prReasons(b).includes('review-requested')) -
-      Number(prReasons(a).includes('review-requested')) || b.createdAt.localeCompare(a.createdAt);
+      Number(prReasons(a).includes('review-requested')) ||
+    b.createdAt.localeCompare(a.createdAt);
 
   return ORDER.map((key) => ({
     key,
