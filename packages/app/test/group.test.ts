@@ -112,6 +112,18 @@ describe('groupItems', () => {
     expect(reviews!.groups!.flatMap((g) => g.items)).toHaveLength(5);
   });
 
+  it('hides events starting more than 48 hours ahead', () => {
+    const items = [
+      item({ type: 'event', title: 'in 47h', startsAt: at(9, 0, 2), endsAt: at(10, 0, 2) }),
+      item({ type: 'event', title: 'in 49h', startsAt: at(11, 0, 2), endsAt: at(12, 0, 2) }),
+      item({ title: 'todo in 5 days', dueAt: at(9, 0, 5) }),
+    ];
+    expect(groupItems(items, NOW).flatMap((s) => s.items.map((i) => i.title))).toEqual([
+      'in 47h',
+      'todo in 5 days',
+    ]);
+  });
+
   it('hides events that are over', () => {
     const items = [
       item({ type: 'event', title: 'yesterday', startsAt: at(9, 0, -1), endsAt: at(10, 0, -1) }),

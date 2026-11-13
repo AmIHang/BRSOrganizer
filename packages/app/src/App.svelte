@@ -160,9 +160,12 @@
     </div>
   </header>
 
-  <button class="fab" title="Neu (Todo oder Termin)" aria-label="Neu" onclick={() => (creating = true)}
-    >+</button
-  >
+  <button class="fab" title="Neu (Todo oder Termin)" aria-label="Neu" onclick={() => (creating = true)}>
+    <!-- Drawn, not a "+" glyph: font metrics put the glyph off-center. -->
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+    </svg>
+  </button>
   <NewItemDialog open={creating} oncreate={createItem} onclose={() => (creating = false)} />
 
   {#if error}
@@ -242,8 +245,9 @@
     padding: 0;
     background: var(--accent);
     color: #fff;
-    font-size: 28px;
-    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
     transition:
       transform 0.12s,

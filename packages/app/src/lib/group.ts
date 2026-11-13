@@ -56,6 +56,8 @@ const ORDER: SectionKey[] = ['overdue', 'now', 'reviews', 'today', 'soon', 'late
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
+/** Appointments starting later than this are not shown. */
+export const EVENT_HORIZON_MS = 48 * HOUR;
 
 /** When something needs attention: due date for todos, start for events. */
 export function whenOf(item: Item): Date | null {
@@ -84,6 +86,8 @@ export function groupItems(items: Item[], now: Date): Section[] {
       const end = item.endsAt ? Date.parse(item.endsAt) : start;
       // Over: synced events get closed by the next sync, manual ones simply drop out of view.
       if (!Number.isNaN(end) && end <= t) continue;
+      // Further out than the horizon: not relevant yet, shown once it comes closer.
+      if (!Number.isNaN(start) && start > t + EVENT_HORIZON_MS) continue;
       if (Number.isNaN(start)) key = 'undated';
       else if (start <= t + HOUR && end > t) key = 'now';
       else if (start <= endOfDay(now)) key = 'today';
