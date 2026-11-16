@@ -33,6 +33,11 @@ esbuild, kopiert die nativen Module (better-sqlite3, keyring) und legt die `node
 `packages/app/src-tauri/target/release/bundle/nsis/`, der ohne Admin-Rechte nach
 `%LOCALAPPDATA%\AmINeeded` installiert. Nutzer brauchen weder Node noch Rust.
 
+Auf GitHub baut die Action `.github/workflows/build-installer.yml` den Installer bei jedem Push auf `main`,
+bei Tags `v*`, bei Pull Requests und auf Knopfdruck. Vorher laufen Lint, Typecheck und Tests. Den Installer
+gibt es als Artefakt „AmINeeded-installer“ am Workflow-Lauf. Er enthält die `node.exe` des Runners (Node aus
+`.nvmrc`, also LTS).
+
 ### Entwicklung
 
 ```bash

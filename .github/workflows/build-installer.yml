@@ -1,0 +1,44 @@
+name: Build installer
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # version from "packageManager" in package.json
+
+      # The installer ships the node.exe of this runner (scripts/build-sidecar.mjs), so use LTS.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/app/src-tauri -> target
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      # Builds the sidecar runtime (daemon, mcp-stdio, native modules, node.exe) and the NSIS installer.
+      - run: pnpm --filter @amineeded/app tauri:build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AmINeeded-installer
+          path: packages/app/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
