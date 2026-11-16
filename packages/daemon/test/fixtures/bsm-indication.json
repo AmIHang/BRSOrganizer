@@ -1,0 +1,348 @@
+{
+  "ui": {
+    "style": {
+      "title": "BRS_PWg0155 |  In Bearbeitung: IH-Berechnung | Termine werden nicht zusammengelegt",
+      "cssClass": "no-style scrollfullsize with-audit-section"
+    },
+    "menus": [
+      {
+        "title": "Meldung abschließen",
+        "wf": { "contextopath": "*4odtLclCG0", "type": "Edit", "name": "CloseIndication" }
+      }
+    ],
+    "form": [
+      {
+        "type": "section",
+        "items": [
+          {
+            "type": "tile",
+            "items": [
+              {
+                "type": "section",
+                "items": [
+                  {
+                    "type": "section",
+                    "style": { "title": "Allgemeine Informationen" },
+                    "items": [
+                      {
+                        "type": "bfres!bsm-js://IndicationProgressBar",
+                        "context": "*4odtLclCG0",
+                        "feat": "cfProgressBar",
+                        "value": "BRS_PWg0155: *Bitte geben Sie ...",
+                        "stati": ["Neu", "In Bearbeitung", "Geliefert", "Abgeschlossen"],
+                        "status": "In Bearbeitung"
+                      },
+                      {
+                        "type": "label",
+                        "context": "*4odtLclCG0",
+                        "feat": "Category",
+                        "value": "Fehlermeldung/Schwerer Fehler, Workaround umständlich",
+                        "menus": [],
+                        "style": { "title": "Auswirkung" }
+                      },
+                      {
+                        "type": "tile",
+                        "items": [
+                          {
+                            "type": "bfres!boomservices-js://LabelWithAvatar",
+                            "context": "*4odtLclCG0",
+                            "feat": "Reporter",
+                            "value": "Muster Max",
+                            "overlaypanelopath": "*|1ACc0l5u|@BoomServices.Services.UI.OverlayPanel,BoomServices.Core",
+                            "avatarurl": "avatar://1",
+                            "style": { "title": "Reporter" }
+                          }
+                        ]
+                      },
+                      {
+                        "type": "tile",
+                        "items": [
+                          {
+                            "type": "bfres!boomservices-js://ChipInfo",
+                            "context": "*4odtLclCG0",
+                            "feat": "cfHandlerText",
+                            "value": "Beispiel Eva",
+                            "chipDefinitions": [{ "displayText": "Beispiel Eva" }],
+                            "style": { "title": "Verantwortlich" }
+                          }
+                        ]
+                      },
+                      {
+                        "type": "bfres!boomservices-js://ExtendedLabelFeatureControl",
+                        "context": "*4odtLclCG0",
+                        "feat": "Description",
+                        "value": "<p><em>Bitte geben Sie nachfolgende Informationen verbindlich an!</em></p>\n<p><strong>In welcher/n Version(en) ist der Fehler aufgetreten:</strong> <a href=\"https://example.com/versions/\">unterstützte Versionen</a></p>\n<hr />\n<p><strong>Beschreiben Sie bitte den Fehler (beobachtetes Verhalten):</strong><br />\nTermine werden nicht zusammengelegt.<br />\n<img src=\"11111111-1111-1111-1111-111111111111\" alt=\"image.png\" /></p>\n<ul>\n<li>W4: alle 1000 h</li>\n<li>W3: alle 500 h</li>\n</ul>\n<h2 id=\"x\">Erwartet: Termine werden inkludiert &amp; zusammengelegt.</h2>\n",
+                        "dataType": "String",
+                        "documents": [
+                          { "id": "11111111-1111-1111-1111-111111111111", "fileName": "image.png" }
+                        ],
+                        "style": { "multiLine": true, "title": "Beschreibung" }
+                      },
+                      {
+                        "type": "context",
+                        "context": "*4odtLclCG0",
+                        "feat": "cfAdditionalDescriptions",
+                        "ui": []
+                      },
+                      {
+                        "type": "link",
+                        "context": "*4odtLclCG0",
+                        "feat": "cfAddAdditionalDescription",
+                        "value": "Notiz hinzufügen"
+                      },
+                      {
+                        "type": "label",
+                        "context": "*4odtLclCG0",
+                        "feat": "cfAffectedSystem",
+                        "value": "BRS Produktwartung & Support, BRS Produktwartung\n",
+                        "style": { "multiLine": true, "title": "Betroffenes System" }
+                      },
+                      {
+                        "type": "label",
+                        "context": "*4odtLclCG0",
+                        "feat": "Priority",
+                        "value": "Hoch",
+                        "style": { "title": "Priorität" }
+                      },
+                      {
+                        "type": "label",
+                        "context": "*4odtLclCG0",
+                        "feat": "ApplicationArea",
+                        "value": "Rail Asset",
+                        "style": { "title": "Bereich" }
+                      },
+                      {
+                        "type": "bfres!bsm-js://IndicationTagAssocAssignCheckboxes",
+                        "context": "*4odtLclCG0",
+                        "feat": "cfAvailableTags",
+                        "value": "E35@109181",
+                        "tags": [{ "opath": "*2mmuhIn2", "name": "BRS 1.7.0", "style": "#FFF2CC" }]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "context",
+                    "context": "*4odtLclCG0",
+                    "feat": "cfDoneSortedDeliveries",
+                    "ui": []
+                  },
+                  {
+                    "type": "context",
+                    "context": "*4odtLclCG0",
+                    "feat": "cfPlannedSortedDeliveries",
+                    "ui": [
+                      {
+                        "type": "section",
+                        "items": [
+                          {
+                            "type": "tile",
+                            "items": [
+                              {
+                                "type": "section",
+                                "style": { "title": "QS" },
+                                "items": [
+                                  {
+                                    "type": "link",
+                                    "context": "*W6ceL2Je",
+                                    "feat": "cfPlannedReleaseName",
+                                    "value": "1.9.1 (08.01.2027)",
+                                    "style": { "title": "Release" }
+                                  },
+                                  {
+                                    "type": "tile",
+                                    "items": [
+                                      {
+                                        "type": "label",
+                                        "context": "*W6ceL2Je",
+                                        "feat": "DeliveryStatus",
+                                        "value": "Geplant",
+                                        "style": { "title": "Status" }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "section",
+                                "style": { "title": "Release Notiz" },
+                                "items": [
+                                  {
+                                    "type": "label",
+                                    "context": "*W6ceL2Je",
+                                    "feat": "cfReleaseNoteText",
+                                    "value": "",
+                                    "style": { "title": "Release Notiz" }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "section",
+                    "items": [
+                      {
+                        "type": "bfres!system-js://Forms/ObjectList",
+                        "context": "*4odtLclCG0",
+                        "feat": "FilteredDocuments",
+                        "data": [[{ "op": "*r6WfLsls" }, 1, 2, 3, 1]],
+                        "strings": ["", "image", "PNG-Datei", "Muster Max"],
+                        "dates": [1793696217715]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "items": [
+                  {
+                    "type": "section",
+                    "style": { "title": "Beteiligte Benutzer" },
+                    "items": [
+                      {
+                        "type": "bfres!boomservices-js://ChipInfo",
+                        "context": "*4odtLclCG0",
+                        "feat": "ActiveUsersListContext",
+                        "value": "BRS_PWg0155: *Bitte geben Sie ...",
+                        "chipDefinitions": []
+                      }
+                    ]
+                  },
+                  {
+                    "type": "section",
+                    "style": { "title": "Themen" },
+                    "items": [
+                      {
+                        "type": "context",
+                        "context": "*4odtLclCG0",
+                        "feat": "cfConversations",
+                        "ui": [
+                          {
+                            "type": "section",
+                            "items": [
+                              {
+                                "type": "section",
+                                "items": [
+                                  {
+                                    "type": "section",
+                                    "style": { "title": "-", "expanded": true },
+                                    "menus": [],
+                                    "items": [
+                                      {
+                                        "type": "bfres!bsm-js://Conversation",
+                                        "context": "*vktxAuZn",
+                                        "feat": "This",
+                                        "value": "-",
+                                        "users": [
+                                          {
+                                            "email": "max@example.com",
+                                            "username": "MAX",
+                                            "displayText": "Muster Max"
+                                          },
+                                          {
+                                            "email": "eva@example.com",
+                                            "username": "EVA",
+                                            "displayText": "Beispiel Eva"
+                                          }
+                                        ],
+                                        "comments": [
+                                          {
+                                            "username": "MAX",
+                                            "timestamp": "/Date(1793964800591)/",
+                                            "menus": [],
+                                            "html": "<p>Können wir hier bitte eine Info bekommen?</p>\n<p>Der Kunde drängt.</p>\n",
+                                            "context": "*LhcOGyDv",
+                                            "answers": [],
+                                            "documents": []
+                                          },
+                                          {
+                                            "username": "EVA",
+                                            "timestamp": "/Date(1794314316609)/",
+                                            "menus": [],
+                                            "html": "<p><span class=\"mention\" overlaypanelopath=\"*|x|@y\">Muster Max</span><br />\nGilt die Entscheidung aus 2024 noch?<br />\n<img src=\"22222222-2222-2222-2222-222222222222\" alt=\"vergleich.png\" /></p>\n",
+                                            "context": "*aDahLWtq",
+                                            "answers": [
+                                              {
+                                                "username": "MAX",
+                                                "timestamp": "/Date(1794404140078)/",
+                                                "menus": [],
+                                                "html": "<p>Ja, gilt weiterhin.</p>\n",
+                                                "context": "*answer",
+                                                "answers": []
+                                              }
+                                            ],
+                                            "documents": [
+                                              {
+                                                "id": "22222222-2222-2222-2222-222222222222",
+                                                "fileName": "vergleich.png",
+                                                "size": 132384
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "bfres!boomservices-js://CommentInput",
+                                        "context": "*vktxAuZn",
+                                        "feat": "cfCommentInput",
+                                        "value": ""
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "tile",
+            "items": [
+              {
+                "type": "section",
+                "items": [
+                  {
+                    "type": "label",
+                    "context": "*4odtLclCG0",
+                    "feat": "CreateInfo",
+                    "value": "Erstellt von Muster Max am 03.11.2026 09:56"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "items": [
+                  {
+                    "type": "label",
+                    "context": "*4odtLclCG0",
+                    "feat": "ChangeInfo",
+                    "value": "Geändert von Beispiel Eva am 10.11.2026 13:41"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "vm": {
+    "iseditable": false,
+    "formname": "default",
+    "original": [{ "__type": 0, "__opath": "*4odtLclCG0", "__roles": ["root"] }],
+    "types": [{ "n": "dotNetBF.Modules.Indication.Indication" }],
+    "signature": "Z9xmO8j3"
+  },
+  "events": [],
+  "rules": []
+}

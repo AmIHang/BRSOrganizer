@@ -43,7 +43,8 @@ await build({
   platform: 'node',
   target: 'node22',
   format: 'esm',
-  external: ['better-sqlite3', '@napi-rs/keyring'],
+  // playwright-core (BSM tickets via Edge) loads its own files at runtime: shipped as is.
+  external: ['better-sqlite3', '@napi-rs/keyring', 'playwright-core'],
   alias: { '@brsorganizer/core': join(root, 'packages', 'core', 'src', 'index.ts') },
   // CommonJS dependencies (express, ...) call require().
   banner: {
@@ -83,6 +84,18 @@ const nativeDir = dirname(nativeRequire.resolve(`${keyringNative}/package.json`)
 cpSync(nativeDir, join(out, 'node_modules', '@napi-rs', 'keyring-win32-x64-msvc'), {
   recursive: true,
 });
+
+// playwright-core has no dependencies; it drives the installed Edge (no browser download).
+copyPackage('playwright-core', join(root, 'packages', 'daemon'), [
+  'package.json',
+  'index.js',
+  'index.mjs',
+  'browsers.json',
+  'lib',
+  'LICENSE',
+  'NOTICE',
+  'ThirdPartyNotices.txt',
+]);
 
 cpSync(join(coreDir, 'drizzle'), join(out, 'drizzle'), { recursive: true });
 

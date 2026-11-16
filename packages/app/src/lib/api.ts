@@ -102,8 +102,7 @@ export const api = {
   updateTodo: (
     id: string,
     patch: Partial<Pick<Item, 'title' | 'notes' | 'link' | 'dueAt'>> & { project?: string | null },
-  ) =>
-    request<Item>('PATCH', `/api/todos/${id}`, patch),
+  ) => request<Item>('PATCH', `/api/todos/${id}`, patch),
   complete: (id: string) => request<Item>('POST', `/api/items/${id}/complete`),
   archive: (id: string) => request<Item>('POST', `/api/items/${id}/archive`),
   reopen: (id: string) => request<Item>('POST', `/api/items/${id}/reopen`),
@@ -118,7 +117,11 @@ export const api = {
       request<PrDetails>('GET', `/api/prs/${id}${fetch ? '?fetch=1' : ''}`),
     cloneOrUpdate: (id: string) => request<{ clonePath: string }>('POST', `/api/prs/${id}/clone`),
     handOffTodo: (id: string) =>
-      request<{ worktree: string; branch: string }>('POST', `/api/prs/todos/${id}/agent`),
+      request<{
+        worktree: string;
+        branch: string;
+        tickets: Array<{ kind: 'bsm'; ok: boolean; message?: string }>;
+      }>('POST', `/api/prs/todos/${id}/agent`),
     removeLocal: (id: string) =>
       request<{ clonePath: string; ideClosed: number; ideForced: number }>(
         'POST',

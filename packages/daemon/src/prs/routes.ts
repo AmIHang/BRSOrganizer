@@ -31,8 +31,9 @@ export function prRouter(workspace: PrWorkspace, scheduler: Scheduler): Router {
   });
 
   // A todo (not a PR) filed under a project: worktree + claude CLI agent that opens a PR.
-  r.post('/todos/:id/agent', (req, res) => {
-    res.status(202).json(workspace.handOffTodo(itemId(req)));
+  // Reads the BSM ticket first (may open Edge for the BSM login), so this can take a while.
+  r.post('/todos/:id/agent', async (req, res) => {
+    res.status(202).json(await workspace.handOffTodo(itemId(req)));
   });
 
   r.get('/:id', async (req, res) => {

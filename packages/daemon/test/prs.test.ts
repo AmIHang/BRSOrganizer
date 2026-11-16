@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { TfsSender, TfsTransport } from '@brsorganizer/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StaticSource } from '../../core/test/helpers.js';
+import { BsmLoginRequiredError, type BsmHttp } from '../src/tickets/bsm.js';
 import { scriptCommand, startArguments, type Launcher } from '../src/prs/launcher.js';
 import { PrWorkspace, type PrDetails } from '../src/prs/service.js';
 import { cloneSync, findRepo, normalizeRemote, scanRepos } from '../src/prs/workspace.js';
@@ -143,6 +144,7 @@ describe('script launcher', () => {
 describe('PR workspace via REST', () => {
   let root: string;
   let h: Harness;
+  let bsmHttp: BsmHttp;
   let launched: Array<{
     kind: 'script' | 'open';
     title?: string;
@@ -177,6 +179,12 @@ describe('PR workspace via REST', () => {
     launched = [];
     sent = [];
     prStatus = 'active';
+    bsmHttp = {
+      runWorkflow: async () => {
+        throw new BsmLoginRequiredError();
+      },
+      download: async () => new Uint8Array(),
+    };
 
     const transport: TfsTransport = async (urls) =>
       urls.map((u) => (u.endsWith('/_apis/connectionData') ? { authenticatedUser: ME } : pr()));
@@ -198,6 +206,7 @@ describe('PR workspace via REST', () => {
           scriptsDir: 'C:\\app\\runtime\\scripts\\pr',
           tfs: () => ({ transport, sender }),
           sleep: async () => undefined,
+          bsm: (fn) => fn(bsmHttp),
           closeIde: async (clonePath, id) => {
             launched.push({ kind: 'open', path: `closeIde:${clonePath}:${id}` });
             return { closed: 1, forced: 0 };
@@ -299,9 +308,11 @@ describe('PR workspace via REST', () => {
     const r = await handOff();
     expect(r.status).toBe(202);
     const suffix = todo.id.slice(-6).toLowerCase();
+    // BSM not logged in: the hand-off still happens, with the link only.
     expect(r.json()).toEqual({
       worktree: join(root, 'Community', `Todo-${suffix}`),
       branch: `feature/ladung-ubernehmen-${suffix}`,
+      tickets: [{ kind: 'bsm', ok: false, message: 'BSM: nicht angemeldet' }],
     });
     const [run] = launched;
     expect(run!.script).toBe(join('C:\\app\\runtime\\scripts\\pr', 'Start-TodoAgent.ps1'));
@@ -319,11 +330,48 @@ describe('PR workspace via REST', () => {
       `feature/ladung-ubernehmen-${suffix}`,
     ]);
     const prompt = readFileSync(args[11]!, 'utf8');
-    rmSync(args[11]!);
+    rmSync(dirname(args[11]!), { recursive: true });
     expect(prompt).toContain('siehe Ticket');
     expect(prompt).toContain('https://bsm.boomsoftware.com/indication/BRS_PWg0127');
     expect(prompt).toContain('fix(BRS_PWg0127)');
     expect(prompt).toContain('148082');
+    expect(prompt).toContain('konnte vorab nicht gelesen werden (BSM: nicht angemeldet)');
+    expect(prompt).not.toContain('<<<BSM-TICKET');
+  });
+
+  it('puts the BSM ticket contents and images into the agent task', async () => {
+    h.core.settings.update({ workspace: { projectsRoot: root } });
+    const fixture = JSON.parse(
+      readFileSync(join(import.meta.dirname, 'fixtures', 'bsm-indication.json'), 'utf8'),
+    ) as unknown;
+    bsmHttp = { runWorkflow: async () => fixture, download: async () => new Uint8Array([1]) };
+    const todo = h.core.items.addTodo(
+      { title: 'Termine zusammenlegen', bsmUrl: 'BRS_PWg0155' },
+      'user',
+    );
+    h.core.items.updateTodo(todo.id, { project: 'Produktion' }, 'user');
+    const r = await raw(h.port, {
+      method: 'POST',
+      path: `/api/prs/todos/${todo.id}/agent`,
+      headers: auth,
+    });
+    expect(r.status).toBe(202);
+    expect(r.json<{ tickets: unknown }>().tickets).toEqual([{ kind: 'bsm', ok: true }]);
+
+    const promptFile = launched[0]!.args![11]!;
+    const dir = dirname(promptFile);
+    try {
+      const prompt = readFileSync(promptFile, 'utf8');
+      expect(prompt.charCodeAt(0)).toBe(0xfeff);
+      expect(prompt).toContain('## Ticketinhalt (extern)');
+      expect(prompt).toContain('<<<BSM-TICKET\n### BSM-Ticket BRS_PWg0155: IH-Berechnung');
+      expect(prompt).toContain('Gilt die Entscheidung aus 2024 noch?');
+      expect(prompt).toContain(`- Bild 1 (image.png): ${join(dir, 'bsm-1-image.png')}`);
+      expect(prompt).toContain('ruf es nicht erneut ab');
+      expect(readFileSync(join(dir, 'bsm-2-vergleich.png'))).toEqual(Buffer.from([1]));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('opens the solution and removes only clones made by the script', async () => {

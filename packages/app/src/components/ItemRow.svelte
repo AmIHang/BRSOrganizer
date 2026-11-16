@@ -99,15 +99,26 @@
     }
   }
 
+  /** The hand-off reads the BSM ticket first (Edge may open for the BSM login). */
+  let handingOff = $state(false);
+
   async function handOff() {
-    if (starting) return;
-    starting = true;
-    setTimeout(() => (starting = false), 5000);
+    if (handingOff) return;
+    handingOff = true;
+    notice = { text: item.bsmUrl ? 'Lese BSM-Ticket …' : 'Starte Agent …', error: false };
     try {
       const r = await api.pr.handOffTodo(item.id);
-      flash(`Agent läuft im PowerShell-Fenster (${r.branch}).`);
+      const failed = r.tickets.find((t) => !t.ok);
+      flash(
+        failed
+          ? `Agent läuft (${r.branch}), aber ohne BSM-Inhalt – nur Link übergeben: ${failed.message ?? 'Fehler'}`
+          : `Agent läuft im PowerShell-Fenster (${r.branch}).`,
+        !!failed,
+      );
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), true);
+    } finally {
+      handingOff = false;
     }
   }
 
@@ -234,9 +245,9 @@
       {#if canHandOff}
         <button
           class="chip action claude"
-          disabled={starting}
-          title="Todo an einen Claude-Agenten übergeben (eigener Branch, PowerShell-Fenster)"
-          onclick={handOff}>An Claude</button
+          disabled={handingOff}
+          title="Todo an einen Claude-Agenten übergeben (eigener Branch, PowerShell-Fenster); das BSM-Ticket wird vorher gelesen"
+          onclick={handOff}>{handingOff ? 'An Claude …' : 'An Claude'}</button
         >
       {/if}
     </div>
