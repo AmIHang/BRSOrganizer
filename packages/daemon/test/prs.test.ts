@@ -335,8 +335,18 @@ describe('PR workspace via REST', () => {
     expect(prompt).toContain('https://bsm.boomsoftware.com/indication/BRS_PWg0127');
     expect(prompt).toContain('fix(BRS_PWg0127)');
     expect(prompt).toContain('148082');
-    expect(prompt).toContain('konnte vorab nicht gelesen werden (BSM: nicht angemeldet)');
+    expect(prompt).toContain('Der Inhalt wurde nicht vorab gelesen (BSM: nicht angemeldet)');
     expect(prompt).not.toContain('<<<BSM-TICKET');
+    // All sources, in order of precedence: own description, OTMA (internal), BSM (customer).
+    const order = [
+      '### 1. Beschreibung des Entwicklers\n\nsiehe Ticket',
+      '### 2. OTMA-Ticket (intern)\n\nLink: https://otma.boomsoftware.com/ap/148082',
+      '### 3. BSM-Ticket (Kunde)\n\nLink: https://bsm.boomsoftware.com/indication/BRS_PWg0127',
+      '## Vorgehen',
+    ].map((s) => prompt.indexOf(s));
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(prompt).toContain('Widersprechen sie sich, gilt die höher priorisierte');
   });
 
   it('puts the BSM ticket contents and images into the agent task', async () => {
@@ -363,7 +373,9 @@ describe('PR workspace via REST', () => {
     try {
       const prompt = readFileSync(promptFile, 'utf8');
       expect(prompt.charCodeAt(0)).toBe(0xfeff);
-      expect(prompt).toContain('## Ticketinhalt (extern)');
+      expect(prompt).toContain('### 3. BSM-Ticket (Kunde)');
+      expect(prompt).toContain('### 1. Beschreibung des Entwicklers\n\n(keine)');
+      expect(prompt).not.toContain('OTMA-Ticket (intern)'); // no OTMA ticket on this todo
       expect(prompt).toContain('<<<BSM-TICKET\n### BSM-Ticket BRS_PWg0155: IH-Berechnung');
       expect(prompt).toContain('Gilt die Entscheidung aus 2024 noch?');
       expect(prompt).toContain(`- Bild 1 (image.png): ${join(dir, 'bsm-1-image.png')}`);

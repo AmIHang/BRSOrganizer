@@ -120,7 +120,7 @@ export const api = {
       request<{
         worktree: string;
         branch: string;
-        tickets: Array<{ kind: 'bsm'; ok: boolean; message?: string }>;
+        tickets: Array<{ kind: 'bsm' | 'otma'; ok: boolean; message?: string }>;
       }>('POST', `/api/prs/todos/${id}/agent`),
     removeLocal: (id: string) =>
       request<{ clonePath: string; ideClosed: number; ideForced: number }>(

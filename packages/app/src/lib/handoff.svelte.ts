@@ -27,7 +27,7 @@ export async function startHandOff(item: Item): Promise<void> {
     done = failed
       ? {
           running: false,
-          text: `Agent läuft (${r.branch}), aber ohne BSM-Inhalt – nur Link übergeben: ${failed.message ?? 'Fehler'}`,
+          text: `Agent läuft (${r.branch}), aber ohne ${failed.kind.toUpperCase()}-Inhalt – nur Link übergeben: ${failed.message ?? 'Fehler'}`,
           error: true,
         }
       : { running: false, text: `Agent läuft im PowerShell-Fenster (${r.branch}).`, error: false };
