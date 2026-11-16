@@ -1,4 +1,4 @@
-import { eq, lte, max } from 'drizzle-orm';
+import { and, eq, lte, max } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import type { Clock } from '../clock.js';
 import type { Db } from '../db/client.js';
@@ -96,6 +96,7 @@ export class SyncEngine {
     try {
       const snapshot = await source.fetchSnapshot();
       counts = this.apply(source.id, snapshot);
+      counts.changedIds.push(...this.adoptAgentTodos());
     } catch (e) {
       // Nothing is closed on failure: a failed fetch must not look like "everything is gone".
       error = describeError(e);
@@ -148,6 +149,63 @@ export class SyncEngine {
     }
     this.events.emit('sync-finished', result);
     return result;
+  }
+
+  /**
+   * A todo handed to an agent (`meta.agentBranch`) becomes its pull request once the PR shows
+   * up: the PR takes over the todo's tickets (unless it has its own) and the todo is done.
+   * The branch is dropped from the todo, so reopening it does not adopt the PR again.
+   */
+  adoptAgentTodos(): string[] {
+    const open = (type: 'todo' | 'pr') =>
+      this.db
+        .select()
+        .from(items)
+        .where(and(eq(items.type, type), eq(items.status, 'open')))
+        .all();
+    const todos = open('todo').filter((t) => typeof t.meta?.agentBranch === 'string');
+    if (!todos.length) return [];
+    const prs = open('pr');
+    const changed: string[] = [];
+    const now = this.clock.now();
+
+    this.db.transaction((tx) => {
+      for (const todo of todos) {
+        const branch = String(todo.meta!.agentBranch).toLowerCase();
+        const project = todo.meta!.project;
+        const pr = prs.find(
+          (p) =>
+            typeof p.meta?.sourceBranch === 'string' &&
+            p.meta.sourceBranch.toLowerCase() === branch &&
+            (typeof project !== 'string' || p.meta.project === project),
+        );
+        if (!pr) continue;
+        tx.update(items)
+          .set({
+            bsmUrl: pr.bsmUrl ?? todo.bsmUrl,
+            otmaUrl: pr.otmaUrl ?? todo.otmaUrl,
+            updatedBy: 'sync',
+            updatedAt: now,
+          })
+          .where(eq(items.id, pr.id))
+          .run();
+        const meta: ItemMeta = { ...todo.meta, prItemId: pr.id };
+        delete meta.agentBranch;
+        tx.update(items)
+          .set({
+            status: 'done',
+            statusChangedBy: 'sync',
+            completedAt: now,
+            meta,
+            updatedBy: 'sync',
+            updatedAt: now,
+          })
+          .where(eq(items.id, todo.id))
+          .run();
+        changed.push(pr.id, todo.id);
+      }
+    });
+    return changed;
   }
 
   /**

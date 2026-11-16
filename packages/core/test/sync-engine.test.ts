@@ -15,6 +15,33 @@ describe('SyncEngine', () => {
     core.items.list({ type: 'pr', status });
   const byExt = (id: string) => prs().find((i) => i.externalId === id)!;
 
+  it('turns a todo handed to an agent into its pull request once the PR is synced', async () => {
+    const todo = core.items.addTodo(
+      { title: 'Ladung', bsmUrl: 'BRS_PWg0127', otmaUrl: '148082' },
+      'user',
+    );
+    core.items.updateTodo(todo.id, { project: 'STB', agentBranch: 'feature/ladung-abc' }, 'user');
+    const tfs = new StaticSource('tfs', [
+      pr('other', { meta: { project: 'XYZ', sourceBranch: 'feature/ladung-abc' } }),
+    ]);
+    await core.sync.run(tfs);
+    expect(core.items.get(todo.id).status).toBe('open'); // same branch, other project
+
+    tfs.snapshot.push(pr('mine', { meta: { project: 'STB', sourceBranch: 'Feature/Ladung-ABC' } }));
+    await core.sync.run(tfs);
+    const done = core.items.get(todo.id);
+    const adopted = byExt('mine');
+    expect(done).toMatchObject({ status: 'done', statusChangedBy: 'sync' });
+    expect(done.meta).toEqual({ project: 'STB', prItemId: adopted.id });
+    expect(adopted.bsmUrl).toBe(todo.bsmUrl);
+    expect(adopted.otmaUrl).toBe(todo.otmaUrl);
+
+    // Reopened by the user: stays a todo.
+    core.items.reopenItem(todo.id, 'user');
+    await core.sync.run(tfs);
+    expect(core.items.get(todo.id).status).toBe('open');
+  });
+
   it('inserts new items as open, created by sync', async () => {
     const r = await core.sync.run(github);
     expect(r).toMatchObject({ ok: true, added: 2, updated: 0, closed: 0, reopened: 0 });

@@ -138,6 +138,13 @@ Worktree `<Kunde>\Todo-<id>` auf einem neuen Branch vom Standard-Branch an und s
 (Claude Code CLI muss installiert sein) mit Notiz, BSM- und OTMA-Ticket. Der Agent liest die Tickets,
 setzt die Lösung um und erstellt den PR. Der Worktree bleibt danach stehen.
 
+Der **BSM/OTMA-Account** (ein Login für beide) wird in den Einstellungen gepflegt und liegt in der
+Windows-Anmeldeinformationsverwaltung. Der Agent bekommt ihn nur über die Umgebungsvariablen
+`BRS_TICKET_USER` / `BRS_TICKET_PASSWORD` seines Fensters, nie über Datei oder Kommandozeile.
+
+Sobald der Sync den PR des Agenten findet (gleicher Source-Branch im gleichen Projekt), wird aus dem
+Todo der PR-Eintrag: Der PR übernimmt BSM- und OTMA-Ticket, das Todo ist erledigt.
+
 Voraussetzung ist der **Projektordner** in den Einstellungen, z. B. `C:\projects-git`. Darunter liegt pro Kunde
 ein Ordner mit dem Repo. Der passende Kundenordner wird über die Remote-URL gefunden, die Ordnernamen
 sind also frei wählbar.

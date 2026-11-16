@@ -149,6 +149,7 @@ describe('PR workspace via REST', () => {
     script?: string;
     args?: string[];
     path?: string;
+    env?: Record<string, string>;
   }>;
   let sent: Array<{ method: string; url: string; body: unknown }>;
   let prStatus: string;
@@ -186,7 +187,8 @@ describe('PR workspace via REST', () => {
       return {};
     };
     const launcher: Launcher = {
-      runScript: (title, script, args) => launched.push({ kind: 'script', title, script, args }),
+      runScript: (title, script, args, env) =>
+        launched.push({ kind: 'script', title, script, args, ...(env && { env }) }),
       open: (path) => launched.push({ kind: 'open', path }),
     };
 
@@ -324,6 +326,23 @@ describe('PR workspace via REST', () => {
     expect(prompt).toContain('https://bsm.boomsoftware.com/indication/BRS_PWg0127');
     expect(prompt).toContain('fix(BRS_PWg0127)');
     expect(prompt).toContain('148082');
+    expect(prompt).not.toContain('BRS_TICKET_PASSWORD');
+    expect(run!.env).toBeUndefined();
+    expect(h.core.items.get(todo.id).meta).toMatchObject({
+      agentBranch: `feature/ladung-ubernehmen-${suffix}`,
+    });
+
+    // With a BSM/OTMA account: credentials only through the environment, never in the prompt.
+    h.core.secrets.set('ticket-user', 'max');
+    h.core.secrets.set('ticket-password', 'geheim!');
+    await handOff();
+    const second = launched[1]!;
+    expect(second.env).toEqual({ BRS_TICKET_USER: 'max', BRS_TICKET_PASSWORD: 'geheim!' });
+    expect(second.args!.join(' ')).not.toContain('geheim!');
+    const prompt2 = readFileSync(second.args![11]!, 'utf8');
+    rmSync(second.args![11]!);
+    expect(prompt2).toContain('BRS_TICKET_PASSWORD');
+    expect(prompt2).not.toContain('geheim!');
   });
 
   it('opens the solution and removes only clones made by the script', async () => {

@@ -181,7 +181,9 @@ export function createMcpServer({ core, scheduler, version, actor }: McpDeps): M
           .string()
           .nullable()
           .optional()
-          .describe('Project (customer) to file the todo under, as on pull requests; null removes it.'),
+          .describe(
+            'Project (customer) to file the todo under, as on pull requests; null removes it.',
+          ),
       },
       annotations: {
         readOnlyHint: false,

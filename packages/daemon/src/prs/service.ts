@@ -99,8 +99,11 @@ export interface PrWorkspaceDeps {
 
 const strip = (ref: string) => ref.replace(/^refs\/heads\//, '');
 
+export const TICKET_USER_ENV = 'BRS_TICKET_USER';
+export const TICKET_PASSWORD_ENV = 'BRS_TICKET_PASSWORD';
+
 /** Task for the claude CLI agent; the script appends worktree and target branch. */
-export function agentPrompt(todo: Item, project: string): string {
+export function agentPrompt(todo: Item, project: string, hasAccount = false): string {
   const bsmKey = todo.bsmUrl?.split('/').filter(Boolean).pop();
   return [
     `# Auftrag: ${todo.title}`,
@@ -108,6 +111,14 @@ export function agentPrompt(todo: Item, project: string): string {
     `Projekt: ${project}`,
     todo.bsmUrl ? `BSM-Ticket: ${todo.bsmUrl}` : 'BSM-Ticket: keines',
     todo.otmaUrl ? `OTMA-Ticket: ${todo.otmaUrl}` : 'OTMA-Ticket: keines',
+    ...(hasAccount
+      ? [
+          '',
+          `Anmeldung an BSM und OTMA (gleicher Account): Benutzer in der Umgebungsvariable ` +
+            `${TICKET_USER_ENV}, Passwort in ${TICKET_PASSWORD_ENV}. Verwende sie nur über ` +
+            'die Variablen; gib das Passwort nie aus, schreib es in keine Datei und committe es nie.',
+        ]
+      : []),
     '',
     '## Notiz aus dem Todo',
     '',
@@ -314,23 +325,36 @@ export class PrWorkspace {
     const branch = `feature/${slug || 'todo'}-${suffix}`;
     const name = `Todo-${suffix}`;
 
+    // BSM/OTMA account: only through the console's environment, never in files or arguments.
+    const user = this.deps.core.secrets.get('ticket-user');
+    const password = this.deps.core.secrets.get('ticket-password');
+    const account = user && password;
+
     const promptFile = join(tmpdir(), `brsorganizer-agent-${suffix}.md`);
     // BOM: Windows PowerShell 5.1 (Add-Content in the script) would read it as ANSI otherwise.
-    writeFileSync(promptFile, '﻿' + agentPrompt(todo, project), 'utf8');
-    this.deps.launcher.runScript(`Agent – ${todo.title}`, this.script('Start-TodoAgent.ps1'), [
-      '-Root',
-      root,
-      '-Project',
-      repo.customer,
-      '-Repo',
-      repo.repoName,
-      '-Name',
-      name,
-      '-Branch',
-      branch,
-      '-PromptFile',
-      promptFile,
-    ]);
+    writeFileSync(promptFile, '﻿' + agentPrompt(todo, project, !!account), 'utf8');
+    // Lets the sync turn the todo into the pull request once it shows up.
+    this.deps.core.items.updateTodo(itemId, { agentBranch: branch }, 'user');
+    const script = this.script('Start-TodoAgent.ps1');
+    this.deps.launcher.runScript(
+      `Agent – ${todo.title}`,
+      script,
+      [
+        '-Root',
+        root,
+        '-Project',
+        repo.customer,
+        '-Repo',
+        repo.repoName,
+        '-Name',
+        name,
+        '-Branch',
+        branch,
+        '-PromptFile',
+        promptFile,
+      ],
+      account ? { [TICKET_USER_ENV]: user, [TICKET_PASSWORD_ENV]: password } : undefined,
+    );
     return { worktree: join(repo.customerDir, name), branch };
   }
 

@@ -160,11 +160,10 @@ export class ItemService {
     const v = parse(updateTodoInput, patch);
     const current = this.getRow(id);
     this.requireTodo(current);
-    let meta = current.meta;
-    if (v.project !== undefined) {
-      const rest = { ...current.meta };
-      delete rest.project;
-      meta = v.project === null ? rest : { ...rest, project: v.project };
+    const meta = { ...current.meta };
+    for (const key of ['project', 'agentBranch'] as const) {
+      if (v[key] === null) delete meta[key];
+      else if (v[key] !== undefined) meta[key] = v[key];
     }
 
     const row = this.db
@@ -174,7 +173,7 @@ export class ItemService {
         ...(v.notes !== undefined && { notes: v.notes }),
         ...(v.link !== undefined && { link: v.link }),
         ...(v.dueAt !== undefined && { dueAt: v.dueAt }),
-        ...(v.project !== undefined && { meta }),
+        ...((v.project !== undefined || v.agentBranch !== undefined) && { meta }),
         updatedBy: a,
         updatedAt: this.clock.now(),
       })

@@ -183,6 +183,7 @@ interface ApiPullRequest {
   creationDate: string;
   createdBy?: Identity;
   targetRefName?: string;
+  sourceRefName?: string;
   repository: { name: string; webUrl?: string; project: { name: string } };
   reviewers?: Array<Identity & { vote?: number; isContainer?: boolean }>;
 }
@@ -267,6 +268,7 @@ export class TfsSource implements SyncSource {
           reasons,
           myVote: mine ? (VOTES[mine.vote ?? 0] ?? String(mine.vote)) : null,
           targetBranch: pr.targetRefName?.replace(/^refs\/heads\//, '') ?? null,
+          sourceBranch: pr.sourceRefName?.replace(/^refs\/heads\//, '') ?? null,
           prCreatedAt: pr.creationDate,
         },
       });

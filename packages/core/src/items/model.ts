@@ -157,6 +157,8 @@ export const updateTodoInput = z
     dueAt: dateInput.nullable().optional(),
     /** Project (customer) the todo is filed under, like a PR's project; null removes it. */
     project: z.string().trim().min(1).max(100).nullable().optional(),
+    /** Branch an agent works on for this todo; the sync turns the todo into its PR. */
+    agentBranch: z.string().trim().min(1).max(200).nullable().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), 'nothing to update');
 export type UpdateTodoInput = z.input<typeof updateTodoInput>;
