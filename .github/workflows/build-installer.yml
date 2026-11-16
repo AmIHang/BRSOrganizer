@@ -1,11 +1,10 @@
 name: Build installer
 
+# Only release branches and their v* tags (the tag publishes the GitHub release).
 on:
   push:
-    branches: [main, 'release/**']
+    branches: ['release/**']
     tags: ['v*']
-  pull_request:
-  workflow_dispatch:
 
 jobs:
   windows-installer:

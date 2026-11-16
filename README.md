@@ -33,16 +33,17 @@ esbuild, kopiert die nativen Module (better-sqlite3, keyring) und legt die `node
 `packages/app/src-tauri/target/release/bundle/nsis/`, der ohne Admin-Rechte nach
 `%LOCALAPPDATA%\AmINeeded` installiert. Nutzer brauchen weder Node noch Rust.
 
-Auf GitHub baut die Action `.github/workflows/build-installer.yml` den Installer bei jedem Push auf `main`,
-bei Tags `v*`, bei Pull Requests und auf Knopfdruck. Vorher laufen Lint, Typecheck und Tests. Den Installer
+Auf GitHub baut die Action `.github/workflows/build-installer.yml` den Installer nur für Release-Branches
+(`release/**`) und Release-Tags (`v*`). Vorher laufen Lint, Typecheck und Tests. Den Installer
 gibt es als Artefakt „AmINeeded-installer“ am Workflow-Lauf. Er enthält die `node.exe` des Runners (Node aus
 `.nvmrc`, also LTS).
 
-**Release:** einen Tag `v<Version>` pushen, z. B.
+**Release:** einen Release-Branch anlegen, dort den Tag `v<Version>` setzen und beides pushen, z. B.
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git branch release/0.2.0 main
+git tag -a v0.2.0 -m "AmINeeded 0.2.0" release/0.2.0
+git push origin release/0.2.0 v0.2.0
 ```
 
 Die Action übernimmt die Version aus dem Tag in den Installer (`AmINeeded_0.2.0_x64-setup.exe`) und legt ein
