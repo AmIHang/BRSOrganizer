@@ -139,11 +139,12 @@
     ...(item.type === 'todo'
       ? [{ label: 'In Projekt verschieben …', onclick: () => (movingProject = true) }]
       : []),
-    ...(item.type === 'todo' && typeof item.meta?.project === 'string'
-      ? [{ label: 'An Agent weitergeben', onclick: () => void handOff(), disabled: starting }]
-      : []),
     { label: 'Archivieren', onclick: () => onarchive(item) },
   ]);
+  /** Open todos inside a project can be handed off to a Claude agent. */
+  const canHandOff = $derived(
+    item.type === 'todo' && item.status === 'open' && typeof item.meta?.project === 'string',
+  );
   let editingTickets = $state(false);
   let movingProject = $state(false);
 </script>
@@ -230,6 +231,14 @@
       {/if}
       {#if location}<span>{location}</span>{/if}
       {#if byAssistant}<span class="chip">von {item.createdBy}</span>{/if}
+      {#if canHandOff}
+        <button
+          class="chip action claude"
+          disabled={starting}
+          title="Todo an einen Claude-Agenten übergeben (eigener Branch, PowerShell-Fenster)"
+          onclick={handOff}>An Claude</button
+        >
+      {/if}
     </div>
     {#if item.notes && item.type === 'todo'}
       <div class="notes">{item.notes}</div>
@@ -284,11 +293,23 @@
   .row:hover {
     background: var(--bg-soft);
   }
-  .chip.ticket {
+  .chip.ticket,
+  .chip.action {
     border: none;
     font: inherit;
     font-size: 12px;
     cursor: pointer;
+  }
+  .chip.action.claude {
+    background: var(--chip-orange-bg);
+    color: var(--chip-orange-fg);
+  }
+  .chip.action:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+  .chip.action:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .chip.ticket.bsm {
     background: var(--chip-teal-bg);
