@@ -16,6 +16,7 @@ import { pino } from 'pino';
 import { createApp } from './app.js';
 import { removeDiscovery, writeDiscovery } from './discovery.js';
 import { DEFAULT_ALLOWED_ORIGINS } from './http/security.js';
+import { applyFirstRunDefaults } from './first-run.js';
 import { createWindowsLauncher } from './prs/launcher.js';
 import { PrWorkspace } from './prs/service.js';
 import { createScheduler } from './scheduler.js';
@@ -60,6 +61,14 @@ const core = createCore({
   secrets,
   ...(migrationsFolder && { migrationsFolder }),
 });
+
+try {
+  const detected = applyFirstRunDefaults(core);
+  if (Object.keys(detected).length)
+    logger.info({ detected }, 'first run: applied detected defaults');
+} catch (err) {
+  logger.warn({ err }, 'first run: could not detect defaults');
+}
 
 const port = Number(args.port ?? process.env.AMINEEDED_PORT ?? core.settings.get().daemonPort);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {

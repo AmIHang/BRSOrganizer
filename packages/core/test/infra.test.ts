@@ -80,7 +80,7 @@ describe('settings', () => {
         daemonPort: 47821,
         github: { enabled: true, includeAuthored: true, includeAssigned: true },
         calendar: { enabled: true, provider: 'ics', lookAheadDays: 14 },
-        tfs: { enabled: false, collectionUrl: '', includeAuthored: true },
+        tfs: { enabled: true, collectionUrl: '', includeAuthored: true },
         workspace: { projectsRoot: '' },
         mail: { enabled: false, outlookFolder: 'Posteingang/PR', lookBackDays: 90 },
       });

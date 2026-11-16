@@ -4,6 +4,42 @@ Lokale Windows-App, die eigene Todos, offene GitHub-PRs (vor allem Review-Anfrag
 Kalendertermine in einer Liste zusammenführt. Sie beantwortet die Frage: **„Wo werde ich gerade gebraucht?“**
 Claude und GitHub Copilot lesen und schreiben über MCP.
 
+## Installieren und loslegen
+
+1. **Installer herunterladen:** `AmINeeded_<Version>_x64-setup.exe` unter
+   [Releases](https://github.com/AmIHang/AmINeeded/releases).
+2. **Ausführen.** Admin-Rechte sind nicht nötig, installiert wird nach `%LOCALAPPDATA%\AmINeeded`. Der Installer
+   ist nicht signiert, SmartScreen warnt deshalb: „Weitere Informationen“ → „Trotzdem ausführen“.
+3. **Die App startet.** Beim ersten Start richtet sie selbst ein:
+   - **Autostart:** an. Die App sitzt danach im Tray, **Strg+Alt+N** blendet sie ein und aus.
+   - **Kalender:** dein Outlook-Kalender, wenn das klassische Outlook installiert ist.
+   - **Projektordner für Klonen + Build:** `C:\projects-git`, `D:\projects-git` oder
+     `%USERPROFILE%\source\repos`, je nachdem, wo Kunden-Repos liegen.
+   - **TFS:** eingeschaltet, angemeldet wird mit deinem Windows-Konto, ohne Token.
+4. **Einmal eintragen:** ⚙ → „TFS / Azure DevOps“ → **Collection**, z. B.
+   `https://tfs.boomsoftware.com/tfs/boom`. Danach erscheinen deine PRs.
+5. **Optional:**
+   - **Projektordner** (⚙ → „PR-Arbeitsbereich“), falls er nicht gefunden wurde.
+   - **GitHub-Token** für GitHub-PRs.
+   - **PR-Mails** als Ersatz für TFS.
+6. **Claude / Copilot anbinden:** ⚙ → „MCP für Claude & Copilot“ zeigt die fertigen Befehle zum Kopieren.
+   Dazu gehört der Anweisungstext unter
+   [PRs an AmINeeded melden](#anweisung-für-claude-und-copilot-prs-an-amineeded-melden).
+
+Alles für Klonen, Update + Build und Merge ist im Installer enthalten, auch die PowerShell-Skripte
+(`Clone-Branch.ps1`, `PrIis.ps1`, `Remove-PrClone.ps1`). Auf dem Rechner müssen nur die Werkzeuge vorhanden
+sein, die das Bauen ohnehin braucht:
+
+- **Git**
+- **Visual Studio** (MSBuild)
+- **BORA Designer:** für die BORA-Referenzen
+- **IIS:** nur für die Web-Apps eines PRs
+
+`nuget.exe` lädt das Skript bei Bedarf selbst.
+
+**Update:** den neuen Installer einfach darüber installieren. Er beendet den laufenden Hintergrunddienst
+selbst; Einstellungen, Todos und Tickets bleiben erhalten.
+
 ## App
 
 Die Tauri-App zeigt die Liste, legt Todos an, verwaltet Token und Kalender-URL und sitzt im Tray.

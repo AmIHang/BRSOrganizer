@@ -32,7 +32,8 @@ export const settingsSchema = z.object({
   /** Azure DevOps / TFS pull requests via REST API. */
   tfs: z
     .object({
-      enabled: z.boolean().default(false),
+      /** On by default: it only runs once a collection URL is set. */
+      enabled: z.boolean().default(true),
       /** e.g. https://tfs.example.com/tfs/DefaultCollection or https://dev.azure.com/org */
       collectionUrl: z.union([z.literal(''), z.url({ protocol: /^https?$/ })]).default(''),
       includeAuthored: z.boolean().default(true),
@@ -103,6 +104,11 @@ export class SettingsService {
     private readonly db: Db,
     private readonly clock: Clock,
   ) {}
+
+  /** False on a fresh installation (nothing saved yet): the daemon then applies detected defaults. */
+  isStored(): boolean {
+    return this.db.select().from(settings).where(eq(settings.key, KEY)).get() !== undefined;
+  }
 
   get(): Settings {
     const row = this.db.select().from(settings).where(eq(settings.key, KEY)).get();

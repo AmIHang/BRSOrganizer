@@ -213,7 +213,7 @@ describe('MCP server', () => {
     expect(r.sources).toEqual({
       github: 'missing-token',
       calendar: 'missing-url',
-      tfs: 'disabled',
+      tfs: 'missing-url',
       mail: 'disabled',
     });
   });

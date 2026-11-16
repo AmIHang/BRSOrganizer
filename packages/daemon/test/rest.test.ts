@@ -158,7 +158,7 @@ describe('REST API', () => {
       status: {
         github: 'missing-token',
         calendar: 'missing-url',
-        tfs: 'disabled',
+        tfs: 'missing-url',
         mail: 'disabled',
       },
     });

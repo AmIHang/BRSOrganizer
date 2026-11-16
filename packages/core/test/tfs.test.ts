@@ -190,7 +190,7 @@ describe('mail fallback', () => {
     });
     try {
       // Fallback: mail.
-      expect(core.sourceStatus()).toMatchObject({ tfs: 'disabled', mail: 'ready' });
+      expect(core.sourceStatus()).toMatchObject({ tfs: 'missing-url', mail: 'ready' });
       await core.syncAll();
       const [fromMail] = core.items.list({ type: 'pr' });
       expect(fromMail).toMatchObject({ source: 'tfs' });
