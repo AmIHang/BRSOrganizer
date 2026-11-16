@@ -38,6 +38,16 @@ bei Tags `v*`, bei Pull Requests und auf Knopfdruck. Vorher laufen Lint, Typeche
 gibt es als Artefakt „AmINeeded-installer“ am Workflow-Lauf. Er enthält die `node.exe` des Runners (Node aus
 `.nvmrc`, also LTS).
 
+**Release:** einen Tag `v<Version>` pushen, z. B.
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Die Action übernimmt die Version aus dem Tag in den Installer (`AmINeeded_0.2.0_x64-setup.exe`) und legt ein
+GitHub-Release mit der `.exe` und automatisch erzeugten Release-Notes an.
+
 ### Entwicklung
 
 ```bash
