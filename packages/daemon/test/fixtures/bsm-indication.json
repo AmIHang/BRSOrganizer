@@ -188,9 +188,21 @@
                         "type": "bfres!system-js://Forms/ObjectList",
                         "context": "*4odtLclCG0",
                         "feat": "FilteredDocuments",
-                        "data": [[{ "op": "*r6WfLsls" }, 1, 2, 3, 1]],
-                        "strings": ["", "image", "PNG-Datei", "Muster Max"],
-                        "dates": [1793696217715]
+                        "data": [
+                          [{ "op": "*r6WfLsls" }, 1, 2, 3, 1],
+                          [{ "op": "*pdfRow01" }, 4, 5, 6, 2],
+                          [{ "op": "not-an-opath" }, 4, 5, 6, 2]
+                        ],
+                        "strings": [
+                          "",
+                          "image",
+                          "PNG-Datei",
+                          "Muster Max",
+                          "Screenshot 2026-06-29 094931",
+                          "PNG-Datei",
+                          "Beispiel Eva"
+                        ],
+                        "dates": [1793696217715, 1782719393744]
                       }
                     ]
                   }

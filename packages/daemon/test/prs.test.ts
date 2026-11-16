@@ -367,7 +367,7 @@ describe('PR workspace via REST', () => {
       expect(prompt).toContain('<<<BSM-TICKET\n### BSM-Ticket BRS_PWg0155: IH-Berechnung');
       expect(prompt).toContain('Gilt die Entscheidung aus 2024 noch?');
       expect(prompt).toContain(`- Bild 1 (image.png): ${join(dir, 'bsm-1-image.png')}`);
-      expect(prompt).toContain('ruf es nicht erneut ab');
+      expect(prompt).toContain('Ruf das Ticket nicht erneut ab.');
       expect(readFileSync(join(dir, 'bsm-2-vergleich.png'))).toEqual(Buffer.from([1]));
     } finally {
       rmSync(dir, { recursive: true, force: true });

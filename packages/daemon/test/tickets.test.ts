@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   BsmLoginRequiredError,
+  bsmDocumentRequest,
   bsmKey,
   bsmTicketMarkdown,
   bsmTicketRequest,
@@ -105,6 +106,23 @@ describe('BSM ticket', () => {
       { n: 1, id: '11111111-1111-1111-1111-111111111111', fileName: 'image.png' },
       { n: 2, id: '22222222-2222-2222-2222-222222222222', fileName: 'vergleich.png' },
     ]);
+    // Document list; rows without a valid object path are ignored.
+    expect(t.attachments).toEqual([
+      {
+        opath: '*r6WfLsls',
+        name: 'image',
+        type: 'PNG-Datei',
+        author: 'Muster Max',
+        at: new Date(1793696217715),
+      },
+      {
+        opath: '*pdfRow01',
+        name: 'Screenshot 2026-06-29 094931',
+        type: 'PNG-Datei',
+        author: 'Beispiel Eva',
+        at: new Date(1782719393744),
+      },
+    ]);
 
     // No UI internals in what the agent gets.
     const md = bsmTicketMarkdown(t, NOW);
@@ -112,11 +130,11 @@ describe('BSM ticket', () => {
   });
 
   it('renders Markdown for the prompt', () => {
-    const md = bsmTicketMarkdown(
-      parseBsmTicket(fixture, 'BRS_PWg0155'),
-      NOW,
-      new Map([[1, 'C:\\tmp\\bsm-1-image.png']]),
-    );
+    const t = parseBsmTicket(fixture, 'BRS_PWg0155');
+    const md = bsmTicketMarkdown(t, NOW, {
+      images: new Map([[1, 'C:\\tmp\\bsm-1-image.png']]),
+      attachments: [{ attachment: t.attachments[1]!, file: 'C:\\tmp\\anhang-1-shot.png' }],
+    });
     expect(md.split('\n').slice(0, 6)).toEqual([
       '### BSM-Ticket BRS_PWg0155: IH-Berechnung | Termine werden nicht zusammengelegt',
       '',
@@ -132,6 +150,9 @@ describe('BSM ticket', () => {
     expect(md).toContain('  - Muster Max, 11.11.2026 14:35:\n    Ja, gilt weiterhin.');
     expect(md).toContain('- Bild 1 (image.png): C:\\tmp\\bsm-1-image.png');
     expect(md).toContain('- Bild 2 (vergleich.png): nicht heruntergeladen');
+    expect(md).toContain(
+      '#### Anhänge\n\n- Anhang 1 (Screenshot 2026-06-29 094931; PNG-Datei, Beispiel Eva, 29.06.2026 09:49): C:\\tmp\\anhang-1-shot.png',
+    );
   });
 
   it('rejects responses that are not a ticket form', () => {
@@ -151,18 +172,26 @@ describe('readBsmTicket', () => {
     (fn) =>
       fn(http);
 
-  it('reads the ticket and saves its images next to the prompt', async () => {
+  it('reads the ticket and saves its images and attachments next to the prompt', async () => {
     const requests: unknown[] = [];
     const downloads: string[] = [];
+    const tokens: Record<string, string> = {
+      '*r6WfLsls': 'token-image-0001',
+      '*pdfRow01': 'token-shot-00001',
+    };
     const http: BsmHttp = {
       runWorkflow: async (body) => {
         requests.push(body);
-        return fixture;
+        const token = tokens[(body as { ContextOPath: string }).ContextOPath];
+        return token ? { download: token, download_fileextension: '.png' } : fixture;
       },
       download: async (path) => {
         downloads.push(path);
         if (path.includes('2222')) throw new Error('404');
-        return new Uint8Array([1, 2, 3]);
+        // The document list repeats image 1 (same bytes) and has one real attachment.
+        return path.endsWith('token-shot-00001')
+          ? new Uint8Array([9, 9])
+          : new Uint8Array([1, 2, 3]);
       },
     };
     const r = await readBsmTicket(
@@ -171,15 +200,33 @@ describe('readBsmTicket', () => {
       dir,
       () => NOW,
     );
-    expect(requests).toEqual([bsmTicketRequest('BRS_PWg0155')]);
+    expect(requests).toEqual([
+      bsmTicketRequest('BRS_PWg0155'),
+      bsmDocumentRequest('*r6WfLsls'),
+      bsmDocumentRequest('*pdfRow01'),
+    ]);
+    // Read-only: "Öffnen" without a transaction.
+    expect(bsmDocumentRequest('*x')).toMatchObject({
+      WorkflowType: 'View',
+      TransactionBehavior: 'NoTransaction',
+    });
     expect(downloads).toEqual([
       '/bfres/de/referenced-document/11111111-1111-1111-1111-111111111111/image.png',
       '/bfres/de/referenced-document/22222222-2222-2222-2222-222222222222/vergleich.png',
+      '/api/core/web/dl/token-image-0001',
+      '/api/core/web/dl/token-shot-00001',
     ]);
-    expect(r.files).toEqual([join(dir, 'bsm-1-image.png')]);
+    const shot = join(dir, 'anhang-1-Screenshot_2026-06-29_094931.png');
+    expect(r.files).toEqual([join(dir, 'bsm-1-image.png'), shot]);
     expect(existsSync(r.files[0]!)).toBe(true);
+    expect(readFileSync(shot)).toEqual(Buffer.from([9, 9]));
     expect(r.markdown).toContain(`- Bild 1 (image.png): ${join(dir, 'bsm-1-image.png')}`);
     expect(r.markdown).toContain('- Bild 2 (vergleich.png): nicht heruntergeladen');
+    // The copy of image 1 in the document list is not listed again.
+    expect(r.markdown).toContain(
+      `- Anhang 1 (Screenshot 2026-06-29 094931; PNG-Datei, Beispiel Eva, 29.06.2026 09:49): ${shot}`,
+    );
+    expect(r.markdown).not.toContain('Anhang 2');
   });
 
   it('never contacts other hosts and passes a missing login on', async () => {

@@ -9,6 +9,7 @@
   import RowMenu from './RowMenu.svelte';
   import TicketDialog from './TicketDialog.svelte';
   import { ticketLabel } from '../lib/tickets';
+  import { handOffs, startHandOff } from '../lib/handoff.svelte';
 
   let {
     item,
@@ -100,27 +101,9 @@
   }
 
   /** The hand-off reads the BSM ticket first (Edge may open for the BSM login). */
-  let handingOff = $state(false);
-
-  async function handOff() {
-    if (handingOff) return;
-    handingOff = true;
-    notice = { text: item.bsmUrl ? 'Lese BSM-Ticket …' : 'Starte Agent …', error: false };
-    try {
-      const r = await api.pr.handOffTodo(item.id);
-      const failed = r.tickets.find((t) => !t.ok);
-      flash(
-        failed
-          ? `Agent läuft (${r.branch}), aber ohne BSM-Inhalt – nur Link übergeben: ${failed.message ?? 'Fehler'}`
-          : `Agent läuft im PowerShell-Fenster (${r.branch}).`,
-        !!failed,
-      );
-    } catch (e) {
-      flash(e instanceof Error ? e.message : String(e), true);
-    } finally {
-      handingOff = false;
-    }
-  }
+  const handOff = $derived(handOffs[item.id]);
+  const handingOff = $derived(handOff?.running === true);
+  const shownNotice = $derived(handOff ?? notice);
 
   async function openSolution() {
     try {
@@ -152,10 +135,14 @@
       : []),
     { label: 'Archivieren', onclick: () => onarchive(item) },
   ]);
-  /** Open todos inside a project can be handed off to a Claude agent. */
+  /** Open todos with something to work on (ticket or description) can go to a Claude agent. */
   const canHandOff = $derived(
-    item.type === 'todo' && item.status === 'open' && typeof item.meta?.project === 'string',
+    item.type === 'todo' &&
+      item.status === 'open' &&
+      (!!item.bsmUrl || !!item.otmaUrl || !!item.notes?.trim()),
   );
+  /** "An Claude" first asks for the project the agent works in. */
+  let pickingHandOffProject = $state(false);
   let editingTickets = $state(false);
   let movingProject = $state(false);
 </script>
@@ -247,14 +234,17 @@
           class="chip action claude"
           disabled={handingOff}
           title="Todo an einen Claude-Agenten übergeben (eigener Branch, PowerShell-Fenster); das BSM-Ticket wird vorher gelesen"
-          onclick={handOff}>{handingOff ? 'An Claude …' : 'An Claude'}</button
+          onclick={() => (pickingHandOffProject = true)}
+          >{handingOff ? 'An Claude …' : 'An Claude'}</button
         >
       {/if}
     </div>
     {#if item.notes && item.type === 'todo'}
       <div class="notes">{item.notes}</div>
     {/if}
-    {#if notice}<div class="notice" class:error={notice.error}>{notice.text}</div>{/if}
+    {#if shownNotice}
+      <div class="notice" class:error={shownNotice.error}>{shownNotice.text}</div>
+    {/if}
     {#if expanded}
       <PrPanel {item} onchanged={() => onchanged?.()} />
     {/if}
@@ -281,6 +271,18 @@
       movingProject = false;
       onchanged?.();
     }}
+  />
+{/if}
+
+{#if pickingHandOffProject}
+  <ProjectDialog
+    {item}
+    {projects}
+    onclose={() => {
+      pickingHandOffProject = false;
+      onchanged?.();
+    }}
+    onhandoff={() => void startHandOff(item)}
   />
 {/if}
 

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BSM_TICKET_BASE } from '@brsorganizer/core';
@@ -67,6 +68,17 @@ export interface BsmImage {
   fileName: string;
 }
 
+/** A file in the ticket's document list (attachments and pasted images). */
+export interface BsmAttachment {
+  /** Object path of the document: what the download workflow is run on. */
+  opath: string;
+  name: string;
+  /** Display type, e.g. "PNG-Datei". */
+  type: string;
+  author: string;
+  at: Date | null;
+}
+
 export interface BsmTicket {
   key: string;
   url: string;
@@ -78,6 +90,7 @@ export interface BsmTicket {
   deliveries: string[];
   conversations: Array<{ topic: string; comments: BsmComment[] }>;
   images: BsmImage[];
+  attachments: BsmAttachment[];
 }
 
 type Node = Record<string, unknown>;
@@ -224,6 +237,27 @@ export function parseBsmTicket(json: unknown, key: string): BsmTicket {
     })
     .filter((c) => c.comments.length > 0);
 
+  // Document list: a table of rows [{op}, nameIdx, typeIdx, authorIdx, dateIdx] with the texts in
+  // `strings` (0-based) and the dates in `dates` (1-based).
+  const attachments: BsmAttachment[] = [];
+  const docs = feat('FilteredDocuments');
+  const strings = Array.isArray(docs?.strings) ? (docs.strings as unknown[]) : [];
+  const dates = Array.isArray(docs?.dates) ? (docs.dates as unknown[]) : [];
+  for (const row of Array.isArray(docs?.data) ? (docs.data as unknown[]) : []) {
+    if (!Array.isArray(row)) continue;
+    const opath = str((row[0] as Node | undefined)?.op);
+    if (!/^\*[\w-]{4,200}$/.test(opath)) continue;
+    const text = (i: unknown) => (typeof i === 'number' ? str(strings[i]) : '');
+    const ms = typeof row[4] === 'number' ? dates[row[4] - 1] : undefined;
+    attachments.push({
+      opath,
+      name: text(row[1]) || 'Anhang',
+      type: text(row[2]),
+      author: text(row[3]),
+      at: typeof ms === 'number' ? new Date(ms) : null,
+    });
+  }
+
   return {
     key,
     url: `${BSM_TICKET_BASE}${key}`,
@@ -234,6 +268,7 @@ export function parseBsmTicket(json: unknown, key: string): BsmTicket {
     deliveries,
     conversations,
     images,
+    attachments,
   };
 }
 
@@ -256,15 +291,17 @@ const indent = (s: string, by: string) =>
 /** Upper bound for the ticket text in the agent prompt. */
 export const BSM_MARKDOWN_LIMIT = 40_000;
 
-/**
- * Markdown for the agent prompt. `files` maps image numbers to local files (downloaded images);
- * images without a file are only named.
- */
-export function bsmTicketMarkdown(
-  t: BsmTicket,
-  fetchedAt: Date,
-  files: ReadonlyMap<number, string> = new Map(),
-): string {
+/** Local copies of a ticket's files, for the prompt. */
+export interface BsmFiles {
+  /** Image number -> downloaded file. */
+  images?: ReadonlyMap<number, string>;
+  /** Attachments that are not one of the images, with their file (null: not downloaded). */
+  attachments?: ReadonlyArray<{ attachment: BsmAttachment; file: string | null }>;
+}
+
+/** Markdown for the agent prompt; files without a local copy are only named. */
+export function bsmTicketMarkdown(t: BsmTicket, fetchedAt: Date, files: BsmFiles = {}): string {
+  const images = files.images ?? new Map<number, string>();
   const out: string[] = [
     `### BSM-Ticket ${t.key}: ${t.title}`,
     '',
@@ -300,9 +337,18 @@ export function bsmTicketMarkdown(
   if (t.images.length) {
     out.push('', '#### Bilder', '');
     for (const img of t.images) {
-      const file = files.get(img.n);
+      const file = images.get(img.n);
       out.push(`- Bild ${img.n} (${img.fileName}): ${file ?? 'nicht heruntergeladen'}`);
     }
+  }
+  if (files.attachments?.length) {
+    out.push('', '#### Anhänge', '');
+    files.attachments.forEach(({ attachment: a, file }, i) => {
+      const meta = [a.type, a.author, a.at ? formatDate(a.at) : ''].filter(Boolean).join(', ');
+      out.push(
+        `- Anhang ${i + 1} (${a.name}${meta ? `; ${meta}` : ''}): ${file ?? 'nicht heruntergeladen'}`,
+      );
+    });
   }
   const md = out.join('\n').trim();
   return md.length > BSM_MARKDOWN_LIMIT
@@ -311,17 +357,40 @@ export function bsmTicketMarkdown(
 }
 
 const MAX_IMAGES = 10;
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_ATTACHMENTS = 15;
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+
+const downloadSchema = z.object({
+  download: z.string().regex(/^[\w-]{8,100}$/),
+  download_fileextension: z.string().optional(),
+});
+
+/** What the SPA runs for "Öffnen" on a document: answers with a download token. */
+export function bsmDocumentRequest(opath: string) {
+  return {
+    ContextOPath: opath,
+    WorkflowType: 'View',
+    TransactionBehavior: 'NoTransaction',
+    WorkflowParameters: {},
+  };
+}
+
+const safeName = (name: string) =>
+  name
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/^[._]+/, '')
+    .slice(-80) || 'datei';
 
 export interface ReadTicketResult {
   markdown: string;
-  /** Downloaded attachments (absolute paths). */
+  /** Downloaded images and attachments (absolute paths). */
   files: string[];
 }
 
 /**
  * Reads a BSM ticket through `session` and returns it as prompt Markdown. Images (screenshots in
- * the description and comments) are saved to `filesDir`, so the agent can look at them.
+ * the description and comments) and attachments are saved to `filesDir`, so the agent can open
+ * them; attachments that are just copies of an image are listed only once.
  */
 export async function readBsmTicket(
   session: BsmSession,
@@ -335,23 +404,69 @@ export async function readBsmTicket(
   return session(async (http) => {
     const ticket = parseBsmTicket(await http.runWorkflow(bsmTicketRequest(key)), key);
     const fetchedAt = now();
-    const files = new Map<number, string>();
-    for (const img of ticket.images.slice(0, MAX_IMAGES)) {
+    const written: string[] = [];
+    const save = (name: string, bytes: Uint8Array) => {
+      mkdirSync(filesDir, { recursive: true });
+      const file = join(filesDir, name);
+      writeFileSync(file, bytes);
+      written.push(file);
+      return file;
+    };
+    const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+    // A missing file must not cost the ticket text; only a lost login ends the read.
+    const attempt = async <T>(fn: () => Promise<T>): Promise<T | null> => {
       try {
-        const bytes = await http.download(
-          `/bfres/de/referenced-document/${encodeURIComponent(img.id)}/${encodeURIComponent(img.fileName)}`,
-        );
-        if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) continue;
-        mkdirSync(filesDir, { recursive: true });
-        const safe = img.fileName.replace(/[^\w.-]+/g, '_').slice(-80) || 'bild.png';
-        const file = join(filesDir, `bsm-${img.n}-${safe}`);
-        writeFileSync(file, bytes);
-        files.set(img.n, file);
+        return await fn();
       } catch (err) {
         if (err instanceof BsmLoginRequiredError) throw err;
-        // A missing image must not cost the ticket text.
+        return null;
       }
+    };
+
+    const images = new Map<number, string>();
+    const imageHashes = new Set<string>();
+    for (const img of ticket.images.slice(0, MAX_IMAGES)) {
+      const bytes = await attempt(() =>
+        http.download(
+          `/bfres/de/referenced-document/${encodeURIComponent(img.id)}/${encodeURIComponent(img.fileName)}`,
+        ),
+      );
+      if (!bytes || bytes.byteLength === 0 || bytes.byteLength > MAX_FILE_BYTES) continue;
+      imageHashes.add(hash(bytes));
+      images.set(img.n, save(`bsm-${img.n}-${safeName(img.fileName)}`, bytes));
     }
-    return { markdown: bsmTicketMarkdown(ticket, fetchedAt, files), files: [...files.values()] };
+
+    const attachments: Array<{ attachment: BsmAttachment; file: string | null }> = [];
+    let downloaded = 0;
+    for (const a of ticket.attachments) {
+      if (downloaded >= MAX_ATTACHMENTS) {
+        attachments.push({ attachment: a, file: null });
+        continue;
+      }
+      const got = await attempt(async () => {
+        const link = downloadSchema.parse(await http.runWorkflow(bsmDocumentRequest(a.opath)));
+        const ext = /^\.[A-Za-z0-9]{1,8}$/.test(link.download_fileextension ?? '')
+          ? link.download_fileextension!
+          : '';
+        return { ext, bytes: await http.download(`/api/core/web/dl/${link.download}`) };
+      });
+      if (!got || got.bytes.byteLength === 0 || got.bytes.byteLength > MAX_FILE_BYTES) {
+        attachments.push({ attachment: a, file: null });
+        continue;
+      }
+      if (imageHashes.has(hash(got.bytes))) continue; // already there as "Bild n"
+      downloaded++;
+      const n = attachments.length + 1;
+      const name =
+        got.ext && !a.name.toLowerCase().endsWith(got.ext.toLowerCase())
+          ? a.name + got.ext
+          : a.name;
+      attachments.push({ attachment: a, file: save(`anhang-${n}-${safeName(name)}`, got.bytes) });
+    }
+
+    return {
+      markdown: bsmTicketMarkdown(ticket, fetchedAt, { images, attachments }),
+      files: written,
+    };
   });
 }
