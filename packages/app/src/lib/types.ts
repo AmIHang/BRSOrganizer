@@ -100,6 +100,9 @@ export interface SecretsStatus {
   githubToken: boolean;
   calendarIcsUrl: boolean;
   tfsToken: boolean;
+  /** BSM/OTMA account (same login for both); the password is never sent back. */
+  ticketUser: string | null;
+  ticketPassword: boolean;
 }
 
 /** GET /api/prs/:id – PR details from TFS plus the local checkout. */

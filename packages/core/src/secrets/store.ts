@@ -6,6 +6,9 @@ export const SECRET_KEYS = [
   'local-access-token',
   /** Optional Azure DevOps PAT; without it the Windows login is used. */
   'tfs-token',
+  /** BSM/OTMA account (one login for both), handed to the todo agent. */
+  'ticket-user',
+  'ticket-password',
 ] as const;
 export type SecretKey = (typeof SECRET_KEYS)[number];
 

@@ -10,7 +10,12 @@ import type {
   StreamEvent,
 } from './types';
 
-type WritableSecret = 'github-token' | 'calendar-ics-url' | 'tfs-token';
+type WritableSecret =
+  | 'github-token'
+  | 'calendar-ics-url'
+  | 'tfs-token'
+  | 'ticket-user'
+  | 'ticket-password';
 
 interface Connection {
   baseUrl: string;

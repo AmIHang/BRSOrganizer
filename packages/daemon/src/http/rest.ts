@@ -41,6 +41,9 @@ const WRITABLE_SECRETS = {
     .trim()
     .max(4096)
     .regex(/^(https?|webcals?):\/\/\S+$/i, 'must be an http(s) or webcal URL'),
+  'ticket-user': z.string().trim().min(1).max(200),
+  // Not trimmed: spaces may belong to the password.
+  'ticket-password': z.string().min(1).max(500),
 } as const;
 type WritableSecret = keyof typeof WRITABLE_SECRETS;
 
@@ -172,6 +175,9 @@ export function restRouter({
       githubToken: core.secrets.get('github-token') !== null,
       calendarIcsUrl: core.secrets.get('calendar-ics-url') !== null,
       tfsToken: core.secrets.get('tfs-token') !== null,
+      // The user name is no secret; shown so the settings can say whose account is stored.
+      ticketUser: core.secrets.get('ticket-user'),
+      ticketPassword: core.secrets.get('ticket-password') !== null,
     });
   });
 

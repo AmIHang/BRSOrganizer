@@ -2,8 +2,11 @@ import { spawn } from 'node:child_process';
 
 /** Starts things the user should see: script consoles and files/folders in their default app. */
 export interface Launcher {
-  /** Runs a PowerShell script in its own, visible console window that stays open afterwards. */
-  runScript(title: string, scriptPath: string, args: string[]): void;
+  /**
+   * Runs a PowerShell script in its own, visible console window that stays open afterwards.
+   * `env` is added to the window's environment (for secrets: never on the command line).
+   */
+  runScript(title: string, scriptPath: string, args: string[], env?: Record<string, string>): void;
   /** Opens a file (e.g. a .sln) with its default application, or a folder in Explorer. */
   open(path: string): void;
 }
@@ -41,8 +44,10 @@ export function startArguments(title: string, scriptPath: string, args: string[]
 
 export function createWindowsLauncher(onError: (err: Error) => void = () => undefined): Launcher {
   return {
-    runScript(title, scriptPath, args) {
+    runScript(title, scriptPath, args, env) {
       const child = spawn('cmd.exe', [startArguments(title, scriptPath, args)], {
+        // `start` passes cmd's environment on to the new console.
+        env: env ? { ...process.env, ...env } : process.env,
         windowsVerbatimArguments: true,
         windowsHide: true, // hides cmd.exe itself, not the window `start` opens
         stdio: 'ignore',

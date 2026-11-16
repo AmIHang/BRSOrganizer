@@ -124,16 +124,28 @@ describe('REST API', () => {
       githubToken: false,
       calendarIcsUrl: false,
       tfsToken: false,
+      ticketUser: null,
+      ticketPassword: false,
     });
     expect((await call('PUT', '/secrets/github-token', { value: 'ghp_abc' })).status).toBe(204);
     expect(
       (await call('PUT', '/secrets/calendar-ics-url', { value: 'webcal://x.example/a.ics' }))
         .status,
     ).toBe(204);
+    expect((await call('PUT', '/secrets/ticket-user', { value: ' max ' })).status).toBe(204);
+    expect((await call('PUT', '/secrets/ticket-password', { value: 'p w!' })).status).toBe(204);
 
     const status = await call('GET', '/secrets');
-    expect(status.json()).toEqual({ githubToken: true, calendarIcsUrl: true, tfsToken: false });
+    expect(status.json()).toEqual({
+      githubToken: true,
+      calendarIcsUrl: true,
+      tfsToken: false,
+      ticketUser: 'max',
+      ticketPassword: true,
+    });
     expect(status.body).not.toContain('ghp_abc');
+    expect(status.body).not.toContain('p w!');
+    expect(h.core.secrets.get('ticket-password')).toBe('p w!');
     expect(h.core.secrets.get('github-token')).toBe('ghp_abc');
 
     expect((await call('PUT', '/secrets/github-token', { value: 'has space' })).status).toBe(400);

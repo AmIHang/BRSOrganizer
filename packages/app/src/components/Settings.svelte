@@ -22,6 +22,8 @@
   let githubToken = $state('');
   let icsUrl = $state('');
   let tfsToken = $state('');
+  let ticketUser = $state('');
+  let ticketPassword = $state('');
   let message = $state<{ text: string; error: boolean } | null>(null);
   let copied = $state<string | null>(null);
 
@@ -72,6 +74,23 @@
     await run(() => api.setSecret('tfs-token', tfsToken.trim()), 'TFS-Token gespeichert');
     tfsToken = '';
   }
+
+  /** Saves what was entered: user and/or password (each may be replaced alone). */
+  async function saveTicketAccount() {
+    await run(async () => {
+      if (ticketUser.trim()) await api.setSecret('ticket-user', ticketUser.trim());
+      if (ticketPassword) await api.setSecret('ticket-password', ticketPassword);
+    }, 'BSM/OTMA-Account gespeichert');
+    ticketUser = '';
+    ticketPassword = '';
+  }
+
+  const removeTicketAccount = () =>
+    run(
+      () =>
+        Promise.all([api.deleteSecret('ticket-user'), api.deleteSecret('ticket-password')]),
+      'BSM/OTMA-Account entfernt',
+    );
 
   async function toggleAutostart() {
     try {
@@ -315,6 +334,35 @@
         Ein PR wird über die Remote-URL dem Kundenordner zugeordnet und nach
         <code>&lt;Kunde&gt;\PR&lt;Nr&gt;</code> geklont, mit IIS-App-Pool, BORA-Referenzen, NuGet und
         Build. Leer = aus. Bei einem PR über ▸ aufklappen.
+      </p>
+    </section>
+
+    <section>
+      <h3>BSM/OTMA-Account</h3>
+      <div class="inline">
+        <input
+          type="text"
+          placeholder={secrets.ticketUser ?? 'Benutzer'}
+          bind:value={ticketUser}
+          autocomplete="off"
+        />
+        <input
+          type="password"
+          placeholder={secrets.ticketPassword ? 'Passwort gesetzt – neu eingeben zum Ersetzen' : 'Passwort'}
+          bind:value={ticketPassword}
+          autocomplete="off"
+        />
+        <button onclick={saveTicketAccount} disabled={!ticketUser.trim() && !ticketPassword}
+          >Speichern</button
+        >
+        {#if secrets.ticketUser || secrets.ticketPassword}
+          <button onclick={removeTicketAccount}>Entfernen</button>
+        {/if}
+      </div>
+      <p class="hint muted">
+        Ein Account für BSM und OTMA. „An Agent weitergeben“ gibt ihn dem Agenten über
+        Umgebungsvariablen mit, damit er die Tickets lesen kann. Gespeichert in der Windows-
+        Anmeldeinformationsverwaltung.
       </p>
     </section>
 
