@@ -1,4 +1,4 @@
-// Shapes of the daemon's REST API. The app talks HTTP only and does not import @amineeded/core.
+// Shapes of the daemon's REST API. The app talks HTTP only and does not import @brsorganizer/core.
 
 export type ItemType = 'todo' | 'pr' | 'event';
 export type ItemStatus = 'open' | 'done' | 'archived';

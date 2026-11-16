@@ -49,13 +49,13 @@ function classify(e: unknown): FailureKind {
 function describe(e: unknown, kind: FailureKind): string {
   switch (kind) {
     case 'network':
-      return 'AmINeeded daemon is not reachable. Start the AmINeeded app (or the daemon) and retry.';
+      return 'BRSOrganizer daemon is not reachable. Start the BRSOrganizer app (or the daemon) and retry.';
     case 'auth':
-      return 'AmINeeded daemon rejected the access token (Credential Manager entry out of date?).';
+      return 'BRSOrganizer daemon rejected the access token (Credential Manager entry out of date?).';
     case 'session':
-      return 'AmINeeded MCP session expired and could not be re-established.';
+      return 'BRSOrganizer MCP session expired and could not be re-established.';
     default:
-      return `AmINeeded proxy error: ${e instanceof Error ? e.message : String(e)}`;
+      return `BRSOrganizer proxy error: ${e instanceof Error ? e.message : String(e)}`;
   }
 }
 
@@ -161,7 +161,7 @@ class McpProxy {
 
   private async reinitialize(): Promise<void> {
     const t = await this.connect();
-    const id = `amineeded-proxy-reinit-${++this.reinitSeq}`;
+    const id = `brsorganizer-proxy-reinit-${++this.reinitSeq}`;
     const response = new Promise<JSONRPCMessage>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingReinit.delete(id);

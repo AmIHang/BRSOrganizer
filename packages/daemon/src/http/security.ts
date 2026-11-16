@@ -68,7 +68,7 @@ export function bearerAuth(token: string): RequestHandler {
     const header = req.headers.authorization ?? '';
     const match = /^Bearer\s+(.+)$/i.exec(header);
     if (match && timingSafeEqual(digest(match[1]!.trim()), expected)) return next();
-    res.setHeader('WWW-Authenticate', 'Bearer realm="AmINeeded"');
+    res.setHeader('WWW-Authenticate', 'Bearer realm="BRSOrganizer"');
     deny(res, 401, 'unauthorized');
   };
 }

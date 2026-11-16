@@ -1,6 +1,6 @@
 import { createServer, request, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { MemorySecretStore, type SecretKey } from '@amineeded/core';
+import { MemorySecretStore, type SecretKey } from '@brsorganizer/core';
 import { pino } from 'pino';
 import { makeCore } from '../../core/test/helpers.js';
 import { createApp } from '../src/app.js';

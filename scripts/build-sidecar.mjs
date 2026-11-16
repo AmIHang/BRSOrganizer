@@ -1,5 +1,5 @@
 // Builds the runtime the Tauri app ships:
-//   src-tauri/binaries/amineeded-node-<triple>.exe   Node.js (externalBin, next to the app exe)
+//   src-tauri/binaries/brsorganizer-node-<triple>.exe   Node.js (externalBin, next to the app exe)
 //   src-tauri/resources/runtime/daemon.mjs          bundled daemon
 //   src-tauri/resources/runtime/mcp-stdio.mjs       bundled stdio bridge for MCP clients
 //   src-tauri/resources/runtime/drizzle/            SQL migrations
@@ -44,7 +44,7 @@ await build({
   target: 'node22',
   format: 'esm',
   external: ['better-sqlite3', '@napi-rs/keyring'],
-  alias: { '@amineeded/core': join(root, 'packages', 'core', 'src', 'index.ts') },
+  alias: { '@brsorganizer/core': join(root, 'packages', 'core', 'src', 'index.ts') },
   // CommonJS dependencies (express, ...) call require().
   banner: {
     js: "import { createRequire as __amnCreateRequire } from 'node:module'; const require = __amnCreateRequire(import.meta.url);",
@@ -94,6 +94,6 @@ cpSync(join(root, 'packages', 'daemon', 'scripts', 'pr'), join(out, 'scripts', '
 
 const binDir = join(tauriDir, 'binaries');
 mkdirSync(binDir, { recursive: true });
-cpSync(process.execPath, join(binDir, `amineeded-node-${TRIPLE}.exe`));
+cpSync(process.execPath, join(binDir, `brsorganizer-node-${TRIPLE}.exe`));
 
 console.log(`sidecar runtime ready (Node ${process.version}) in ${out}`);

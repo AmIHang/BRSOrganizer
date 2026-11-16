@@ -11,7 +11,7 @@ import { CLIENT_NAMES, readToken, resolvePort, type ClientName } from './config.
 import { defaultDaemonMain, startDaemon } from './launcher.js';
 import { startProxy } from './proxy.js';
 
-const log = (m: string) => process.stderr.write(`[amineeded-mcp] ${m}\n`);
+const log = (m: string) => process.stderr.write(`[brsorganizer-mcp] ${m}\n`);
 
 const { values: args } = parseArgs({
   options: {
@@ -24,11 +24,11 @@ const { values: args } = parseArgs({
 });
 
 if (args.help) {
-  process.stderr.write(`amineeded-mcp – stdio MCP bridge to the AmINeeded daemon
+  process.stderr.write(`brsorganizer-mcp – stdio MCP bridge to the BRSOrganizer daemon
 
 Options:
   --client claude|copilot|other  Who is creating items (default: derived from the client's name)
-  --port <n>                     Daemon port (default: AMINEEDED_PORT, daemon.json, 47821)
+  --port <n>                     Daemon port (default: BRSORGANIZER_PORT, daemon.json, 47821)
   --no-start-daemon              Do not start the daemon if it is not running
   --daemon-main <path>           Daemon entry point to start (default: monorepo build)
 `);
@@ -63,14 +63,14 @@ const proxy = await startProxy({
     }
     if (!token) {
       throw new Error(
-        'no AmINeeded access token in the Credential Manager – start the AmINeeded app once',
+        'no BRSOrganizer access token in the Credential Manager – start the BRSOrganizer app once',
       );
     }
     return {
       url: new URL(`http://127.0.0.1:${port}/mcp`),
       headers: {
         Authorization: `Bearer ${token}`,
-        ...(client && { 'X-AmINeeded-Client': client }),
+        ...(client && { 'X-BRSOrganizer-Client': client }),
       },
     };
   },

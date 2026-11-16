@@ -19,7 +19,7 @@ const SEARCHES: Record<PrReason, string> = {
 const REASON_ORDER: PrReason[] = ['review-requested', 'assigned', 'authored'];
 
 export const SEARCH_QUERY = /* GraphQL */ `
-  query AmINeededPrSearch($q: String!, $after: String) {
+  query BRSOrganizerPrSearch($q: String!, $after: String) {
     search(query: $q, type: ISSUE, first: 50, after: $after) {
       pageInfo {
         hasNextPage

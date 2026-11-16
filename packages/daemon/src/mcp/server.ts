@@ -1,4 +1,4 @@
-import { CoreError, ITEM_STATUSES, ITEM_TYPES, type Actor, type Core } from '@amineeded/core';
+import { CoreError, ITEM_STATUSES, ITEM_TYPES, type Actor, type Core } from '@brsorganizer/core';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -13,7 +13,7 @@ export interface McpDeps {
   actor: () => Actor;
 }
 
-const INSTRUCTIONS = `AmINeeded answers "where am I needed right now?" for the user: their own todos, open
+const INSTRUCTIONS = `BRSOrganizer answers "where am I needed right now?" for the user: their own todos, open
 GitHub pull requests (mostly review requests) and upcoming calendar events in one list.
 Use list_items to see what is open, add_todo to capture new work. Items are never deleted:
 complete todos with complete_todo, hide anything (also PRs and events) with archive_item.
@@ -46,7 +46,7 @@ async function guard(fn: () => CallToolResult | Promise<CallToolResult>): Promis
 /** One MCP server instance per session (the actor depends on the connected client). */
 export function createMcpServer({ core, scheduler, version, actor }: McpDeps): McpServer {
   const server = new McpServer(
-    { name: 'amineeded', title: 'AmINeeded', version },
+    { name: 'brsorganizer', title: 'BRSOrganizer', version },
     { instructions: INSTRUCTIONS },
   );
 

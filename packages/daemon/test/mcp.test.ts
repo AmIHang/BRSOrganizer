@@ -61,7 +61,7 @@ describe('MCP server', () => {
   it('sets created_by from the client identity', async () => {
     const claude = await open('claude-code');
     const copilot = await open('Visual Studio Code');
-    const pinned = await open('some-agent', { 'X-AmINeeded-Client': 'copilot' });
+    const pinned = await open('some-agent', { 'X-BRSOrganizer-Client': 'copilot' });
 
     const a = payload<{ item: { id: string; created_by: string } }>(
       await claude.callTool({ name: 'add_todo', arguments: { title: 'from claude' } }),

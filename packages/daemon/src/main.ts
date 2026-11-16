@@ -11,12 +11,13 @@ import {
   dataDir,
   getOrCreateAccessToken,
   KeyringSecretStore,
-} from '@amineeded/core';
+} from '@brsorganizer/core';
 import { pino } from 'pino';
 import { createApp } from './app.js';
 import { removeDiscovery, writeDiscovery } from './discovery.js';
 import { DEFAULT_ALLOWED_ORIGINS } from './http/security.js';
 import { applyFirstRunDefaults } from './first-run.js';
+import { legacyName, migrateLegacy } from './legacy.js';
 import { createWindowsLauncher } from './prs/launcher.js';
 import { PrWorkspace } from './prs/service.js';
 import { createScheduler } from './scheduler.js';
@@ -34,12 +35,12 @@ const { values: args } = parseArgs({
   },
 });
 
-if (args['data-dir']) process.env.AMINEEDED_DATA_DIR = args['data-dir'];
+if (args['data-dir']) process.env.BRSORGANIZER_DATA_DIR = args['data-dir'];
 mkdirSync(join(dataDir(), 'logs'), { recursive: true });
 
 const logger = pino(
   {
-    name: 'amineeded-daemon',
+    name: 'brsorganizer-daemon',
     level: args['log-level'],
     redact: ['*.authorization', '*.token', '*.value'],
   },
@@ -50,8 +51,21 @@ const logger = pino(
   ]),
 );
 
-// Separate keyring namespace for development (AMINEEDED_KEYRING_SERVICE=AmINeeded-dev).
-const secrets = new KeyringSecretStore(process.env.AMINEEDED_KEYRING_SERVICE ?? APP_NAME);
+// Separate keyring namespace for development (BRSORGANIZER_KEYRING_SERVICE=BRSOrganizer-dev).
+const keyringService = process.env.BRSORGANIZER_KEYRING_SERVICE ?? APP_NAME;
+const secrets = new KeyringSecretStore(keyringService);
+try {
+  const legacyService = legacyName(keyringService);
+  const taken = migrateLegacy({
+    dataDir: dataDir(),
+    databaseFile: databaseFile(),
+    secrets,
+    legacySecrets: legacyService ? new KeyringSecretStore(legacyService) : null,
+  });
+  if (taken.length) logger.info({ taken }, 'took over data from AmINeeded');
+} catch (err) {
+  logger.warn({ err }, 'could not take over data from AmINeeded');
+}
 // Bundled runtime (app install): migrations ship in ./drizzle next to daemon.mjs.
 const bundledMigrations = join(dirname(fileURLToPath(import.meta.url)), 'drizzle');
 const migrationsFolder =
@@ -70,7 +84,7 @@ try {
   logger.warn({ err }, 'first run: could not detect defaults');
 }
 
-const port = Number(args.port ?? process.env.AMINEEDED_PORT ?? core.settings.get().daemonPort);
+const port = Number(args.port ?? process.env.BRSORGANIZER_PORT ?? core.settings.get().daemonPort);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   logger.fatal({ port }, 'invalid port');
   process.exit(1);
@@ -78,7 +92,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 
 const allowedOrigins = [
   ...DEFAULT_ALLOWED_ORIGINS,
-  ...(process.env.AMINEEDED_ALLOWED_ORIGINS ?? '')
+  ...(process.env.BRSORGANIZER_ALLOWED_ORIGINS ?? '')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean),
@@ -122,7 +136,7 @@ server.on('error', async (err: NodeJS.ErrnoException) => {
   try {
     const res = await fetch(`http://${HOST}:${port}/health`, { signal: AbortSignal.timeout(2000) });
     const body = (await res.json()) as { app?: string };
-    if (body.app === 'AmINeeded') {
+    if (body.app === 'BRSOrganizer') {
       logger.info({ port }, 'daemon already running, exiting');
       core.close();
       process.exit(0);

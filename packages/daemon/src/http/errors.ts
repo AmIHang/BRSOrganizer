@@ -1,4 +1,4 @@
-import { CoreError, TfsRequestError } from '@amineeded/core';
+import { CoreError, TfsRequestError } from '@brsorganizer/core';
 import type { ErrorRequestHandler } from 'express';
 import type { Logger } from 'pino';
 

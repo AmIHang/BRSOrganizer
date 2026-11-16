@@ -5,7 +5,7 @@ import {
   ValidationError,
   type Core,
   type ListFilter,
-} from '@amineeded/core';
+} from '@brsorganizer/core';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { prRouter } from '../prs/routes.js';

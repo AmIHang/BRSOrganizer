@@ -34,8 +34,8 @@ function connect(): Promise<Connection> {
   // Development only (stripped from release bundles): run the UI in a plain browser against a
   // dev daemon, configured in packages/app/.env.development.local (gitignored).
   if (import.meta.env.DEV && !('__TAURI_INTERNALS__' in window)) {
-    const baseUrl = import.meta.env.VITE_AMINEEDED_URL as string | undefined;
-    const token = import.meta.env.VITE_AMINEEDED_TOKEN as string | undefined;
+    const baseUrl = import.meta.env.VITE_BRSORGANIZER_URL as string | undefined;
+    const token = import.meta.env.VITE_BRSORGANIZER_TOKEN as string | undefined;
     if (baseUrl && token) return Promise.resolve({ baseUrl, token });
   }
   connection ??= invoke<Connection>('connection').catch((e: unknown) => {

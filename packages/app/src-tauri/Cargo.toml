@@ -1,12 +1,12 @@
 [package]
-name = "amineeded"
+name = "brsorganizer"
 version = "0.1.0"
 description = "Wo werde ich gerade gebraucht? Todos, PRs und Termine in einer Liste."
 edition = "2021"
 publish = false
 
 [lib]
-name = "amineeded_lib"
+name = "brsorganizer_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

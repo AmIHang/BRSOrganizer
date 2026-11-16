@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { Core, SettingsPatch } from '@amineeded/core';
+import type { Core, SettingsPatch } from '@brsorganizer/core';
 import { scanRepos } from './prs/workspace.js';
 
 export interface FirstRunEnv {

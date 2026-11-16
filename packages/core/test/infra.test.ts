@@ -16,7 +16,7 @@ describe('database', () => {
   });
 
   it('opens a file database in WAL mode and runs migrations', () => {
-    dir = mkdtempSync(join(tmpdir(), 'amineeded-'));
+    dir = mkdtempSync(join(tmpdir(), 'brsorganizer-'));
     const handle = openDatabase({ file: join(dir, 'nested', 'test.db') });
     try {
       expect(handle.sqlite.pragma('journal_mode', { simple: true })).toBe('wal');
@@ -31,7 +31,7 @@ describe('database', () => {
   });
 
   it('lets a second connection open the same file while the first holds it', () => {
-    dir = mkdtempSync(join(tmpdir(), 'amineeded-'));
+    dir = mkdtempSync(join(tmpdir(), 'brsorganizer-'));
     const file = join(dir, 'race.db');
     const first = openDatabase({ file });
     try {
@@ -45,7 +45,7 @@ describe('database', () => {
   });
 
   it('can be reopened (migrations are applied once)', () => {
-    dir = mkdtempSync(join(tmpdir(), 'amineeded-'));
+    dir = mkdtempSync(join(tmpdir(), 'brsorganizer-'));
     const file = join(dir, 'test.db');
     openDatabase({ file }).close();
     expect(() => openDatabase({ file }).close()).not.toThrow();
@@ -53,12 +53,12 @@ describe('database', () => {
 });
 
 describe('paths', () => {
-  it('uses %LOCALAPPDATA%\\AmINeeded by default and honours the override', () => {
+  it('uses %LOCALAPPDATA%\\BRSOrganizer by default and honours the override', () => {
     expect(dataDir({ LOCALAPPDATA: 'C:\\Users\\x\\AppData\\Local' })).toBe(
-      join('C:\\Users\\x\\AppData\\Local', 'AmINeeded'),
+      join('C:\\Users\\x\\AppData\\Local', 'BRSOrganizer'),
     );
-    expect(dataDir({ AMINEEDED_DATA_DIR: 'D:\\data', LOCALAPPDATA: 'C:\\x' })).toBe('D:\\data');
-    expect(databaseFile({ AMINEEDED_DATA_DIR: 'D:\\data' })).toBe(join('D:\\data', 'amineeded.db'));
+    expect(dataDir({ BRSORGANIZER_DATA_DIR: 'D:\\data', LOCALAPPDATA: 'C:\\x' })).toBe('D:\\data');
+    expect(databaseFile({ BRSORGANIZER_DATA_DIR: 'D:\\data' })).toBe(join('D:\\data', 'brsorganizer.db'));
   });
 });
 

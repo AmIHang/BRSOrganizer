@@ -1,4 +1,4 @@
-import type { Core } from '@amineeded/core';
+import type { Core } from '@brsorganizer/core';
 import express, { type Express } from 'express';
 import type { Logger } from 'pino';
 import { errorHandler } from './http/errors.js';
@@ -33,7 +33,7 @@ export function createApp(deps: AppDeps): { app: Express; close(): Promise<void>
 
   // Unauthenticated liveness probe, so clients can tell "our daemon" from "port taken".
   app.get('/health', (_req, res) => {
-    res.json({ ok: true, app: 'AmINeeded', version: deps.version });
+    res.json({ ok: true, app: 'BRSOrganizer', version: deps.version });
   });
 
   app.use(bearerAuth(deps.token));

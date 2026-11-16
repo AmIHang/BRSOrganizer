@@ -18,10 +18,10 @@ const runOutlookScript = (script: string, env: Record<string, string>, what: str
 
 const MAIL_SCRIPT = String.raw`
 $folder = $ns.DefaultStore.GetRootFolder()
-foreach ($part in ($env:AMINEEDED_OL_FOLDER -split '[\\/]' | Where-Object { $_ })) {
+foreach ($part in ($env:BRSORGANIZER_OL_FOLDER -split '[\\/]' | Where-Object { $_ })) {
   $folder = $folder.Folders.Item($part)
 }
-$cutoff = (Get-Date).AddDays(-[int]$env:AMINEEDED_OL_DAYS)
+$cutoff = (Get-Date).AddDays(-[int]$env:BRSORGANIZER_OL_DAYS)
 $items = $folder.Items
 $items.Sort('[ReceivedTime]', $true)
 $out = New-Object System.Collections.Generic.List[object]
@@ -47,7 +47,7 @@ foreach ($m in $items) {
 export const outlookComReader: MailboxReader = async ({ folderPath, lookBackDays }) => {
   const stdout = await runOutlookScript(
     MAIL_SCRIPT,
-    { AMINEEDED_OL_FOLDER: folderPath, AMINEEDED_OL_DAYS: String(lookBackDays) },
+    { BRSORGANIZER_OL_FOLDER: folderPath, BRSORGANIZER_OL_DAYS: String(lookBackDays) },
     `Outlook folder "${folderPath}"`,
   );
   try {
@@ -68,8 +68,8 @@ export const outlookComReader: MailboxReader = async ({ folderPath, lookBackDays
 const CALENDAR_SCRIPT = String.raw`
 $inv = [Globalization.CultureInfo]::InvariantCulture
 $kind = [Globalization.DateTimeStyles]::RoundtripKind
-$from = [DateTime]::Parse($env:AMINEEDED_CAL_FROM, $inv, $kind).ToLocalTime()
-$to = [DateTime]::Parse($env:AMINEEDED_CAL_TO, $inv, $kind).ToLocalTime()
+$from = [DateTime]::Parse($env:BRSORGANIZER_CAL_FROM, $inv, $kind).ToLocalTime()
+$to = [DateTime]::Parse($env:BRSORGANIZER_CAL_TO, $inv, $kind).ToLocalTime()
 $items = $ns.GetDefaultFolder(9).Items
 $items.Sort('[Start]')
 $items.IncludeRecurrences = $true
@@ -103,7 +103,7 @@ ConvertTo-Json -InputObject @($out.ToArray()) -Depth 3 -Compress
 export const outlookCalendarReader: CalendarReader = async ({ from, to }) => {
   const stdout = await runOutlookScript(
     CALENDAR_SCRIPT,
-    { AMINEEDED_CAL_FROM: from.toISOString(), AMINEEDED_CAL_TO: to.toISOString() },
+    { BRSORGANIZER_CAL_FROM: from.toISOString(), BRSORGANIZER_CAL_TO: to.toISOString() },
     'Outlook calendar',
   );
   try {

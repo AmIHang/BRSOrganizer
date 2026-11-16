@@ -89,11 +89,11 @@
       ? [
           {
             label: 'Claude Code (Windows)',
-            text: `claude mcp add amineeded --scope user -- ${q(mcp.node)} ${q(mcp.script)} --client claude`,
+            text: `claude mcp add brsorganizer --scope user -- ${q(mcp.node)} ${q(mcp.script)} --client claude`,
           },
           {
             label: 'Claude Code (WSL)',
-            text: `claude mcp add amineeded --scope user -- "$(wslpath '${mcp.node}')" '${mcp.script}' --client claude`,
+            text: `claude mcp add brsorganizer --scope user -- "$(wslpath '${mcp.node}')" '${mcp.script}' --client claude`,
           },
           {
             label: 'Claude Desktop / VS Code (args)',

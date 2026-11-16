@@ -11,7 +11,7 @@ describe('HTTP security', () => {
   it('serves /health without a token', async () => {
     const r = await raw(h.port, { path: '/health' });
     expect(r.status).toBe(200);
-    expect(r.json()).toMatchObject({ ok: true, app: 'AmINeeded' });
+    expect(r.json()).toMatchObject({ ok: true, app: 'BRSOrganizer' });
   });
 
   it.each([

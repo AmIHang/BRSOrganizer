@@ -1,4 +1,4 @@
-# AmINeeded
+# BRSOrganizer
 
 Lokale Windows-App, die eigene Todos, offene GitHub-PRs (vor allem Review-Anfragen) und anstehende
 Kalendertermine in einer Liste zusammenführt. Sie beantwortet die Frage: **„Wo werde ich gerade gebraucht?“**
@@ -6,9 +6,9 @@ Claude und GitHub Copilot lesen und schreiben über MCP.
 
 ## Installieren und loslegen
 
-1. **Installer herunterladen:** `AmINeeded_<Version>_x64-setup.exe` unter
-   [Releases](https://github.com/AmIHang/AmINeeded/releases).
-2. **Ausführen.** Admin-Rechte sind nicht nötig, installiert wird nach `%LOCALAPPDATA%\AmINeeded`. Der Installer
+1. **Installer herunterladen:** `BRSOrganizer_<Version>_x64-setup.exe` unter
+   [Releases](https://github.com/AmIHang/BRSOrganizer/releases).
+2. **Ausführen.** Admin-Rechte sind nicht nötig, installiert wird nach `%LOCALAPPDATA%\BRSOrganizer`. Der Installer
    ist nicht signiert, SmartScreen warnt deshalb: „Weitere Informationen“ → „Trotzdem ausführen“.
 3. **Die App startet.** Beim ersten Start richtet sie selbst ein:
    - **Autostart:** an. Die App sitzt danach im Tray, **Strg+Alt+N** blendet sie ein und aus.
@@ -24,7 +24,7 @@ Claude und GitHub Copilot lesen und schreiben über MCP.
    - **PR-Mails** als Ersatz für TFS.
 6. **Claude / Copilot anbinden:** ⚙ → „MCP für Claude & Copilot“ zeigt die fertigen Befehle zum Kopieren.
    Dazu gehört der Anweisungstext unter
-   [PRs an AmINeeded melden](#anweisung-für-claude-und-copilot-prs-an-amineeded-melden).
+   [PRs an BRSOrganizer melden](#anweisung-für-claude-und-copilot-prs-an-brsorganizer-melden).
 
 Alles für Klonen, Update + Build und Merge ist im Installer enthalten, auch die PowerShell-Skripte
 (`Clone-Branch.ps1`, `PrIis.ps1`, `Remove-PrClone.ps1`). Auf dem Rechner müssen nur die Werkzeuge vorhanden
@@ -39,6 +39,12 @@ sein, die das Bauen ohnehin braucht:
 
 **Update:** den neuen Installer einfach darüber installieren. Er beendet den laufenden Hintergrunddienst
 selbst; Einstellungen, Todos und Tickets bleiben erhalten.
+
+**Umstieg von AmINeeded** (früherer Name): den BRSOrganizer-Installer einfach ausführen. Er deinstalliert
+AmINeeded still, beim ersten Start übernimmt BRSOrganizer Datenbank, Einstellungen und gespeicherte Tokens. Die
+alten Daten unter `%LOCALAPPDATA%\AmINeeded` bleiben unangetastet liegen und können später gelöscht werden.
+Danach den MCP-Server neu eintragen (⚙ → „MCP für Claude & Copilot“), Name ist jetzt `brsorganizer`; den alten
+Eintrag entfernen, z. B. `claude mcp remove amineeded --scope user`.
 
 ## App
 
@@ -60,41 +66,41 @@ mit „Desktopentwicklung mit C++“ samt Windows SDK. WebView2 ist unter Window
 
 ```bash
 pnpm install
-pnpm --filter @amineeded/app tauri:build
+pnpm --filter @brsorganizer/app tauri:build
 ```
 
 `tauri:build` ruft zuerst `scripts/build-sidecar.mjs` auf. Das Skript bündelt Daemon und `mcp-stdio` mit
 esbuild, kopiert die nativen Module (better-sqlite3, keyring) und legt die `node.exe` der Build-Maschine als
-`amineeded-node.exe` bei. Ergebnis ist ein NSIS-Installer unter
+`brsorganizer-node.exe` bei. Ergebnis ist ein NSIS-Installer unter
 `packages/app/src-tauri/target/release/bundle/nsis/`, der ohne Admin-Rechte nach
-`%LOCALAPPDATA%\AmINeeded` installiert. Nutzer brauchen weder Node noch Rust.
+`%LOCALAPPDATA%\BRSOrganizer` installiert. Nutzer brauchen weder Node noch Rust.
 
 Auf GitHub baut die Action `.github/workflows/build-installer.yml` den Installer nur für Release-Branches
 (`release/**`) und Release-Tags (`v*`). Vorher laufen Lint, Typecheck und Tests. Den Installer
-gibt es als Artefakt „AmINeeded-installer“ am Workflow-Lauf. Er enthält die `node.exe` des Runners (Node aus
+gibt es als Artefakt „BRSOrganizer-installer“ am Workflow-Lauf. Er enthält die `node.exe` des Runners (Node aus
 `.nvmrc`, also LTS).
 
 **Release:** einen Release-Branch anlegen, dort den Tag `v<Version>` setzen und beides pushen, z. B.
 
 ```bash
 git branch release/0.2.0 main
-git tag -a v0.2.0 -m "AmINeeded 0.2.0" release/0.2.0
+git tag -a v0.2.0 -m "BRSOrganizer 0.2.0" release/0.2.0
 git push origin release/0.2.0 v0.2.0
 ```
 
-Die Action übernimmt die Version aus dem Tag in den Installer (`AmINeeded_0.2.0_x64-setup.exe`) und legt ein
+Die Action übernimmt die Version aus dem Tag in den Installer (`BRSOrganizer_0.2.0_x64-setup.exe`) und legt ein
 GitHub-Release mit der `.exe` und automatisch erzeugten Release-Notes an.
 
 ### Entwicklung
 
 ```bash
-pnpm --filter @amineeded/app tauri:dev
+pnpm --filter @brsorganizer/app tauri:dev
 ```
 
 Debug-Builds sind von der echten Installation getrennt:
 
-- Datenordner `%LOCALAPPDATA%\AmINeeded-dev`
-- Credential-Dienst `AmINeeded-dev`
+- Datenordner `%LOCALAPPDATA%\BRSOrganizer-dev`
+- Credential-Dienst `BRSOrganizer-dev`
 - Port 47822
 - Der Vite-Origin `http://127.0.0.1:1420` ist für den Daemon freigeschaltet.
 
@@ -136,7 +142,7 @@ oder löschen.
 ## MCP einrichten
 
 **Mit installierter App:** In den Einstellungen unter „MCP für Claude & Copilot“ stehen die Befehle mit den
-richtigen Pfaden zum Kopieren. Sie rufen die mitgelieferte `amineeded-node.exe` mit `runtime\mcp-stdio.mjs` auf.
+richtigen Pfaden zum Kopieren. Sie rufen die mitgelieferte `brsorganizer-node.exe` mit `runtime\mcp-stdio.mjs` auf.
 
 **Aus dem Repo (Entwicklung):** wie folgt beschrieben.
 
@@ -149,7 +155,7 @@ Empfohlen ist für alle Clients die stdio-Brücke `mcp-stdio`:
 - Sie funktioniert auch aus WSL heraus.
 
 Voraussetzung ist ein Build (`pnpm install && pnpm build`). Im Folgenden steht `<repo>` für den Repo-Pfad,
-z. B. `C:\projects-git\AmINeeded\AmINeeded`.
+z. B. `C:\projects-git\BRSOrganizer\BRSOrganizer`.
 
 Die Option `--client claude|copilot` legt fest, was in `created_by` landet. Ohne sie wird der Wert aus dem
 Client-Namen abgeleitet.
@@ -157,7 +163,7 @@ Client-Namen abgeleitet.
 ### Claude Code (Windows)
 
 ```bash
-claude mcp add amineeded --scope user -- node "<repo>\packages\mcp-stdio\dist\main.js" --client claude
+claude mcp add brsorganizer --scope user -- node "<repo>\packages\mcp-stdio\dist\main.js" --client claude
 ```
 
 ### Claude Code in WSL
@@ -166,7 +172,7 @@ In WSL zeigt `127.0.0.1` (NAT-Modus) nicht auf Windows. Deshalb startet Claude C
 per Interop. Der Pfad zum Skript wird als Windows-Pfad übergeben:
 
 ```bash
-claude mcp add amineeded --scope user -- "/mnt/c/Program Files/nodejs/node.exe" 'C:\projects-git\AmINeeded\AmINeeded\packages\mcp-stdio\dist\main.js' --client claude
+claude mcp add brsorganizer --scope user -- "/mnt/c/Program Files/nodejs/node.exe" 'C:\projects-git\BRSOrganizer\BRSOrganizer\packages\mcp-stdio\dist\main.js' --client claude
 ```
 
 So laufen Proxy und Daemon in Windows, mit Zugriff auf `%LOCALAPPDATA%` und die Anmeldeinformationsverwaltung.
@@ -179,7 +185,7 @@ Netzwerkkonfiguration ist nicht nötig.
 ```json
 {
   "mcpServers": {
-    "amineeded": {
+    "brsorganizer": {
       "command": "node",
       "args": ["<repo>\\packages\\mcp-stdio\\dist\\main.js", "--client", "claude"]
     }
@@ -195,7 +201,7 @@ Server über „MCP: Open User Configuration“ hinzu:
 ```json
 {
   "servers": {
-    "amineeded": {
+    "brsorganizer": {
       "type": "stdio",
       "command": "node",
       "args": ["<repo>\\packages\\mcp-stdio\\dist\\main.js", "--client", "copilot"]
@@ -209,36 +215,36 @@ Server über „MCP: Open User Configuration“ hinzu:
 | Option                     | Bedeutung                                                  |
 | -------------------------- | ---------------------------------------------------------- |
 | `--client claude\|copilot` | Wert für `created_by`                                      |
-| `--port <n>`               | Daemon-Port (sonst `AMINEEDED_PORT`, `daemon.json`, 47821) |
+| `--port <n>`               | Daemon-Port (sonst `BRSORGANIZER_PORT`, `daemon.json`, 47821) |
 | `--no-start-daemon`        | Daemon nicht automatisch starten                           |
 | `--daemon-main <pfad>`     | Anderer Daemon-Einstiegspunkt (sonst der Build im Repo)    |
 
 Diagnosemeldungen gehen nach stderr, stdout gehört dem Protokoll.
 
-### Anweisung für Claude und Copilot: PRs an AmINeeded melden
+### Anweisung für Claude und Copilot: PRs an BRSOrganizer melden
 
-Damit Claude oder Copilot neue PRs gleich an AmINeeded übertragen, kopierst du den folgenden Text in die
+Damit Claude oder Copilot neue PRs gleich an BRSOrganizer übertragen, kopierst du den folgenden Text in die
 Anweisungen des Assistenten:
 
 - **Claude Code:** `~/.claude/CLAUDE.md`, gilt für alle Projekte, oder die `CLAUDE.md` eines Repos
 - **GitHub Copilot:** `.github/copilot-instructions.md` im Repo
 
-Voraussetzung: AmINeeded ist dort als MCP-Server eingerichtet (siehe oben).
+Voraussetzung: BRSOrganizer ist dort als MCP-Server eingerichtet (siehe oben).
 
 ```markdown
-## Pull Requests und AmINeeded
+## Pull Requests und BRSOrganizer
 
 Vor dem Erstellen eines Pull Requests nach dem BSM-Ticket fragen (z. B. `BRS_PWg0127`); keine Angabe = ohne
 Ticket weitermachen, nicht erneut fragen. Ein angegebenes Ticket kommt als Link in die PR-Beschreibung
 (`https://bsm.boomsoftware.com/indication/<Schlüssel>`).
 
-Direkt nach dem Erstellen des PRs die Infos an AmINeeded übertragen (MCP-Server `amineeded`):
+Direkt nach dem Erstellen des PRs die Infos an BRSOrganizer übertragen (MCP-Server `brsorganizer`):
 
-1. `sync_sources` aufrufen, damit AmINeeded den neuen PR aus TFS/GitHub holt.
+1. `sync_sources` aufrufen, damit BRSOrganizer den neuen PR aus TFS/GitHub holt.
 2. Den PR mit `list_items` (type `pr`) anhand von Repo und PR-Nummer finden.
 3. Ist ein BSM- oder OTMA-Ticket bekannt: `set_tickets` mit `bsm_url` (Schlüssel genügt) bzw. `otma_url`
    (Nummer genügt, z. B. `148082`).
-4. Klappt ein Schritt nicht (AmINeeded nicht erreichbar, PR noch nicht synchronisiert), das dem Benutzer sagen.
+4. Klappt ein Schritt nicht (BRSOrganizer nicht erreichbar, PR noch nicht synchronisiert), das dem Benutzer sagen.
 
 Commit-Messages mit bekanntem BSM-Ticket nutzen den Schlüssel als Scope, z. B. `feat(BRS_PWg0127): …`,
 `fix(BRS_PWg0127): …`, `chore(BRS_PWg0127): …`.
@@ -278,10 +284,10 @@ node packages/daemon/dist/main.js --port 48000 --no-sync --log-level debug
 
 - Lauscht nur auf `127.0.0.1`. Ein zweiter Start erkennt den laufenden Daemon und beendet sich mit Code 0.
 - Beim ersten Start wird das lokale Zugriffstoken erzeugt und in der Anmeldeinformationsverwaltung abgelegt
-  (Dienst `AmINeeded`, Konto `local-access-token`).
-- `%LOCALAPPDATA%\AmINeeded\daemon.json` enthält PID und Port (kein Secret), Logs liegen unter `logs\`.
-- Für die Entwicklung: `AMINEEDED_KEYRING_SERVICE=AmINeeded-dev` trennt die Secrets von der echten Installation,
-  `AMINEEDED_ALLOWED_ORIGINS=http://localhost:1420` erlaubt den Vite-Dev-Server.
+  (Dienst `BRSOrganizer`, Konto `local-access-token`).
+- `%LOCALAPPDATA%\BRSOrganizer\daemon.json` enthält PID und Port (kein Secret), Logs liegen unter `logs\`.
+- Für die Entwicklung: `BRSORGANIZER_KEYRING_SERVICE=BRSOrganizer-dev` trennt die Secrets von der echten Installation,
+  `BRSORGANIZER_ALLOWED_ORIGINS=http://localhost:1420` erlaubt den Vite-Dev-Server.
 
 ### Sicherheit
 
@@ -317,7 +323,7 @@ Endpunkt `http://127.0.0.1:47821/mcp` (Streamable HTTP):
 | `sync_sources`  | GitHub und Kalender sofort abrufen                           |
 
 `created_by` ergibt sich aus dem Client-Namen beim Verbindungsaufbau (Claude → `claude`, VS Code/Copilot →
-`copilot`, sonst `other`). Der Header `X-AmINeeded-Client: claude|copilot` legt ihn fest. Inhalte von PRs und
+`copilot`, sonst `other`). Der Header `X-BRSOrganizer-Client: claude|copilot` legt ihn fest. Inhalte von PRs und
 Terminen stehen in MCP-Antworten im Feld `external_content` mit `origin: "external:…"` und einem Hinweis, dass
 es sich um Daten und nicht um Anweisungen handelt.
 
@@ -325,8 +331,8 @@ es sich um Daten und nicht um Anweisungen handelt.
 
 | Was                                               | Wo                                                                                             |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Datenbank                                         | `%LOCALAPPDATA%\AmINeeded\amineeded.db` (SQLite, WAL), überschreibbar mit `AMINEEDED_DATA_DIR` |
-| GitHub-Token, ICS-Feed-URL, lokales Zugriffstoken | Windows-Anmeldeinformationsverwaltung, Dienst `AmINeeded`                                      |
+| Datenbank                                         | `%LOCALAPPDATA%\BRSOrganizer\brsorganizer.db` (SQLite, WAL), überschreibbar mit `BRSORGANIZER_DATA_DIR` |
+| GitHub-Token, ICS-Feed-URL, lokales Zugriffstoken | Windows-Anmeldeinformationsverwaltung, Dienst `BRSOrganizer`                                      |
 
 Die ICS-URL gilt als Secret, weil private Kalender-Feeds (Google „geheime Adresse“, Outlook „Veröffentlichter
 Kalender“) den Zugriffsschlüssel in der URL tragen.

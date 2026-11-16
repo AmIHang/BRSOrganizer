@@ -1,9 +1,9 @@
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { dataDir } from '@amineeded/core';
+import { dataDir } from '@brsorganizer/core';
 
 /**
- * `%LOCALAPPDATA%\AmINeeded\daemon.json` tells local clients (app, mcp-stdio) where the
+ * `%LOCALAPPDATA%\BRSOrganizer\daemon.json` tells local clients (app, mcp-stdio) where the
  * daemon listens. It holds no secrets; the access token stays in the Credential Manager.
  */
 export interface DiscoveryInfo {

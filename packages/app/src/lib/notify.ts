@@ -7,7 +7,7 @@ import { upcomingEvents } from './group';
 import type { Item } from './types';
 
 const REMINDER_MS = 10 * 60 * 1000;
-const STORAGE_KEY = 'amineeded.notified';
+const STORAGE_KEY = 'brsorganizer.notified';
 
 let permission: Promise<boolean> | null = null;
 

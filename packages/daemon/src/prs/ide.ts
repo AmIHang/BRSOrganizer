@@ -1,4 +1,4 @@
-import { runPowerShell } from '@amineeded/core';
+import { runPowerShell } from '@brsorganizer/core';
 
 export interface CloseIdeResult {
   /** Visual Studio instances that had the PR solution open. */
@@ -18,8 +18,8 @@ export type CloseIde = (clonePath: string, prId: number) => Promise<CloseIdeResu
  */
 export const closeVisualStudio: CloseIde = async (clonePath, prId) => {
   const script = String.raw`
-$path = $env:AMINEEDED_CLONE
-$tag = '\bPR' + $env:AMINEEDED_PRID + '\b'
+$path = $env:BRSORGANIZER_CLONE
+$tag = '\bPR' + $env:BRSORGANIZER_PRID + '\b'
 $ids = @(Get-CimInstance Win32_Process -Filter "Name='devenv.exe'" | Where-Object {
   ($_.CommandLine -and $_.CommandLine.IndexOf($path, [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
   ((Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue).MainWindowTitle -match $tag)
@@ -33,7 +33,7 @@ foreach ($id in $left) { Stop-Process -Id $id -Force -ErrorAction SilentlyContin
 `;
   const out = await runPowerShell(
     script,
-    { AMINEEDED_CLONE: clonePath, AMINEEDED_PRID: String(prId) },
+    { BRSORGANIZER_CLONE: clonePath, BRSORGANIZER_PRID: String(prId) },
     'Visual Studio',
   );
   return JSON.parse(out || '{"closed":0,"forced":0}') as CloseIdeResult;

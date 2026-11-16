@@ -30,7 +30,7 @@ function vevent(lines: string[]): string[] {
 const FEED = [
   'BEGIN:VCALENDAR',
   'VERSION:2.0',
-  'PRODID:-//AmINeeded//test//EN',
+  'PRODID:-//BRSOrganizer//test//EN',
   ...VIENNA,
   ...vevent([
     'UID:single-1',

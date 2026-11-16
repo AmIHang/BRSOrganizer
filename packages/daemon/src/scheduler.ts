@@ -1,4 +1,4 @@
-import type { Core, SourceStatus, SyncResult } from '@amineeded/core';
+import type { Core, SourceStatus, SyncResult } from '@brsorganizer/core';
 import type { Logger } from 'pino';
 
 export interface SyncAllResult {

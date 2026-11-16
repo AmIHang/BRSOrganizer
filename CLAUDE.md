@@ -1,4 +1,4 @@
-# AmINeeded – Projektkonventionen
+# BRSOrganizer – Projektkonventionen
 
 Lokale Windows-App, die eigene Todos, GitHub-PRs und Kalendertermine zusammenführt
 ("Wo werde ich gerade gebraucht?"). Claude und Copilot lesen und schreiben über MCP.
@@ -22,12 +22,12 @@ pnpm install
 pnpm test              # Vitest, alle Pakete
 pnpm typecheck
 pnpm lint
-pnpm --filter @amineeded/core db:generate   # Migration aus src/db/schema.ts erzeugen
+pnpm --filter @brsorganizer/core db:generate   # Migration aus src/db/schema.ts erzeugen
 pnpm build && node packages/daemon/dist/main.js --port 47999 --data-dir <tmp> --no-sync   # Daemon lokal
 ```
 
 pnpm liegt unter `%APPDATA%\npm` und ist evtl. nicht im PATH der Shell.
-Beim manuellen Starten des Daemons `AMINEEDED_KEYRING_SERVICE=AmINeeded-dev` setzen und die Einträge danach
+Beim manuellen Starten des Daemons `BRSORGANIZER_KEYRING_SERVICE=BRSOrganizer-dev` setzen und die Einträge danach
 entfernen, damit die echten Credentials unberührt bleiben.
 
 ## App-Konventionen (`packages/app`)
@@ -36,10 +36,10 @@ entfernen, damit die echten Credentials unberührt bleiben.
   `src/lib/types.ts` spiegeln die REST-Antworten.
 - Rust (`src-tauri/src/daemon.rs`) findet/startet den Daemon und liest das Token aus dem Credential Manager
   (`keyring` v3, gleiches Ziel `local-access-token.<Dienst>` wie `@napi-rs/keyring`).
-- Debug-Builds nutzen das Profil `AmINeeded-dev` (Datenordner, Credentials, Port 47822) – nie die echte
+- Debug-Builds nutzen das Profil `BRSOrganizer-dev` (Datenordner, Credentials, Port 47822) – nie die echte
   Installation.
 - Externe Texte (PR-Titel, Termine) nur als Text rendern (Svelte-Interpolation), nie `{@html}`.
-- Sidecar-Runtime: `pnpm --filter @amineeded/app sidecar`; läuft ein Daemon aus dieser Runtime, sperrt er
+- Sidecar-Runtime: `pnpm --filter @brsorganizer/app sidecar`; läuft ein Daemon aus dieser Runtime, sperrt er
   `better_sqlite3.node` – vorher `POST /api/shutdown`.
 
 ## PR-Arbeitsbereich (`packages/daemon/src/prs`, `packages/daemon/scripts/pr`)
@@ -55,7 +55,7 @@ entfernen, damit die echten Credentials unberührt bleiben.
 
 - stdout ist ausschließlich das MCP-Protokoll; Logs nur nach stderr.
 - Hängt nicht von `core` ab (nur HTTP zum Daemon). Pfade/Keyring-Namen in `src/config.ts` müssen zu
-  `core` passen (`dataDir`, Dienst `AmINeeded`, Konto `local-access-token`).
+  `core` passen (`dataDir`, Dienst `BRSOrganizer`, Konto `local-access-token`).
 - Tests (`test/proxy.test.ts`) starten den echten Daemon-Harness, auch für Neustart, Ausfall und 401.
 
 ## Daemon-Konventionen
@@ -64,7 +64,7 @@ entfernen, damit die echten Credentials unberührt bleiben.
 - Neue MCP-Tools: in `packages/daemon/src/mcp/server.ts`, Items immer über `itemResult`/`itemsResult`
   ausgeben (Externkennzeichnung), Domänenfehler über `guard` als `isError`-Ergebnis. Kein Tool löscht.
 - Daemon-Tests nutzen `test/harness.ts` (echter HTTP-Server auf Port 0, In-Memory-Core) und importieren
-  `@amineeded/core` per Vitest-Alias aus den Quellen – kein Build nötig.
+  `@brsorganizer/core` per Vitest-Alias aus den Quellen – kein Build nötig.
 
 ## Regeln, die nicht gebrochen werden dürfen
 
@@ -95,6 +95,6 @@ entfernen, damit die echten Credentials unberührt bleiben.
 
 ## Daten
 
-- DB: `%LOCALAPPDATA%\AmINeeded\amineeded.db` (überschreibbar mit `AMINEEDED_DATA_DIR`), nie im
+- DB: `%LOCALAPPDATA%\BRSOrganizer\brsorganizer.db` (überschreibbar mit `BRSORGANIZER_DATA_DIR`), nie im
   WSL-Dateisystem.
 - Tests nutzen `:memory:` und den `MemorySecretStore`.

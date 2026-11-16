@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 export function defaultDaemonMain(
   env: Record<string, string | undefined> = process.env,
 ): string | null {
-  if (env.AMINEEDED_DAEMON_MAIN) return env.AMINEEDED_DAEMON_MAIN;
+  if (env.BRSORGANIZER_DAEMON_MAIN) return env.BRSORGANIZER_DAEMON_MAIN;
   const candidates = [
     // App install: runtime/daemon.mjs next to runtime/mcp-stdio.mjs
     new URL('./daemon.mjs', import.meta.url),
@@ -22,7 +22,7 @@ export async function isDaemonHealthy(port: number, timeoutMs = 1500): Promise<b
       signal: AbortSignal.timeout(timeoutMs),
     });
     const body = (await res.json()) as { app?: string };
-    return body.app === 'AmINeeded';
+    return body.app === 'BRSOrganizer';
   } catch {
     return false;
   }

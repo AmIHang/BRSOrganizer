@@ -121,10 +121,10 @@
 
     // Autostart is on by default for installed (release) builds; the user can turn it off in the
     // settings. Never in development: it would register the debug exe from target/.
-    if (import.meta.env.PROD && !localStorage.getItem('amineeded.autostart-initialized')) {
+    if (import.meta.env.PROD && !localStorage.getItem('brsorganizer.autostart-initialized')) {
       void isEnabled()
         .then((on) => (on ? undefined : enable()))
-        .then(() => localStorage.setItem('amineeded.autostart-initialized', '1'))
+        .then(() => localStorage.setItem('brsorganizer.autostart-initialized', '1'))
         .catch(() => undefined);
     }
 

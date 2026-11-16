@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { TfsSender, TfsTransport } from '@amineeded/core';
+import type { TfsSender, TfsTransport } from '@brsorganizer/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StaticSource } from '../../core/test/helpers.js';
 import { scriptCommand, startArguments, type Launcher } from '../src/prs/launcher.js';
@@ -28,7 +28,7 @@ function makeRepo(dir: string, remote: string, marker = false) {
 describe('workspace scan', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'amineeded-ws-'));
+    root = mkdtempSync(join(tmpdir(), 'brsorganizer-ws-'));
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -60,7 +60,7 @@ describe('workspace scan', () => {
 describe('cloneSync with real git', () => {
   let dir: string;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'amineeded-git-'));
+    dir = mkdtempSync(join(tmpdir(), 'brsorganizer-git-'));
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -128,14 +128,14 @@ describe('script launcher', () => {
 
   it('quotes arguments for PowerShell and keeps flags bare', () => {
     expect(
-      scriptCommand("PR 1 – O'Brien", 'C:\\Program Files\\AmINeeded\\Clone-Branch.ps1', [
+      scriptCommand("PR 1 – O'Brien", 'C:\\Program Files\\BRSOrganizer\\Clone-Branch.ps1', [
         '-Project',
         "O'Brien",
         '-Root',
         'C:\\projects git',
       ]),
     ).toContain(
-      "& 'C:\\Program Files\\AmINeeded\\Clone-Branch.ps1' -Project 'O''Brien' -Root 'C:\\projects git'",
+      "& 'C:\\Program Files\\BRSOrganizer\\Clone-Branch.ps1' -Project 'O''Brien' -Root 'C:\\projects git'",
     );
   });
 });
@@ -172,7 +172,7 @@ describe('PR workspace via REST', () => {
   });
 
   beforeEach(async () => {
-    root = mkdtempSync(join(tmpdir(), 'amineeded-ws-'));
+    root = mkdtempSync(join(tmpdir(), 'brsorganizer-ws-'));
     makeRepo(join(root, 'Community', 'Community'), REPO_URL);
     launched = [];
     sent = [];

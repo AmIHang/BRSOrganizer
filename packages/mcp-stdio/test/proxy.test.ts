@@ -99,7 +99,7 @@ describe('stdio proxy', () => {
     const h = await harness();
     const { client } = await connect({ resolveUpstream: upstream(h.port) });
 
-    expect(client.getServerVersion()?.name).toBe('amineeded');
+    expect(client.getServerVersion()?.name).toBe('brsorganizer');
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toContain('add_todo');
 
@@ -110,7 +110,7 @@ describe('stdio proxy', () => {
   it('passes the --client override as header', async () => {
     const h = await harness();
     const { client } = await connect(
-      { resolveUpstream: upstream(h.port, { 'X-AmINeeded-Client': 'copilot' }) },
+      { resolveUpstream: upstream(h.port, { 'X-BRSOrganizer-Client': 'copilot' }) },
       'unknown-agent',
     );
     const r = text(await client.callTool({ name: 'add_todo', arguments: { title: 'x' } }));

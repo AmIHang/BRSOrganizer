@@ -100,7 +100,7 @@ importers:
 
   packages/daemon:
     dependencies:
-      '@amineeded/core':
+      '@brsorganizer/core':
         specifier: workspace:*
         version: link:../core
       '@modelcontextprotocol/sdk':

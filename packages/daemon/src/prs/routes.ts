@@ -1,4 +1,4 @@
-import { ValidationError } from '@amineeded/core';
+import { ValidationError } from '@brsorganizer/core';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import type { Scheduler } from '../scheduler.js';

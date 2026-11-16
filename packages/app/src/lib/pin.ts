@@ -1,6 +1,6 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
-const KEY = 'amineeded.always-on-top';
+const KEY = 'brsorganizer.always-on-top';
 
 /** Remembered choice (per user, in the webview's local storage). */
 export function savedAlwaysOnTop(): boolean {

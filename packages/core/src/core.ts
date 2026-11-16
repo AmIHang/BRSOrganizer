@@ -15,7 +15,7 @@ import type { TfsTransport } from './sync/tfs.js';
 import { buildSources, type SourceStatus } from './sync/sources.js';
 
 export interface CoreOptions {
-  /** DB file or `:memory:`. Default: `%LOCALAPPDATA%\AmINeeded\amineeded.db`. */
+  /** DB file or `:memory:`. Default: `%LOCALAPPDATA%\BRSOrganizer\brsorganizer.db`. */
   databaseFile?: string;
   migrationsFolder?: string;
   secrets?: SecretStore;

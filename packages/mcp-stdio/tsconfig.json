@@ -4,7 +4,7 @@
     "rootDir": "..",
     "noEmit": true,
     "paths": {
-      "@amineeded/core": ["../core/src/index.ts"]
+      "@brsorganizer/core": ["../core/src/index.ts"]
     }
   },
   "include": ["src", "test", "vitest.config.ts"]

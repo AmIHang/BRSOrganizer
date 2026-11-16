@@ -1,4 +1,4 @@
-import type { Core, CoreEventMap, Item } from '@amineeded/core';
+import type { Core, CoreEventMap, Item } from '@brsorganizer/core';
 import type { RequestHandler } from 'express';
 
 const HEARTBEAT_MS = 25_000;

@@ -12,7 +12,7 @@ import {
   type Item,
   type TfsSender,
   type TfsTransport,
-} from '@amineeded/core';
+} from '@brsorganizer/core';
 import { closeVisualStudio, type CloseIde } from './ide.js';
 import type { Launcher } from './launcher.js';
 import {

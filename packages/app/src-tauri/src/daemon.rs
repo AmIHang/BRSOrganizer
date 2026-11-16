@@ -1,4 +1,4 @@
-//! Finding, starting and connecting to the AmINeeded daemon.
+//! Finding, starting and connecting to the BRSOrganizer daemon.
 //!
 //! The daemon runs detached: it keeps serving MCP clients when the app window or even the
 //! app itself is closed. The app only starts it when it is not running yet.
@@ -30,16 +30,16 @@ struct Profile {
 
 #[cfg(debug_assertions)]
 const PROFILE: Profile = Profile {
-    data_dir_name: "AmINeeded-dev",
-    keyring_service: "AmINeeded-dev",
+    data_dir_name: "BRSOrganizer-dev",
+    keyring_service: "BRSOrganizer-dev",
     fixed_port: Some(47822),
     extra_origins: Some("http://127.0.0.1:1420"),
 };
 
 #[cfg(not(debug_assertions))]
 const PROFILE: Profile = Profile {
-    data_dir_name: "AmINeeded",
-    keyring_service: "AmINeeded",
+    data_dir_name: "BRSOrganizer",
+    keyring_service: "BRSOrganizer",
     fixed_port: None,
     extra_origins: None,
 };
@@ -60,7 +60,7 @@ pub struct McpPaths {
 }
 
 fn data_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("AMINEEDED_DATA_DIR") {
+    if let Ok(dir) = std::env::var("BRSORGANIZER_DATA_DIR") {
         return PathBuf::from(dir);
     }
     let base = std::env::var("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|_| {
@@ -70,7 +70,7 @@ fn data_dir() -> PathBuf {
 }
 
 fn keyring_service() -> String {
-    std::env::var("AMINEEDED_KEYRING_SERVICE").unwrap_or_else(|_| PROFILE.keyring_service.into())
+    std::env::var("BRSORGANIZER_KEYRING_SERVICE").unwrap_or_else(|_| PROFILE.keyring_service.into())
 }
 
 fn discovered_port() -> Option<u16> {
@@ -80,7 +80,7 @@ fn discovered_port() -> Option<u16> {
 }
 
 fn configured_port() -> Option<u16> {
-    std::env::var("AMINEEDED_PORT")
+    std::env::var("BRSORGANIZER_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
         .or(PROFILE.fixed_port)
@@ -106,7 +106,7 @@ fn is_healthy(port: u16) -> bool {
     }
     let mut response = String::new();
     let _ = stream.read_to_string(&mut response);
-    response.starts_with("HTTP/1.1 200") && response.contains("\"app\":\"AmINeeded\"")
+    response.starts_with("HTTP/1.1 200") && response.contains("\"app\":\"BRSOrganizer\"")
 }
 
 /// Tauri returns verbatim paths (`\\?\C:\...`). Node cannot resolve a main script given that
@@ -123,7 +123,7 @@ fn plain_path(path: PathBuf) -> PathBuf {
 /// Node runtime shipped as externalBin (next to the app exe) and the bundled scripts.
 fn runtime(app: &AppHandle) -> Option<(PathBuf, PathBuf)> {
     let exe_dir = plain_path(std::env::current_exe().ok()?.parent()?.to_path_buf());
-    let node = exe_dir.join("amineeded-node.exe");
+    let node = exe_dir.join("brsorganizer-node.exe");
     let runtime_dir = plain_path(app.path().resource_dir().ok()?).join("runtime");
     Some((node, runtime_dir))
 }
@@ -136,12 +136,12 @@ mod tests {
     #[test]
     fn strips_verbatim_prefix_from_drive_paths_only() {
         assert_eq!(
-            plain_path(PathBuf::from(r"\\?\C:\Apps\AmINeeded")),
-            PathBuf::from(r"C:\Apps\AmINeeded")
+            plain_path(PathBuf::from(r"\\?\C:\Apps\BRSOrganizer")),
+            PathBuf::from(r"C:\Apps\BRSOrganizer")
         );
         assert_eq!(
-            plain_path(PathBuf::from(r"C:\Apps\AmINeeded")),
-            PathBuf::from(r"C:\Apps\AmINeeded")
+            plain_path(PathBuf::from(r"C:\Apps\BRSOrganizer")),
+            PathBuf::from(r"C:\Apps\BRSOrganizer")
         );
         // UNC verbatim paths stay as they are.
         assert_eq!(
@@ -185,14 +185,14 @@ fn spawn_daemon(app: &AppHandle) -> Result<(), String> {
         .stdin(Stdio::null())
         .stdout(Stdio::from(start_log))
         .stderr(Stdio::from(start_log_err))
-        .env("AMINEEDED_DATA_DIR", data_dir())
-        .env("AMINEEDED_KEYRING_SERVICE", keyring_service())
+        .env("BRSORGANIZER_DATA_DIR", data_dir())
+        .env("BRSORGANIZER_KEYRING_SERVICE", keyring_service())
         .creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
     if let Some(port) = configured_port() {
         cmd.arg("--port").arg(port.to_string());
     }
     if let Some(origins) = PROFILE.extra_origins {
-        cmd.env("AMINEEDED_ALLOWED_ORIGINS", origins);
+        cmd.env("BRSORGANIZER_ALLOWED_ORIGINS", origins);
     }
     // The child is intentionally not kept: the daemon outlives the app.
     cmd.spawn().map_err(|e| format!("failed to start daemon: {e}"))?;

@@ -3,7 +3,7 @@ import { APP_NAME } from '../paths.js';
 import type { SecretKey, SecretStore } from './store.js';
 
 /**
- * Windows Credential Manager (generic credentials, target `AmINeeded/<key>` style entries
+ * Windows Credential Manager (generic credentials, target `BRSOrganizer/<key>` style entries
  * managed by the keyring crate). Visible under "Anmeldeinformationsverwaltung".
  */
 export class KeyringSecretStore implements SecretStore {

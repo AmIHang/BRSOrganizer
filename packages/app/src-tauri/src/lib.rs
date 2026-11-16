@@ -77,7 +77,7 @@ pub fn run() {
 
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().cloned().expect("app icon"))
-                .tooltip("AmINeeded")
+                .tooltip("BRSOrganizer")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -129,5 +129,5 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![connection, mcp_paths, hotkey_label])
         .run(tauri::generate_context!())
-        .expect("error while running AmINeeded");
+        .expect("error while running BRSOrganizer");
 }

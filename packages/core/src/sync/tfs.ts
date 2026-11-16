@@ -20,7 +20,7 @@ const API = 'api-version=5.0';
 /** Windows integrated authentication (NTLM/Kerberos) via Invoke-WebRequest. */
 export const windowsAuthTransport: TfsTransport = async (urls) => {
   const script = String.raw`
-$urls = $env:AMINEEDED_TFS_URLS | ConvertFrom-Json
+$urls = $env:BRSORGANIZER_TFS_URLS | ConvertFrom-Json
 $out = New-Object System.Collections.Generic.List[string]
 foreach ($u in $urls) {
   $r = Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri $u -TimeoutSec 30 -Headers @{ Accept = 'application/json' }
@@ -30,7 +30,7 @@ ConvertTo-Json -InputObject @($out.ToArray()) -Compress
 `;
   const stdout = await runPowerShell(
     script,
-    { AMINEEDED_TFS_URLS: JSON.stringify(urls) },
+    { BRSORGANIZER_TFS_URLS: JSON.stringify(urls) },
     'Azure DevOps (Windows login)',
   );
   const bodies = ([] as string[]).concat(JSON.parse(stdout || '[]') as string | string[]);
@@ -74,9 +74,9 @@ export class TfsRequestError extends Error {
 /** Windows integrated authentication for writes. */
 export const windowsAuthSender: TfsSender = async ({ method, url, body }) => {
   const script = String.raw`
-$bytes = [Text.Encoding]::UTF8.GetBytes($env:AMINEEDED_TFS_BODY)
+$bytes = [Text.Encoding]::UTF8.GetBytes($env:BRSORGANIZER_TFS_BODY)
 try {
-  $r = Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri $env:AMINEEDED_TFS_URL -Method $env:AMINEEDED_TFS_METHOD -Body $bytes -ContentType 'application/json; charset=utf-8' -TimeoutSec 60
+  $r = Invoke-WebRequest -UseBasicParsing -UseDefaultCredentials -Uri $env:BRSORGANIZER_TFS_URL -Method $env:BRSORGANIZER_TFS_METHOD -Body $bytes -ContentType 'application/json; charset=utf-8' -TimeoutSec 60
   [pscustomobject]@{ status = [int]$r.StatusCode; body = [string]$r.Content } | ConvertTo-Json -Compress
 } catch {
   $status = 0
@@ -87,9 +87,9 @@ try {
   const stdout = await runPowerShell(
     script,
     {
-      AMINEEDED_TFS_URL: url,
-      AMINEEDED_TFS_METHOD: method,
-      AMINEEDED_TFS_BODY: JSON.stringify(body),
+      BRSORGANIZER_TFS_URL: url,
+      BRSORGANIZER_TFS_METHOD: method,
+      BRSORGANIZER_TFS_BODY: JSON.stringify(body),
     },
     'Azure DevOps (Windows login)',
   );

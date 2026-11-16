@@ -1,4 +1,4 @@
-import type { Item } from '@amineeded/core';
+import type { Item } from '@brsorganizer/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { pr, StaticSource } from '../../core/test/helpers.js';
 import { auth, raw, startHarness, type Harness } from './harness.js';

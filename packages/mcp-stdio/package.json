@@ -1,11 +1,11 @@
 {
-  "name": "@amineeded/mcp-stdio",
+  "name": "@brsorganizer/mcp-stdio",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./dist/main.js",
   "bin": {
-    "amineeded-mcp": "./dist/main.js"
+    "brsorganizer-mcp": "./dist/main.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

@@ -44,11 +44,11 @@ jobs:
           node -e "const f='packages/app/src-tauri/tauri.conf.json';const fs=require('fs');const c=JSON.parse(fs.readFileSync(f,'utf8'));c.version=process.argv[1];fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n')" "$version"
 
       # Builds the sidecar runtime (daemon, mcp-stdio, native modules, node.exe) and the NSIS installer.
-      - run: pnpm --filter @amineeded/app tauri:build
+      - run: pnpm --filter @brsorganizer/app tauri:build
 
       - uses: actions/upload-artifact@v4
         with:
-          name: AmINeeded-installer
+          name: BRSOrganizer-installer
           path: packages/app/src-tauri/target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
 

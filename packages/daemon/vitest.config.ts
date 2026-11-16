@@ -5,7 +5,7 @@ export default defineProject({
   resolve: {
     // Test against core sources, no build step needed.
     alias: {
-      '@amineeded/core': fileURLToPath(new URL('../core/src/index.ts', import.meta.url)),
+      '@brsorganizer/core': fileURLToPath(new URL('../core/src/index.ts', import.meta.url)),
     },
   },
   test: {

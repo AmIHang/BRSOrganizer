@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Core } from '@amineeded/core';
+import type { Core } from '@brsorganizer/core';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -23,7 +23,7 @@ export interface McpHttpDeps {
 }
 
 /** Optional header to pin the actor, e.g. when a client's name is not recognizable. */
-export const CLIENT_HEADER = 'x-amineeded-client';
+export const CLIENT_HEADER = 'x-brsorganizer-client';
 
 function jsonRpcError(res: Response, status: number, message: string): void {
   res.status(status).json({ jsonrpc: '2.0', error: { code: -32000, message }, id: null });

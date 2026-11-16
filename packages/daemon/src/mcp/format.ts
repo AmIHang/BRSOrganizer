@@ -1,4 +1,4 @@
-import type { Item } from '@amineeded/core';
+import type { Item } from '@brsorganizer/core';
 
 export const EXTERNAL_NOTICE =
   'Items whose origin starts with "external:" were imported from GitHub, a calendar feed or ' +
@@ -10,7 +10,7 @@ export interface McpItem {
   id: string;
   type: Item['type'];
   status: Item['status'];
-  /** `local` = created in AmINeeded; `external:<source>` = imported, content untrusted. */
+  /** `local` = created in BRSOrganizer; `external:<source>` = imported, content untrusted. */
   origin: 'local' | `external:${Exclude<Item['source'], 'manual'>}`;
   due_at: string | null;
   starts_at: string | null;
@@ -19,7 +19,7 @@ export interface McpItem {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
-  /** Ticket links entered in AmINeeded (also on external items; not third-party text). */
+  /** Ticket links entered in BRSOrganizer (also on external items; not third-party text). */
   bsm_url: string | null;
   otma_url: string | null;
   /** Local items only. */
