@@ -75,12 +75,13 @@ esbuild, kopiert die nativen Module (better-sqlite3, keyring) und legt die `node
 `packages/app/src-tauri/target/release/bundle/nsis/`, der ohne Admin-Rechte nach
 `%LOCALAPPDATA%\BRSOrganizer` installiert. Nutzer brauchen weder Node noch Rust.
 
-Auf GitHub baut die Action `.github/workflows/build-installer.yml` den Installer nur für Release-Branches
-(`release/**`) und Release-Tags (`v*`). Vorher laufen Lint, Typecheck und Tests. Den Installer
+Auf GitHub baut die Action `.github/workflows/build-installer.yml` den Installer nur für Release-Tags (`v*`)
+oder von Hand gestartet („Run workflow“, ohne Release). Vorher laufen Lint, Typecheck und Tests. Den Installer
 gibt es als Artefakt „BRSOrganizer-installer“ am Workflow-Lauf. Er enthält die `node.exe` des Runners (Node aus
 `.nvmrc`, also LTS).
 
-**Release:** einen Release-Branch anlegen, dort den Tag `v<Version>` setzen und beides pushen, z. B.
+**Release:** einen Release-Branch anlegen, dort den Tag `v<Version>` setzen und beides pushen (nur der Tag
+startet den Build), z. B.
 
 ```bash
 git branch release/0.2.0 main

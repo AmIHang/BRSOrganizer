@@ -1,10 +1,11 @@
 name: Build installer
 
-# Only release branches and their v* tags (the tag publishes the GitHub release).
+# Only v* tags (they publish the GitHub release). Pushing a release branch together with its tag
+# used to start a second, identical run. Test builds without a release: start it by hand.
 on:
   push:
-    branches: ['release/**']
     tags: ['v*']
+  workflow_dispatch:
 
 jobs:
   windows-installer:
