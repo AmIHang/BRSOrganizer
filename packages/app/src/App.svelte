@@ -80,10 +80,18 @@
       const failed = s.lastRuns.find((r) => !r.ok && r.error);
       const latestOk = s.lastRuns.find((r) => r.ok);
       lastSyncError = failed && (!latestOk || failed.id > latestOk.id) ? `${failed.source}: ${failed.error}` : null;
+      projectsRoot = (await api.settings()).workspace.projectsRoot;
     } catch {
       // shown via refresh()
     }
   }
+
+  /** Empty: clone/update dots cannot work; hint when there are TFS pull requests. */
+  let projectsRoot = $state<string | null>(null);
+  const needsWorkspace = $derived(
+    projectsRoot === '' &&
+      items.some((i) => i.type === 'pr' && /\/_git\/[^/]+\/pullrequest\/\d+/i.test(i.link ?? '')),
+  );
 
   async function syncNow() {
     syncing = true;
@@ -202,6 +210,13 @@
     <p class="banner">
       Noch keine Quelle eingerichtet (GitHub, TFS, Kalender oder PR-Mails).
       <button class="linkish" onclick={() => (view = 'settings')}>Jetzt einrichten</button>
+    </p>
+  {/if}
+
+  {#if needsWorkspace}
+    <p class="banner">
+      Für Klonen, Update und Build fehlt noch der Projektordner (z. B. C:\projects-git).
+      <button class="linkish" onclick={() => (view = 'settings')}>Festlegen</button>
     </p>
   {/if}
 
