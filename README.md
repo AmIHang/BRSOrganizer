@@ -179,6 +179,35 @@ Server über „MCP: Open User Configuration“ hinzu:
 
 Diagnosemeldungen gehen nach stderr, stdout gehört dem Protokoll.
 
+### Anweisung für Claude und Copilot: PRs an AmINeeded melden
+
+Damit Claude oder Copilot neue PRs gleich an AmINeeded übertragen, kopierst du den folgenden Text in die
+Anweisungen des Assistenten:
+
+- **Claude Code:** `~/.claude/CLAUDE.md`, gilt für alle Projekte, oder die `CLAUDE.md` eines Repos
+- **GitHub Copilot:** `.github/copilot-instructions.md` im Repo
+
+Voraussetzung: AmINeeded ist dort als MCP-Server eingerichtet (siehe oben).
+
+```markdown
+## Pull Requests und AmINeeded
+
+Vor dem Erstellen eines Pull Requests nach dem BSM-Ticket fragen (z. B. `BRS_PWg0127`); keine Angabe = ohne
+Ticket weitermachen, nicht erneut fragen. Ein angegebenes Ticket kommt als Link in die PR-Beschreibung
+(`https://bsm.boomsoftware.com/indication/<Schlüssel>`).
+
+Direkt nach dem Erstellen des PRs die Infos an AmINeeded übertragen (MCP-Server `amineeded`):
+
+1. `sync_sources` aufrufen, damit AmINeeded den neuen PR aus TFS/GitHub holt.
+2. Den PR mit `list_items` (type `pr`) anhand von Repo und PR-Nummer finden.
+3. Ist ein BSM- oder OTMA-Ticket bekannt: `set_tickets` mit `bsm_url` (Schlüssel genügt) bzw. `otma_url`
+   (Nummer genügt, z. B. `148082`).
+4. Klappt ein Schritt nicht (AmINeeded nicht erreichbar, PR noch nicht synchronisiert), das dem Benutzer sagen.
+
+Commit-Messages mit bekanntem BSM-Ticket nutzen den Schlüssel als Scope, z. B. `feat(BRS_PWg0127): …`,
+`fix(BRS_PWg0127): …`, `chore(BRS_PWg0127): …`.
+```
+
 ### Alternative: HTTP direkt
 
 Clients mit Streamable-HTTP-Unterstützung können `http://127.0.0.1:47821/mcp` direkt ansprechen.
