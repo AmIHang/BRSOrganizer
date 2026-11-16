@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseSseBlock } from '../src/lib/api';
-import { groupItems, upcomingEvents } from '../src/lib/group';
+import { groupItems, projectsOf, upcomingEvents } from '../src/lib/group';
 import type { Item } from '../src/lib/types';
 
 const NOW = new Date(2026, 10, 12, 10, 0, 0); // Thu 12 Nov 2026, 10:00 local
@@ -36,6 +36,22 @@ function item(partial: Partial<Item>): Item {
 
 const at = (h: number, m = 0, dayOffset = 0) =>
   new Date(2026, 10, 12 + dayOffset, h, m).toISOString();
+
+describe('todos in projects', () => {
+  it('files a todo with a project under that project next to its pull requests', () => {
+    const pr = item({ type: 'pr', meta: { project: 'STB' } });
+    const todo = item({ meta: { project: 'STB' }, dueAt: at(9) });
+    const loose = item({});
+    const sections = groupItems([pr, todo, loose], NOW);
+    const reviews = sections.find((s) => s.key === 'reviews')!;
+    expect(reviews.groups).toEqual([{ customer: 'STB', items: [todo, pr] }]);
+    expect(sections.find((s) => s.key === 'undated')!.items).toEqual([loose]);
+    expect(projectsOf([pr, todo, item({ type: 'pr', meta: { repo: 'acme/x' } })])).toEqual([
+      'acme',
+      'STB',
+    ]);
+  });
+});
 
 describe('groupItems', () => {
   it('sorts items into urgency sections', () => {

@@ -99,7 +99,10 @@ export const api = {
     request<Item>('PATCH', `/api/items/${id}/tickets`, tickets),
   addEvent: (input: { title: string; startsAt: string; endsAt?: string | null }) =>
     request<Item>('POST', '/api/events', input),
-  updateTodo: (id: string, patch: Partial<Pick<Item, 'title' | 'notes' | 'link' | 'dueAt'>>) =>
+  updateTodo: (
+    id: string,
+    patch: Partial<Pick<Item, 'title' | 'notes' | 'link' | 'dueAt'>> & { project?: string | null },
+  ) =>
     request<Item>('PATCH', `/api/todos/${id}`, patch),
   complete: (id: string) => request<Item>('POST', `/api/items/${id}/complete`),
   archive: (id: string) => request<Item>('POST', `/api/items/${id}/archive`),
@@ -114,6 +117,8 @@ export const api = {
     details: (id: string, fetch = false) =>
       request<PrDetails>('GET', `/api/prs/${id}${fetch ? '?fetch=1' : ''}`),
     cloneOrUpdate: (id: string) => request<{ clonePath: string }>('POST', `/api/prs/${id}/clone`),
+    handOffTodo: (id: string) =>
+      request<{ worktree: string; branch: string }>('POST', `/api/prs/todos/${id}/agent`),
     removeLocal: (id: string) =>
       request<{ clonePath: string; ideClosed: number; ideForced: number }>(
         'POST',

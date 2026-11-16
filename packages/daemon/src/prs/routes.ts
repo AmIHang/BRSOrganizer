@@ -30,6 +30,11 @@ export function prRouter(workspace: PrWorkspace, scheduler: Scheduler): Router {
     next();
   });
 
+  // A todo (not a PR) filed under a project: worktree + claude CLI agent that opens a PR.
+  r.post('/todos/:id/agent', (req, res) => {
+    res.status(202).json(workspace.handOffTodo(itemId(req)));
+  });
+
   r.get('/:id', async (req, res) => {
     res.json(await workspace.details(itemId(req), { fetch: req.query.fetch === '1' }));
   });

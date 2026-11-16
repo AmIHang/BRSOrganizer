@@ -43,6 +43,13 @@ export function groupByCustomer(sorted: Item[]): CustomerGroup[] {
   return [...groups].map(([customer, items]) => ({ customer, items }));
 }
 
+/** Projects a todo can be filed under: the customers of the current pull requests. */
+export function projectsOf(items: Item[]): string[] {
+  return [...new Set(items.filter((i) => i.type === 'pr').map(customerOf))].sort((a, b) =>
+    a.localeCompare(b, 'de'),
+  );
+}
+
 const TITLES: Record<SectionKey, string> = {
   overdue: 'Überfällig',
   now: 'Jetzt',
@@ -79,7 +86,8 @@ export function groupItems(items: Item[], now: Date): Section[] {
 
   for (const item of items) {
     let key: SectionKey;
-    if (item.type === 'pr') {
+    // Todos filed under a project sit next to that project's pull requests.
+    if (item.type === 'pr' || (item.type === 'todo' && typeof item.meta?.project === 'string')) {
       key = 'reviews';
     } else if (item.type === 'event') {
       const start = item.startsAt ? Date.parse(item.startsAt) : NaN;

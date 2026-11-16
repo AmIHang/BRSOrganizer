@@ -155,6 +155,8 @@ export const updateTodoInput = z
     notes: notes.nullable().optional(),
     link: link.nullable().optional(),
     dueAt: dateInput.nullable().optional(),
+    /** Project (customer) the todo is filed under, like a PR's project; null removes it. */
+    project: z.string().trim().min(1).max(100).nullable().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), 'nothing to update');
 export type UpdateTodoInput = z.input<typeof updateTodoInput>;

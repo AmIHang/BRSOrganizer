@@ -6,7 +6,7 @@
   import NewItemDialog from './components/NewItemDialog.svelte';
   import Settings from './components/Settings.svelte';
   import { api, subscribe } from './lib/api';
-  import { groupItems } from './lib/group';
+  import { groupItems, projectsOf } from './lib/group';
   import { announceNewItems, remindUpcoming } from './lib/notify';
   import { savedAlwaysOnTop, setAlwaysOnTop } from './lib/pin';
   import type { CloneSync, Item, NewItem, SourceStatus } from './lib/types';
@@ -46,6 +46,7 @@
   }
 
   const sections = $derived(groupItems(items, now));
+  const projects = $derived(projectsOf(items));
   const needsSetup = $derived(
     sources !== null &&
       sources.github !== 'ready' &&
@@ -256,6 +257,7 @@
           void refreshCloneSync(true);
         }}
         sync={cloneSync[item.id]}
+        {projects}
       />
     {/each}
   </ul>

@@ -177,6 +177,11 @@ export function createMcpServer({ core, scheduler, version, actor }: McpDeps): M
         due_at: z.string().nullable().optional().describe(DATE_HELP),
         link: z.string().nullable().optional(),
         notes: z.string().nullable().optional(),
+        project: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('Project (customer) to file the todo under, as on pull requests; null removes it.'),
       },
       annotations: {
         readOnlyHint: false,
@@ -185,7 +190,7 @@ export function createMcpServer({ core, scheduler, version, actor }: McpDeps): M
         openWorldHint: false,
       },
     },
-    ({ id, title, due_at, link, notes }) =>
+    ({ id, title, due_at, link, notes, project }) =>
       guard(() =>
         itemResult(
           core.items.updateTodo(
@@ -195,6 +200,7 @@ export function createMcpServer({ core, scheduler, version, actor }: McpDeps): M
               ...(due_at !== undefined && { dueAt: due_at }),
               ...(link !== undefined && { link }),
               ...(notes !== undefined && { notes }),
+              ...(project !== undefined && { project }),
             },
             actor(),
           ),

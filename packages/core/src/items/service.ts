@@ -158,7 +158,14 @@ export class ItemService {
   updateTodo(id: string, patch: UpdateTodoInput, actor: Actor): Item {
     const a = parse(actorInput, actor);
     const v = parse(updateTodoInput, patch);
-    this.requireTodo(this.getRow(id));
+    const current = this.getRow(id);
+    this.requireTodo(current);
+    let meta = current.meta;
+    if (v.project !== undefined) {
+      const rest = { ...current.meta };
+      delete rest.project;
+      meta = v.project === null ? rest : { ...rest, project: v.project };
+    }
 
     const row = this.db
       .update(items)
@@ -167,6 +174,7 @@ export class ItemService {
         ...(v.notes !== undefined && { notes: v.notes }),
         ...(v.link !== undefined && { link: v.link }),
         ...(v.dueAt !== undefined && { dueAt: v.dueAt }),
+        ...(v.project !== undefined && { meta }),
         updatedBy: a,
         updatedAt: this.clock.now(),
       })

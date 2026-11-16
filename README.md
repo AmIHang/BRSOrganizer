@@ -131,6 +131,12 @@ Ein TFS-PR lässt sich in der Liste über ▸ aufklappen. Dort stehen:
   - **PR abschließen:** optional vorher genehmigen, dann Squash-Merge in den Ziel-Branch und Source-Branch
     löschen. Danach bietet die App an, den Klon zu löschen.
 
+Todos lassen sich über ⋯ → **In Projekt verschieben** einem Projekt (Kunde wie bei den PRs) zuordnen.
+Für solche Todos gibt es **An Agent weitergeben**: `Start-TodoAgent.ps1` legt im Repo des Projekts einen
+Worktree `<Kunde>\Todo-<id>` auf einem neuen Branch vom Standard-Branch an und startet dort `claude`
+(Claude Code CLI muss installiert sein) mit Notiz, BSM- und OTMA-Ticket. Der Agent liest die Tickets,
+setzt die Lösung um und erstellt den PR. Der Worktree bleibt danach stehen.
+
 Voraussetzung ist der **Projektordner** in den Einstellungen, z. B. `C:\projects-git`. Darunter liegt pro Kunde
 ein Ordner mit dem Repo. Der passende Kundenordner wird über die Remote-URL gefunden, die Ordnernamen
 sind also frei wählbar.

@@ -5,6 +5,7 @@
   import type { CloneSync, Item, MenuEntry } from '../lib/types';
   import MergeDialog from './MergeDialog.svelte';
   import PrPanel from './PrPanel.svelte';
+  import ProjectDialog from './ProjectDialog.svelte';
   import RowMenu from './RowMenu.svelte';
   import TicketDialog from './TicketDialog.svelte';
   import { ticketLabel } from '../lib/tickets';
@@ -16,6 +17,7 @@
     onarchive,
     onchanged,
     sync,
+    projects = [],
   }: {
     item: Item;
     now: Date;
@@ -25,6 +27,8 @@
     sync?: CloneSync;
     /** Something changed outside the list (e.g. a PR was merged): refresh. */
     onchanged?: () => void;
+    /** Projects a todo can be moved into (same as the PR groups). */
+    projects?: string[];
   } = $props();
 
   const REASON_LABELS: Record<string, string> = {
@@ -95,6 +99,18 @@
     }
   }
 
+  async function handOff() {
+    if (starting) return;
+    starting = true;
+    setTimeout(() => (starting = false), 5000);
+    try {
+      const r = await api.pr.handOffTodo(item.id);
+      flash(`Agent läuft im PowerShell-Fenster (${r.branch}).`);
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), true);
+    }
+  }
+
   async function openSolution() {
     try {
       await api.pr.open(item.id, 'solution');
@@ -120,9 +136,16 @@
     ...(item.type === 'todo' || item.type === 'pr'
       ? [{ label: 'Tickets …', onclick: () => (editingTickets = true) }]
       : []),
+    ...(item.type === 'todo'
+      ? [{ label: 'In Projekt verschieben …', onclick: () => (movingProject = true) }]
+      : []),
+    ...(item.type === 'todo' && typeof item.meta?.project === 'string'
+      ? [{ label: 'An Agent weitergeben', onclick: () => void handOff(), disabled: starting }]
+      : []),
     { label: 'Archivieren', onclick: () => onarchive(item) },
   ]);
   let editingTickets = $state(false);
+  let movingProject = $state(false);
 </script>
 
 <li class="row" class:done={item.status !== 'open'}>
@@ -225,6 +248,17 @@
     {item}
     onclose={() => {
       editingTickets = false;
+      onchanged?.();
+    }}
+  />
+{/if}
+
+{#if movingProject}
+  <ProjectDialog
+    {item}
+    {projects}
+    onclose={() => {
+      movingProject = false;
       onchanged?.();
     }}
   />

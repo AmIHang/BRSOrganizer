@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TfsSender, TfsTransport } from '@brsorganizer/core';
@@ -211,6 +211,7 @@ describe('PR workspace via REST', () => {
           type: 'pr',
           title: 'feat: added community RMH',
           link: PR_LINK,
+          meta: { project: 'Produktion' },
         },
       ]),
     );
@@ -277,6 +278,52 @@ describe('PR workspace via REST', () => {
         args: ['-Project', 'Community', '-PrNumber', '4393', '-Repo', 'Community', '-Root', root],
       },
     ]);
+  });
+
+  it('hands a todo in a project to an agent in a new worktree of the project repo', async () => {
+    h.core.settings.update({ workspace: { projectsRoot: root } });
+    const todo = h.core.items.addTodo(
+      {
+        title: 'Ladung übernehmen!',
+        notes: 'siehe Ticket',
+        bsmUrl: 'BRS_PWg0127',
+        otmaUrl: '148082',
+      },
+      'user',
+    );
+    const handOff = () =>
+      raw(h.port, { method: 'POST', path: `/api/prs/todos/${todo.id}/agent`, headers: auth });
+    expect((await handOff()).status).toBe(409); // not in a project yet
+
+    h.core.items.updateTodo(todo.id, { project: 'Produktion' }, 'user');
+    const r = await handOff();
+    expect(r.status).toBe(202);
+    const suffix = todo.id.slice(-6).toLowerCase();
+    expect(r.json()).toEqual({
+      worktree: join(root, 'Community', `Todo-${suffix}`),
+      branch: `feature/ladung-ubernehmen-${suffix}`,
+    });
+    const [run] = launched;
+    expect(run!.script).toBe(join('C:\\app\\runtime\\scripts\\pr', 'Start-TodoAgent.ps1'));
+    const args = run!.args!;
+    expect(args.slice(0, 10)).toEqual([
+      '-Root',
+      root,
+      '-Project',
+      'Community',
+      '-Repo',
+      'Community',
+      '-Name',
+      `Todo-${suffix}`,
+      '-Branch',
+      `feature/ladung-ubernehmen-${suffix}`,
+    ]);
+    const prompt = readFileSync(args[11]!, 'utf8');
+    rmSync(args[11]!);
+    expect(prompt).toContain('siehe Ticket');
+    expect(prompt).toContain('https://bsm.boomsoftware.com/indication/BRS_PWg0127');
+    expect(prompt).toContain('fix(BRS_PWg0127)');
+    expect(prompt).toContain('148082');
   });
 
   it('opens the solution and removes only clones made by the script', async () => {

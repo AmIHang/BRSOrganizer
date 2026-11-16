@@ -176,6 +176,13 @@ describe('ItemService', () => {
       expect(u.updatedAt).toBe('2026-11-12T09:00:00.000Z');
     });
 
+    it('files a todo under a project and removes it again', () => {
+      const t = core.items.addTodo({ title: 'a' }, 'user');
+      expect(core.items.updateTodo(t.id, { project: ' STB ' }, 'user').meta).toEqual({ project: 'STB' });
+      expect(core.items.updateTodo(t.id, { title: 'b' }, 'user').meta).toEqual({ project: 'STB' });
+      expect(core.items.updateTodo(t.id, { project: null }, 'user').meta).toEqual({});
+    });
+
     it('rejects an empty patch', () => {
       const t = core.items.addTodo({ title: 'a' }, 'user');
       expect(() => core.items.updateTodo(t.id, {}, 'user')).toThrow(ValidationError);
