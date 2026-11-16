@@ -27,7 +27,15 @@ $ErrorActionPreference = 'Stop'
 
 if (-not (Test-Path -LiteralPath $PromptFile)) { throw "Auftragsdatei fehlt: $PromptFile" }
 
-if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+# The daemon may have been started before claude was installed and passes on its old PATH:
+# read the current one from the registry, and fall back to the native installer's location.
+$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+  [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + $env:Path
+$claude = (Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+if (-not $claude -and (Test-Path "$env:USERPROFILE\.local\bin\claude.exe")) {
+  $claude = "$env:USERPROFILE\.local\bin\claude.exe"
+}
+if (-not $claude) {
   throw 'claude (Claude Code CLI) wurde nicht gefunden - bitte installieren und in den PATH aufnehmen.'
 }
 
@@ -57,4 +65,4 @@ Add-Content -LiteralPath $PromptFile -Encoding UTF8 -Value @(
 # The task travels as a file: multi-line arguments with quotes do not survive PowerShell 5.1
 # native argument passing (or claude.cmd) intact.
 Set-Location -LiteralPath $worktree
-claude "Lies deinen Auftrag aus der Datei $PromptFile und fuehre ihn vollstaendig aus."
+& $claude "Lies deinen Auftrag aus der Datei $PromptFile und fuehre ihn vollstaendig aus."
