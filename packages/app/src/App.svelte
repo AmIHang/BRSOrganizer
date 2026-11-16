@@ -221,7 +221,7 @@
   {/if}
 
   {#if sections.length === 0 && !error}
-    <p class="empty muted">Gerade wirst du nirgends gebraucht. 🎉</p>
+    <p class="empty muted">Glückwunsch, du bist arbeitslos 🎉</p>
   {/if}
 
   {#each sections as section (section.key)}
