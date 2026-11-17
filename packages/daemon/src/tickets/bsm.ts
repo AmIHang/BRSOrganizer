@@ -498,3 +498,38 @@ export async function saveTicket(
     files: written,
   };
 }
+
+/** The link of the ticket's main work package ("Hauptarbeitspaket") to OTMA, if it has one. */
+export function bsmOtmaLinkContext(json: unknown): string | null {
+  const link = nodes((json as { ui?: { form?: unknown } } | null)?.ui?.form).find(
+    (n) =>
+      n.feat === 'cfNameLink' &&
+      (n.style as Node | undefined)?.link === 'Workflow:RedirectToOTMAByIndicationNumber',
+  );
+  const ctx = str(link?.linkContext);
+  return /^\*[\w-]{4,200}$/.test(ctx) ? ctx : null;
+}
+
+/** What the SPA runs on a click on that link (read-only here): answers with the OTMA URL. */
+export function bsmOtmaRedirectRequest(linkContext: string) {
+  return {
+    ContextOPath: linkContext,
+    WorkflowType: 'Edit',
+    WorkflowName: 'RedirectToOTMAByIndicationNumber',
+    TransactionBehavior: 'NoTransaction',
+  };
+}
+
+const redirectSchema = z.object({ link: z.object({ url: z.string() }) });
+
+/** The OTMA ticket number a BSM ticket's main work package points to, or null. */
+export async function bsmOtmaNumber(http: BsmHttp, key: string): Promise<string | null> {
+  const ctx = bsmOtmaLinkContext(await http.runWorkflow(bsmTicketRequest(key)));
+  if (!ctx) return null;
+  const parsed = redirectSchema.safeParse(await http.runWorkflow(bsmOtmaRedirectRequest(ctx)));
+  // "https://otma.boomsoftware.com//ap//177329"
+  const m = parsed.success
+    ? /^https:\/\/otma\.boomsoftware\.com\/+ap\/+(\d{1,10})\/?$/.exec(parsed.data.link.url)
+    : null;
+  return m ? m[1]! : null;
+}

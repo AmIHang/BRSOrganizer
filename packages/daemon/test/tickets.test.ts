@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   BsmLoginRequiredError,
   bsmDocumentRequest,
+  bsmOtmaLinkContext,
+  bsmOtmaRedirectRequest,
   bsmKey,
   ticketMarkdown,
   bsmTicketRequest,
@@ -15,8 +17,8 @@ import {
 } from '../src/tickets/bsm.js';
 import { htmlToText } from '../src/tickets/html.js';
 import { makeCore } from '../../core/test/helpers.js';
+import { linkTickets } from '../src/tickets/link.js';
 import {
-  fillBsmFromOtma,
   otmaBsmKey,
   otmaJumpRequest,
   otmaKey,
@@ -410,7 +412,7 @@ describe('OTMA ticket', () => {
   });
 });
 
-describe('BSM ticket from OTMA', () => {
+describe('linking BSM and OTMA tickets', () => {
   const view = JSON.parse(
     readFileSync(join(import.meta.dirname, 'fixtures', 'otma-order-process.json'), 'utf8'),
   ) as { ui: { form: unknown[] } };
@@ -426,50 +428,96 @@ describe('BSM ticket from OTMA', () => {
   };
   const withBsm = (value: string) =>
     JSON.parse(JSON.stringify(view).replace('"value":"STBBRSg0034"', `"value":"${value}"`));
-
-  it('takes the key from the BSM field and ignores the placeholder', () => {
-    expect(otmaBsmKey(view)).toBe('STBBRSg0034');
-    expect(otmaBsmKey(withBsm('Kein Ticket zugewiesen'))).toBeNull();
+  // The BSM fixture with a main work package that links to OTMA.
+  const bsmView = structuredClone(fixture) as { ui: { form: unknown[] } };
+  bsmView.ui.form.push({
+    type: 'context',
+    feat: 'cfMainOpOTMARedirect',
+    ui: [
+      {
+        type: 'link',
+        feat: 'cfNameLink',
+        linkContext: '*nY7hcBJC6fx_eA7dYPZulg',
+        style: { link: 'Workflow:RedirectToOTMAByIndicationNumber', title: 'Bezeichnung' },
+      },
+    ],
   });
 
-  it('fills a new todo with an OTMA but no BSM ticket, and nothing else', async () => {
+  it('takes the BSM key from OTMA and the OTMA link from BSM', () => {
+    expect(otmaBsmKey(view)).toBe('STBBRSg0034');
+    expect(otmaBsmKey(withBsm('Kein Ticket zugewiesen'))).toBeNull();
+    expect(bsmOtmaLinkContext(bsmView)).toBe('*nY7hcBJC6fx_eA7dYPZulg');
+    expect(bsmOtmaLinkContext(fixture)).toBeNull();
+    // Read-only, as the SPA runs it on a click on the link.
+    expect(bsmOtmaRedirectRequest('*x')).toMatchObject({
+      WorkflowName: 'RedirectToOTMAByIndicationNumber',
+      TransactionBehavior: 'NoTransaction',
+    });
+  });
+
+  const setup = (gate?: Promise<void>) => {
     const core = makeCore();
     const reads: string[] = [];
-    const session: BsmSession = (fn) =>
-      fn({
-        runWorkflow: async (body) => {
-          const b = body as { WorkflowName?: string; WorkflowParameters: { publicurl?: string } };
-          if (b.WorkflowName) reads.push(b.WorkflowParameters.publicurl!);
-          return b.WorkflowName ? jump : view;
-        },
-        download: async () => new Uint8Array(),
-      });
-    fillBsmFromOtma(core, session);
-    const settle = () => new Promise((r) => setTimeout(r, 10));
+    const http = {
+      runWorkflow: async (body: unknown) => {
+        const b = body as { ContextOPath: string; WorkflowName?: string };
+        reads.push(b.WorkflowName ?? b.ContextOPath);
+        if (b.WorkflowName === 'JumpToOrderProcess') return jump;
+        if (b.WorkflowName === 'JumpToIndication') return bsmView;
+        if (b.WorkflowName === 'RedirectToOTMAByIndicationNumber') {
+          return { link: { url: 'https://otma.boomsoftware.com//ap//177329', target: '_blank' } };
+        }
+        return view;
+      },
+      download: async () => new Uint8Array(),
+    };
+    const session: BsmSession = async (fn) => {
+      await gate;
+      return fn(http);
+    };
+    linkTickets(core, { bsm: session, otma: session });
+    return { core, reads };
+  };
+  const settle = () => new Promise((r) => setTimeout(r, 10));
 
-    const todo = core.items.addTodo({ title: 'A', otmaUrl: '165071' }, 'claude');
-    const own = core.items.addTodo({ title: 'B', otmaUrl: '1', bsmUrl: 'X_1' }, 'user');
-    core.items.addTodo({ title: 'C' }, 'user');
+  it('fills the missing ticket on creation and when a ticket is set later', async () => {
+    const { core, reads } = setup();
+    const a = core.items.addTodo({ title: 'A', otmaUrl: '165071' }, 'claude');
+    const b = core.items.addTodo({ title: 'B', bsmUrl: 'WECOOg0044' }, 'user');
+    const both = core.items.addTodo({ title: 'C', otmaUrl: '1', bsmUrl: 'X_1' }, 'user');
+    const later = core.items.addTodo({ title: 'D' }, 'user');
     await settle();
-    expect(reads).toEqual(['ap/165071']);
-    expect(core.items.get(todo.id)).toMatchObject({
+    expect(core.items.get(a.id)).toMatchObject({
       bsmUrl: 'https://bsm.boomsoftware.com/indication/STBBRSg0034',
       updatedBy: 'claude',
     });
-    expect(core.items.get(own.id).bsmUrl).toBe('https://bsm.boomsoftware.com/indication/X_1');
+    expect(core.items.get(b.id).otmaUrl).toBe('https://otma.boomsoftware.com/ap/177329');
+    expect(core.items.get(both.id).bsmUrl).toBe('https://bsm.boomsoftware.com/indication/X_1');
+    // Only the two items with one ticket are read (the fake session does not serialize them).
+    expect([...reads].sort()).toEqual([
+      '2B89D@1000A5',
+      'JumpToIndication',
+      'JumpToOrderProcess',
+      'RedirectToOTMAByIndicationNumber',
+    ]);
 
-    // Set by the user while OTMA was read: stays.
+    // Set later; other edits do not read again.
+    core.items.setTickets(later.id, { otmaUrl: '42' }, 'user');
+    core.items.updateTodo(a.id, { notes: 'x' }, 'user');
+    await settle();
+    expect(core.items.get(later.id).bsmUrl).toBe(
+      'https://bsm.boomsoftware.com/indication/STBBRSg0034',
+    );
+    expect(reads).toHaveLength(6);
+  });
+
+  it('keeps what the user set while the ticket was read', async () => {
     let release!: () => void;
-    const slow: BsmSession = async (fn) => {
-      await new Promise<void>((r) => (release = r));
-      return session(fn);
-    };
-    const core2 = makeCore();
-    fillBsmFromOtma(core2, slow);
-    const t2 = core2.items.addTodo({ title: 'D', otmaUrl: '2' }, 'user');
-    core2.items.setTickets(t2.id, { bsmUrl: 'Y_2' }, 'user');
+    const { core } = setup(new Promise<void>((r) => (release = r)));
+    const t = core.items.addTodo({ title: 'E', otmaUrl: '2' }, 'user');
+    core.items.setTickets(t.id, { bsmUrl: 'Y_2' }, 'user');
     release();
     await settle();
-    expect(core2.items.get(t2.id).bsmUrl).toBe('https://bsm.boomsoftware.com/indication/Y_2');
+    expect(core.items.get(t.id).bsmUrl).toBe('https://bsm.boomsoftware.com/indication/Y_2');
   });
 });

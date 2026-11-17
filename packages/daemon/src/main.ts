@@ -21,7 +21,7 @@ import { legacyName, migrateLegacy } from './legacy.js';
 import { createWindowsLauncher } from './prs/launcher.js';
 import { PrWorkspace } from './prs/service.js';
 import { edgeTicketSessions } from './tickets/edge.js';
-import { fillBsmFromOtma } from './tickets/otma.js';
+import { linkTickets } from './tickets/link.js';
 import { createScheduler } from './scheduler.js';
 import { VERSION } from './version.js';
 
@@ -126,7 +126,7 @@ const prWorkspace = new PrWorkspace({
   scriptsDir,
   ...tickets,
 });
-fillBsmFromOtma(core, tickets.otma, (msg, extra) => logger.warn(extra ?? {}, msg));
+linkTickets(core, tickets, (msg, extra) => logger.warn(extra ?? {}, msg));
 const { app, close: closeApp } = createApp({
   core,
   scheduler,

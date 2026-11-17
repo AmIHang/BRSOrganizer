@@ -144,8 +144,9 @@ Keycloak-Login: Ist der BSM/OTMA-Account hinterlegt, meldet sich BRSOrganizer da
 `auth.boomsoftware.com`, einmal pro Versuch); sonst oder wenn das scheitert, öffnet sich ein Edge-Fenster.
 Klappt das Lesen nicht, bekommt der Agent nur den Link. Die Dokumentliste von OTMA wird noch nicht gelesen.
 
-Wird ein Todo mit OTMA-, aber ohne BSM-Ticket angelegt (App oder MCP), übernimmt BRSOrganizer im
-Hintergrund das BSM-Ticket, das im OTMA-Ticket steht.
+Hat ein Todo oder PR nur eines der beiden Tickets (beim Anlegen oder nachträglich gesetzt, über App oder
+MCP), ergänzt BRSOrganizer im Hintergrund das andere: das BSM-Ticket, das im OTMA-Ticket steht, bzw. das
+OTMA-Ticket des Hauptarbeitspakets im BSM-Ticket.
 
 Der **BSM/OTMA-Account** (ein Login für beide) wird in den Einstellungen gepflegt und liegt in der
 Windows-Anmeldeinformationsverwaltung. Der Agent bekommt ihn nur über die Umgebungsvariablen
