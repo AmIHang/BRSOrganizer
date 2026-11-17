@@ -93,10 +93,23 @@
       const failed = s.lastRuns.find((r) => !r.ok && r.error);
       const latestOk = s.lastRuns.find((r) => r.ok);
       lastSyncError = failed && (!latestOk || failed.id > latestOk.id) ? `${failed.source}: ${failed.error}` : null;
-      workspace = (await api.settings()).workspace;
+      const settings = await api.settings();
+      workspace = settings.workspace;
+      collapsed = settings.ui.collapsed;
     } catch {
       // shown via refresh()
     }
+  }
+
+  /** Folded sections ("section:<key>") and projects ("project:<name>"), stored in the daemon. */
+  let collapsed = $state<string[]>([]);
+  function toggle(key: string) {
+    collapsed = collapsed.includes(key)
+      ? collapsed.filter((k) => k !== key)
+      : [...collapsed, key];
+    api.updateSettings({ ui: { collapsed } }).catch((e: unknown) => {
+      error = `Ansicht nicht gespeichert: ${e instanceof Error ? e.message : String(e)}`;
+    });
   }
 
   /** Empty: clone/update dots cannot work; hint when there are TFS pull requests. */
@@ -246,14 +259,22 @@
   {/if}
 
   {#each sections as section (section.key)}
+    {@const sectionOpen = !collapsed.includes(`section:${section.key}`)}
     <section>
       <h2 class:alert={section.key === 'overdue' || section.key === 'now'}>
-        {section.title} <span class="count">{section.items.length}</span>
+        <button class="fold" aria-expanded={sectionOpen} onclick={() => toggle(`section:${section.key}`)}>
+          <span class="chevron" class:closed={!sectionOpen} aria-hidden="true">▾</span>
+          {section.title} <span class="count">{section.items.length}</span>
+        </button>
       </h2>
-      {#if section.groups}
+      {#if sectionOpen && section.groups}
         {#each section.groups as group (group.customer)}
+          {@const groupOpen = !collapsed.includes(`project:${group.customer}`)}
           <h3 class="customer">
-            {group.customer} <span class="count">{group.items.length}</span>
+            <button class="fold" aria-expanded={groupOpen} onclick={() => toggle(`project:${group.customer}`)}>
+              <span class="chevron" class:closed={!groupOpen} aria-hidden="true">▾</span>
+              {group.customer} <span class="count">{group.items.length}</span>
+            </button>
             {#if group.customer !== 'Sonstige'}
               <button
                 class="add-todo"
@@ -266,9 +287,9 @@
               >
             {/if}
           </h3>
-          {@render rows(group.items)}
+          {#if groupOpen}{@render rows(group.items)}{/if}
         {/each}
-      {:else}
+      {:else if sectionOpen}
         {@render rows(section.items)}
       {/if}
     </section>
@@ -398,6 +419,27 @@
   }
   .count {
     font-weight: normal;
+  }
+  /* Section and project headings fold their list; the heading keeps its own look. */
+  .fold {
+    all: unset;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .fold:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .chevron {
+    display: inline-block;
+    width: 10px;
+    transition: transform 0.12s;
+  }
+  .chevron.closed {
+    transform: rotate(-90deg);
   }
   ul {
     list-style: none;

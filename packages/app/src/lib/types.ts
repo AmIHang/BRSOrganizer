@@ -69,6 +69,8 @@ export interface Settings {
   tfs: { enabled: boolean; collectionUrl: string; includeAuthored: boolean };
   workspace: { projectsRoot: string; projects: string[]; hiddenProjects: string[] };
   mail: { enabled: boolean; outlookFolder: string; lookBackDays: number };
+  /** Folded list parts ("section:<key>", "project:<name>"), kept in the daemon's DB. */
+  ui: { collapsed: string[] };
 }
 
 export interface SourceStatus {

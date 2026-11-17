@@ -75,9 +75,10 @@ describe('groupItems', () => {
       ['now', ['meeting running', 'due in 30 min', 'meeting at 10:45']],
       ['reviews', ['review me', 'my PR']],
       ['today', ['meeting at 16:00', 'due tonight']],
+      // Below the tasks, above the next days' dates.
+      ['undated', ['no date']],
       ['soon', ['due in 3 days']],
       ['later', ['due next month']],
-      ['undated', ['no date']],
     ]);
   });
 

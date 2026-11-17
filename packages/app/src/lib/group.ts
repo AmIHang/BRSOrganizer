@@ -66,7 +66,7 @@ const TITLES: Record<SectionKey, string> = {
   later: 'Später',
   undated: 'Ohne Termin',
 };
-const ORDER: SectionKey[] = ['overdue', 'now', 'reviews', 'today', 'soon', 'later', 'undated'];
+const ORDER: SectionKey[] = ['overdue', 'now', 'reviews', 'today', 'undated', 'soon', 'later'];
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;

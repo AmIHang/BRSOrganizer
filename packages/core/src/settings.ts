@@ -62,6 +62,13 @@ export const settingsSchema = z.object({
       lookBackDays: z.number().int().min(1).max(365).default(90),
     })
     .prefault({}),
+  /** View state of the app that survives a restart. */
+  ui: z
+    .object({
+      /** Folded parts of the list, e.g. "section:reviews" or "project:Community". */
+      collapsed: z.array(z.string().trim().min(1).max(200)).max(500).default([]),
+    })
+    .prefault({}),
 });
 
 export type Settings = z.output<typeof settingsSchema>;
@@ -106,6 +113,10 @@ export const settingsPatchSchema = z.strictObject({
     .strictObject({ enabled: z.boolean(), outlookFolder: z.string(), lookBackDays: z.number() })
     .partial()
     .optional(),
+  ui: z
+    .strictObject({ collapsed: z.array(z.string()) })
+    .partial()
+    .optional(),
 });
 export type SettingsPatch = z.input<typeof settingsPatchSchema>;
 
@@ -143,6 +154,7 @@ export class SettingsService {
       tfs: { ...current.tfs, ...patch.tfs },
       workspace: { ...current.workspace, ...patch.workspace },
       mail: { ...current.mail, ...patch.mail },
+      ui: { ...current.ui, ...patch.ui },
     };
     const r = settingsSchema.safeParse(merged);
     if (!r.success) throw new ValidationError(z.prettifyError(r.error));

@@ -83,6 +83,7 @@ describe('settings', () => {
         tfs: { enabled: true, collectionUrl: '', includeAuthored: true },
         workspace: { projectsRoot: '', projects: [], hiddenProjects: [] },
         mail: { enabled: false, outlookFolder: 'Posteingang/PR', lookBackDays: 90 },
+        ui: { collapsed: [] },
       });
       expect(() => core.settings.update({ tfs: { collectionUrl: 'not a url' } })).toThrow(
         ValidationError,
