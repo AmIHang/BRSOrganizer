@@ -6,6 +6,7 @@ import {
   type BsmHttp,
   type BsmSession,
 } from './bsm.js';
+import { OTMA_ORIGIN } from './otma.js';
 
 export interface EdgeBsmOptions {
   /** Edge profile of BRSOrganizer (in the data folder), separate from the user's own Edge. */
@@ -17,47 +18,53 @@ export interface EdgeBsmOptions {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function httpFor(ctx: BrowserContext): BsmHttp {
+/** BSM and OTMA run on the same web framework (same API, same Keycloak login). */
+interface System {
+  origin: string;
+  label: 'BSM' | 'OTMA';
+}
+
+function httpFor(ctx: BrowserContext, { origin, label }: System): BsmHttp {
   return {
     async runWorkflow(body) {
-      const res = await ctx.request.post(`${BSM_ORIGIN}${BSM_WORKFLOW_PATH}`, {
+      const res = await ctx.request.post(`${origin}${BSM_WORKFLOW_PATH}`, {
         data: body,
         headers: { Accept: 'application/json' },
         maxRedirects: 0,
         timeout: 30_000,
       });
-      // Without a session BSM answers 200 with an HTML page that starts the OAuth login.
+      // Without a session BSM answers 200 with an HTML page that starts the OAuth login, OTMA 401.
       const type = res.headers()['content-type'] ?? '';
       if (res.status() === 401 || res.status() === 403 || res.status() === 302) {
-        throw new BsmLoginRequiredError();
+        throw new BsmLoginRequiredError(label);
       }
       if (!type.includes('json')) {
-        if (type.includes('html')) throw new BsmLoginRequiredError();
-        throw new Error(`BSM: unerwartete Antwort (${res.status()} ${type})`);
+        if (type.includes('html')) throw new BsmLoginRequiredError(label);
+        throw new Error(`${label}: unerwartete Antwort (${res.status()} ${type})`);
       }
-      if (!res.ok()) throw new Error(`BSM: HTTP ${res.status()}`);
+      if (!res.ok()) throw new Error(`${label}: HTTP ${res.status()}`);
       return res.json() as Promise<unknown>;
     },
     async download(path) {
-      if (!path.startsWith('/')) throw new Error('BSM: path must start with /');
-      const res = await ctx.request.get(`${BSM_ORIGIN}${path}`, {
+      if (!path.startsWith('/')) throw new Error(`${label}: path must start with /`);
+      const res = await ctx.request.get(`${origin}${path}`, {
         maxRedirects: 0,
         timeout: 30_000,
       });
-      if (!res.ok()) throw new Error(`BSM: HTTP ${res.status()} for an attachment`);
+      if (!res.ok()) throw new Error(`${label}: HTTP ${res.status()} for an attachment`);
       return res.body();
     },
   };
 }
 
 /**
- * BSM through Microsoft Edge (playwright-core, installed Edge, no browser download). Requests
- * run in a headless Edge with BRSOrganizer's own profile, so BSM sees the user's login cookies.
- * Without a valid login, a visible Edge window opens on BSM for the user to sign in
- * (Keycloak); the request then runs in that window's session. Cookies stay in the profile and,
+ * BSM and OTMA through Microsoft Edge (playwright-core, installed Edge, no browser download). Requests
+ * run in a headless Edge with BRSOrganizer's own profile, so the systems see the user's login
+ * cookies. Without a valid login, a visible Edge window opens on the system for the user to sign
+ * in (Keycloak, one login for both); the request then runs in that window's session. Cookies stay in the profile and,
  * for session cookies, in this process's memory – never on disk elsewhere, never in logs.
  */
-export function edgeBsmSession(options: EdgeBsmOptions): BsmSession {
+export function edgeTicketSessions(options: EdgeBsmOptions): { bsm: BsmSession; otma: BsmSession } {
   const loginTimeoutMs = options.loginTimeoutMs ?? 5 * 60_000;
   const log = options.log ?? (() => undefined);
   // Session cookies (no expiry) do not survive closing Edge; carry them to the next run.
@@ -87,26 +94,29 @@ export function edgeBsmSession(options: EdgeBsmOptions): BsmSession {
   };
 
   /**
-   * Opens BSM in `ctx` (which starts the OAuth login) and runs `fn` once the page is back on BSM
-   * with a session. Undefined when the deadline passes; throws when the window was closed.
+   * Opens the system in `ctx` (which starts the OAuth login) and runs `fn` once the page is back on
+   * the system with a session. Undefined when the deadline passes; throws when the window was closed.
    */
   async function viaLogin<T>(
+    system: System,
     ctx: BrowserContext,
     fn: (http: BsmHttp) => Promise<T>,
     timeoutMs: number,
     visible: boolean,
   ): Promise<{ result: T } | undefined> {
     const page = ctx.pages()[0] ?? (await ctx.newPage());
-    await page.goto(`${BSM_ORIGIN}/`).catch(() => undefined);
+    await page.goto(`${system.origin}/`).catch(() => undefined);
     if (visible) await page.bringToFront().catch(() => undefined);
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      if (page.isClosed()) throw new Error('BSM-Anmeldung abgebrochen (Fenster geschlossen)');
+      if (page.isClosed()) {
+        throw new Error(`${system.label}-Anmeldung abgebrochen (Fenster geschlossen)`);
+      }
       const url = page.url();
-      const onBsm = url.startsWith(`${BSM_ORIGIN}/`) && !/loginoa|LoginOAuth/i.test(url);
-      if (onBsm) {
+      const onSystem = url.startsWith(`${system.origin}/`) && !/loginoa|LoginOAuth/i.test(url);
+      if (onSystem) {
         try {
-          return { result: await fn(httpFor(ctx)) };
+          return { result: await fn(httpFor(ctx, system)) };
         } catch (err) {
           if (!(err instanceof BsmLoginRequiredError)) throw err;
         }
@@ -116,19 +126,19 @@ export function edgeBsmSession(options: EdgeBsmOptions): BsmSession {
     }
   }
 
-  async function run<T>(fn: (http: BsmHttp) => Promise<T>): Promise<T> {
+  async function run<T>(system: System, fn: (http: BsmHttp) => Promise<T>): Promise<T> {
     const headless = await launch(true);
     try {
       try {
-        return await fn(httpFor(headless));
+        return await fn(httpFor(headless, system));
       } catch (err) {
         if (!(err instanceof BsmLoginRequiredError)) throw err;
       }
-      // No BSM session (e.g. after a restart), but the Keycloak SSO login in the profile
+      // No session (e.g. after a restart), but the Keycloak SSO login in the profile
       // usually still holds: the OAuth redirects then log in without any user input.
-      const silent = await viaLogin(headless, fn, 15_000, false);
+      const silent = await viaLogin(system, headless, fn, 15_000, false);
       if (silent) {
-        log('BSM session renewed via SSO');
+        log(`${system.label} session renewed via SSO`);
         return silent.result;
       }
     } finally {
@@ -136,12 +146,12 @@ export function edgeBsmSession(options: EdgeBsmOptions): BsmSession {
       await headless.close().catch(() => undefined);
     }
 
-    log('BSM login required, opening Edge for the user');
+    log(`${system.label} login required, opening Edge for the user`);
     const ctx = await launch(false);
     try {
-      const done = await viaLogin(ctx, fn, loginTimeoutMs, true);
-      if (!done) throw new Error('BSM-Anmeldung nicht abgeschlossen (Zeitlimit)');
-      log('BSM login done');
+      const done = await viaLogin(system, ctx, fn, loginTimeoutMs, true);
+      if (!done) throw new Error(`${system.label}-Anmeldung nicht abgeschlossen (Zeitlimit)`);
+      log(`${system.label} login done`);
       return done.result;
     } finally {
       await remember(ctx);
@@ -149,12 +159,18 @@ export function edgeBsmSession(options: EdgeBsmOptions): BsmSession {
     }
   }
 
-  return <T>(fn: (http: BsmHttp) => Promise<T>): Promise<T> => {
-    const next = queue.then(
-      () => run(fn),
-      () => run(fn),
-    );
-    queue = next.catch(() => undefined);
-    return next;
+  const session =
+    (system: System): BsmSession =>
+    <T>(fn: (http: BsmHttp) => Promise<T>): Promise<T> => {
+      const next = queue.then(
+        () => run(system, fn),
+        () => run(system, fn),
+      );
+      queue = next.catch(() => undefined);
+      return next;
+    };
+  return {
+    bsm: session({ origin: BSM_ORIGIN, label: 'BSM' }),
+    otma: session({ origin: OTMA_ORIGIN, label: 'OTMA' }),
   };
 }

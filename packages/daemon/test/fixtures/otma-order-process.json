@@ -1,0 +1,206 @@
+{
+  "ui": {
+    "style": {
+      "title": "178333 - #STBBRSg0034: [WORKSHOP] Vordefinierte E-Mailempfänger werden nicht angeführt",
+      "cssClass": "no-style"
+    },
+    "menus": [],
+    "form": [
+      {
+        "type": "section",
+        "style": { "title": "Allgemein" },
+        "items": [
+          {
+            "type": "bfres!boomcrm-js://Forms/WorkflowRunnerLinkControl",
+            "context": "2B89D@1000A5",
+            "feat": "cfSupportIDLink",
+            "value": "STBBRSg0034",
+            "style": { "link": "Workflow:OpenBSPId", "title": "BSM" }
+          },
+          {
+            "type": "link",
+            "context": "2B89D@1000A5",
+            "feat": "cfDevOpsWorkItemIdLink",
+            "value": "Kein Workitem zugewiesen?",
+            "style": { "title": "DevOps WorkItem" }
+          },
+          {
+            "type": "label",
+            "context": "2B89D@1000A5",
+            "feat": "Name",
+            "value": "#STBBRSg0034: [WORKSHOP] Vordefinierte E-Mailempfänger werden nicht angeführt",
+            "style": { "title": "Bezeichnung" }
+          },
+          {
+            "type": "label",
+            "context": "2B89D@1000A5",
+            "feat": "Status",
+            "value": "Zugewiesen",
+            "style": { "title": "Status" }
+          },
+          {
+            "type": "label",
+            "context": "2B89D@1000A5",
+            "feat": "cfResponsiblePersonDisplayText",
+            "value": "ABC -> XYZ",
+            "style": { "title": "Verantwortlich" }
+          },
+          {
+            "type": "label",
+            "context": "2B89D@1000A5",
+            "feat": "cfReporter",
+            "value": "Muster Max",
+            "style": { "title": "Reporter" }
+          },
+          {
+            "type": "link",
+            "context": "2B89D@1000A5",
+            "feat": "Project",
+            "value": "STB BRS [STBBRS]",
+            "linkContext": "10EC@10388D",
+            "style": { "link": "Workflow:ShowProject@View", "title": "Projekt" }
+          },
+          {
+            "type": "label",
+            "context": "2B89D@1000A5",
+            "feat": "Worktime",
+            "value": "2,00",
+            "style": { "title": "Planzeit h" }
+          },
+          {
+            "type": "label",
+            "context": "2B89D@1000A5",
+            "feat": "WorktimeUndone",
+            "value": "1,00",
+            "style": { "title": "Offen h" }
+          },
+          {
+            "type": "label",
+            "context": "2B89D@1000A5",
+            "feat": "cfTimeRecordingsSumRecursive",
+            "value": "1,00",
+            "style": { "title": "Σ Ist h" }
+          },
+          {
+            "type": "link",
+            "context": "2B89D@1000A5",
+            "feat": "cfAssignReleaseLink",
+            "value": "Release zuordnen",
+            "style": { "title": "Release" }
+          },
+          {
+            "type": "bfres!boomservices-js://ExtendedLabelFeatureControl",
+            "context": "2B89D@1000A5",
+            "feat": "Note",
+            "value": "<p>Empfänger aus der <strong>Vorlage</strong> fehlen im Dialog.</p>\n",
+            "documents": [],
+            "style": { "multiLine": true, "title": "Bemerkung" }
+          },
+          {
+            "type": "context",
+            "context": "2B89D@1000A5",
+            "feat": "cfAdditionalDescriptions",
+            "ui": [
+              {
+                "type": "bfres!boomservices-js://ExtendedLabelFeatureControl",
+                "context": "7A1@1109AA",
+                "feat": "Text",
+                "value": "<p>Nur bei Workshop-Terminen.</p>"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "section",
+        "style": { "title": "Konversationen" },
+        "items": [
+          {
+            "type": "context",
+            "context": "2B89D@1000A5",
+            "feat": "Conversations",
+            "style": { "title": "Konversationen" },
+            "ui": [
+              {
+                "type": "section",
+                "style": {
+                  "title": "Analyse",
+                  "expanded": true,
+                  "css": "otma-conversation",
+                  "fill": true
+                },
+                "items": [
+                  {
+                    "type": "context",
+                    "context": "DAD1@1109EB",
+                    "feat": "cfSortedComments",
+                    "style": { "title": "Kommentare" },
+                    "ui": [
+                      {
+                        "type": "label",
+                        "context": "64687@1109FA",
+                        "feat": "CombinedCreateBy",
+                        "value": "Beispiel Eva -",
+                        "style": { "css": "createInfo" }
+                      },
+                      {
+                        "type": "label",
+                        "context": "64687@1109FA",
+                        "feat": "CombinedCreateDate",
+                        "value": "/Date(1794212613789)/"
+                      },
+                      {
+                        "type": "bfres!boomservices-js://ExtendedLabelFeatureControl",
+                        "context": "64687@1109FA",
+                        "feat": "CommentText",
+                        "value": "<p>Siehe Screenshot:</p><p><img src=\"33333333-3333-3333-3333-333333333333\" alt=\"image.png\" /></p>",
+                        "documents": [
+                          { "id": "33333333-3333-3333-3333-333333333333", "fileName": "dialog.png" }
+                        ]
+                      },
+                      {
+                        "type": "context",
+                        "context": "64687@1109FA",
+                        "feat": "NotReferencedDocuments",
+                        "ui": []
+                      },
+                      {
+                        "type": "label",
+                        "context": "64688@1109FA",
+                        "feat": "CombinedCreateBy",
+                        "value": "BRS Support -",
+                        "style": { "css": "createInfo" }
+                      },
+                      {
+                        "type": "label",
+                        "context": "64688@1109FA",
+                        "feat": "CombinedCreateDate",
+                        "value": "/Date(1794299013789)/"
+                      },
+                      {
+                        "type": "bfres!boomservices-js://ExtendedLabelFeatureControl",
+                        "context": "64688@1109FA",
+                        "feat": "CommentText",
+                        "value": "<p>Commit 1df970e</p>\n",
+                        "documents": []
+                      }
+                    ]
+                  },
+                  {
+                    "type": "bfres!boomservices-js://CommentInput",
+                    "context": "DAD1@1109EB",
+                    "feat": "cfReplyBox",
+                    "style": { "title": "Deine Antwort" }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "vm": {},
+  "events": [],
+  "rules": []
+}

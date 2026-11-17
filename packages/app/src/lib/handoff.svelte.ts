@@ -17,7 +17,7 @@ export async function startHandOff(item: Item): Promise<void> {
   if (handOffs[item.id]?.running) return;
   handOffs[item.id] = {
     running: true,
-    text: item.bsmUrl ? 'Lese BSM-Ticket …' : 'Starte Agent …',
+    text: item.bsmUrl || item.otmaUrl ? 'Lese Tickets …' : 'Starte Agent …',
     error: false,
   };
   let done: HandOffState;

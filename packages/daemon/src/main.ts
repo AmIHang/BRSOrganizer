@@ -20,7 +20,7 @@ import { applyFirstRunDefaults } from './first-run.js';
 import { legacyName, migrateLegacy } from './legacy.js';
 import { createWindowsLauncher } from './prs/launcher.js';
 import { PrWorkspace } from './prs/service.js';
-import { edgeBsmSession } from './tickets/edge.js';
+import { edgeTicketSessions } from './tickets/edge.js';
 import { createScheduler } from './scheduler.js';
 import { VERSION } from './version.js';
 
@@ -114,7 +114,7 @@ const prWorkspace = new PrWorkspace({
   launcher: createWindowsLauncher((err) => logger.error({ err }, 'could not start script window')),
   scriptsDir,
   // Own Edge profile in the data folder (dev and installed app each have their own login).
-  bsm: edgeBsmSession({
+  ...edgeTicketSessions({
     profileDir: join(dataDir(), 'edge-profile'),
     log: (msg, extra) => logger.info(extra ?? {}, msg),
   }),

@@ -15,7 +15,8 @@ import {
   type TfsSender,
   type TfsTransport,
 } from '@brsorganizer/core';
-import { readBsmTicket, type BsmSession } from '../tickets/bsm.js';
+import { readBsmTicket, type BsmSession, type ReadTicketResult } from '../tickets/bsm.js';
+import { readOtmaTicket } from '../tickets/otma.js';
 import { closeVisualStudio, type CloseIde } from './ide.js';
 import type { Launcher } from './launcher.js';
 import {
@@ -98,6 +99,8 @@ export interface PrWorkspaceDeps {
   closeIde?: CloseIde;
   /** BSM with the user's login, to put ticket contents into the agent's task; none: links only. */
   bsm?: BsmSession;
+  /** OTMA with the user's login (same Edge profile as BSM); none: links only. */
+  otma?: BsmSession;
 }
 
 const strip = (ref: string) => ref.replace(/^refs\/heads\//, '');
@@ -111,7 +114,6 @@ export type TicketContent = { markdown: string } | { error: string };
 /** What was read from the todo's tickets before the hand-off. */
 export interface TicketContents {
   bsm?: TicketContent;
-  /** Not read automatically yet; the agent gets the link. */
   otma?: TicketContent;
 }
 
@@ -416,23 +418,31 @@ export class PrWorkspace {
     rmSync(taskDir, { recursive: true, force: true });
     mkdirSync(taskDir, { recursive: true });
 
-    // Ticket contents are read here, so the agent does not have to log in to BSM itself. A
-    // failure costs only the contents: the agent still gets the link.
+    // Ticket contents are read here, so the agent does not have to log in to BSM/OTMA itself.
+    // A failure costs only the contents: the agent still gets the link.
     const contents: TicketContents = {};
     const tickets: TicketStatus[] = [];
-    if (todo.bsmUrl && this.deps.bsm) {
+    const now = () => this.deps.core.clock.now();
+    const read = async (
+      kind: 'bsm' | 'otma',
+      url: string | null,
+      session: BsmSession | undefined,
+      reader: typeof readBsmTicket,
+    ) => {
+      if (!url || !session) return;
       try {
-        const r = await readBsmTicket(this.deps.bsm, todo.bsmUrl, taskDir, () =>
-          this.deps.core.clock.now(),
-        );
-        contents.bsm = { markdown: r.markdown };
-        tickets.push({ kind: 'bsm', ok: true });
+        const r: ReadTicketResult = await reader(session, url, taskDir, now);
+        contents[kind] = { markdown: r.markdown };
+        tickets.push({ kind, ok: true });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        contents.bsm = { error: message };
-        tickets.push({ kind: 'bsm', ok: false, message });
+        contents[kind] = { error: message };
+        tickets.push({ kind, ok: false, message });
       }
-    }
+    };
+    // One after the other: both share one Edge profile (and its login window).
+    await read('bsm', todo.bsmUrl, this.deps.bsm, readBsmTicket);
+    await read('otma', todo.otmaUrl, this.deps.otma, readOtmaTicket);
 
     // BSM/OTMA account: only through the console's environment, never in files or arguments.
     const user = this.deps.core.secrets.get('ticket-user');

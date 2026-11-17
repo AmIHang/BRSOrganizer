@@ -9,10 +9,10 @@ import { htmlToText } from './html.js';
 export const BSM_ORIGIN = new URL(BSM_TICKET_BASE).origin;
 export const BSM_WORKFLOW_PATH = '/api/core/web/runwf/';
 
-/** The browser session has no (valid) BSM login: the API answered with the login page. */
+/** The browser session has no (valid) BSM/OTMA login: the API answered with the login page. */
 export class BsmLoginRequiredError extends Error {
-  constructor() {
-    super('BSM: nicht angemeldet');
+  constructor(label: 'BSM' | 'OTMA' = 'BSM') {
+    super(`${label}: nicht angemeldet`);
     this.name = 'BsmLoginRequiredError';
   }
 }
@@ -79,7 +79,9 @@ export interface BsmAttachment {
   at: Date | null;
 }
 
+/** A BSM or OTMA ticket, as it goes into the agent's task. */
 export interface BsmTicket {
+  system: 'BSM' | 'OTMA';
   key: string;
   url: string;
   title: string;
@@ -93,7 +95,7 @@ export interface BsmTicket {
   attachments: BsmAttachment[];
 }
 
-type Node = Record<string, unknown>;
+export type Node = Record<string, unknown>;
 
 const responseSchema = z.object({
   ui: z.object({
@@ -103,7 +105,7 @@ const responseSchema = z.object({
 });
 
 /** All objects of a form tree, depth-first in display order (children in `items` and `ui`). */
-function nodes(root: unknown): Node[] {
+export function nodes(root: unknown): Node[] {
   const out: Node[] = [];
   const walk = (n: unknown) => {
     if (Array.isArray(n)) n.forEach(walk);
@@ -118,22 +120,19 @@ function nodes(root: unknown): Node[] {
   return out;
 }
 
-const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
-const title = (n: Node) => str((n.style as Node | undefined)?.title);
+export const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+export const title = (n: Node) => str((n.style as Node | undefined)?.title);
 
-function parseDate(v: unknown): Date | null {
+export function parseDate(v: unknown): Date | null {
   const m = /Date\((-?\d+)/.exec(str(v));
   return m ? new Date(Number(m[1])) : null;
 }
 
-/** Extracts what matters for working on the ticket from the JumpToIndication response. */
-export function parseBsmTicket(json: unknown, key: string): BsmTicket {
-  const parsed = responseSchema.safeParse(json);
-  if (!parsed.success) throw new Error('BSM: unerwartete Antwort (kein Ticket-Formular)');
-  const all = nodes(parsed.data.ui.form);
-  const feat = (f: string) => all.find((n) => n.feat === f);
-  const value = (f: string) => str(feat(f)?.value);
-
+/**
+ * HTML fields (description, comments) as text; pasted images become numbered references
+ * ("[Bild 2: …]") collected in `images`, with file names from the documents of all nodes.
+ */
+export function richText(all: Node[]): { images: BsmImage[]; text: (html: unknown) => string } {
   // Images: one number per document id, in order of first appearance.
   const images: BsmImage[] = [];
   // File names of attachments, from the description and from comments (and their answers).
@@ -158,7 +157,18 @@ export function parseBsmTicket(json: unknown, key: string): BsmTicket {
     }
     return `[Bild ${img.n}: ${img.fileName}]`;
   };
-  const text = (html: unknown) => htmlToText(str(html), image);
+  return { images, text: (html) => htmlToText(str(html), image) };
+}
+
+/** Extracts what matters for working on the ticket from the JumpToIndication response. */
+export function parseBsmTicket(json: unknown, key: string): BsmTicket {
+  const parsed = responseSchema.safeParse(json);
+  if (!parsed.success) throw new Error('BSM: unerwartete Antwort (kein Ticket-Formular)');
+  const all = nodes(parsed.data.ui.form);
+  const feat = (f: string) => all.find((n) => n.feat === f);
+  const value = (f: string) => str(feat(f)?.value);
+
+  const { images, text } = richText(all);
 
   const status = str(feat('cfProgressBar')?.status);
   // "BRS_PWg0155 |  In Bearbeitung: IH-Berechnung | Termine …" → "IH-Berechnung | Termine …"
@@ -259,6 +269,7 @@ export function parseBsmTicket(json: unknown, key: string): BsmTicket {
   }
 
   return {
+    system: 'BSM',
     key,
     url: `${BSM_TICKET_BASE}${key}`,
     title: parts.join(' | ') || fullTitle || key,
@@ -300,10 +311,10 @@ export interface BsmFiles {
 }
 
 /** Markdown for the agent prompt; files without a local copy are only named. */
-export function bsmTicketMarkdown(t: BsmTicket, fetchedAt: Date, files: BsmFiles = {}): string {
+export function ticketMarkdown(t: BsmTicket, fetchedAt: Date, files: BsmFiles = {}): string {
   const images = files.images ?? new Map<number, string>();
   const out: string[] = [
-    `### BSM-Ticket ${t.key}: ${t.title}`,
+    `### ${t.system}-Ticket ${t.key}: ${t.title}`,
     '',
     `Quelle: ${t.url} (abgerufen ${formatDate(fetchedAt)})`,
     '',
@@ -401,72 +412,89 @@ export async function readBsmTicket(
   const key = bsmKey(url);
   if (!key) throw new Error(`BSM: keine Ticket-URL unter ${BSM_ORIGIN}: ${url}`);
 
-  return session(async (http) => {
-    const ticket = parseBsmTicket(await http.runWorkflow(bsmTicketRequest(key)), key);
-    const fetchedAt = now();
-    const written: string[] = [];
-    const save = (name: string, bytes: Uint8Array) => {
-      mkdirSync(filesDir, { recursive: true });
-      const file = join(filesDir, name);
-      writeFileSync(file, bytes);
-      written.push(file);
-      return file;
-    };
-    const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
-    // A missing file must not cost the ticket text; only a lost login ends the read.
-    const attempt = async <T>(fn: () => Promise<T>): Promise<T | null> => {
-      try {
-        return await fn();
-      } catch (err) {
-        if (err instanceof BsmLoginRequiredError) throw err;
-        return null;
-      }
-    };
+  return session(async (http) =>
+    saveTicket(
+      http,
+      parseBsmTicket(await http.runWorkflow(bsmTicketRequest(key)), key),
+      filesDir,
+      now(),
+    ),
+  );
+}
 
-    const images = new Map<number, string>();
-    const imageHashes = new Set<string>();
-    for (const img of ticket.images.slice(0, MAX_IMAGES)) {
-      const bytes = await attempt(() =>
-        http.download(
-          `/bfres/de/referenced-document/${encodeURIComponent(img.id)}/${encodeURIComponent(img.fileName)}`,
-        ),
-      );
-      if (!bytes || bytes.byteLength === 0 || bytes.byteLength > MAX_FILE_BYTES) continue;
-      imageHashes.add(hash(bytes));
-      images.set(img.n, save(`bsm-${img.n}-${safeName(img.fileName)}`, bytes));
+/**
+ * Downloads the ticket's images and attachments to `filesDir` (same file API on BSM and OTMA)
+ * and renders the prompt Markdown with their paths.
+ */
+export async function saveTicket(
+  http: BsmHttp,
+  ticket: BsmTicket,
+  filesDir: string,
+  fetchedAt: Date,
+): Promise<ReadTicketResult> {
+  const written: string[] = [];
+  const save = (name: string, bytes: Uint8Array) => {
+    mkdirSync(filesDir, { recursive: true });
+    const file = join(filesDir, name);
+    writeFileSync(file, bytes);
+    written.push(file);
+    return file;
+  };
+  const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+  // A missing file must not cost the ticket text; only a lost login ends the read.
+  const attempt = async <T>(fn: () => Promise<T>): Promise<T | null> => {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err instanceof BsmLoginRequiredError) throw err;
+      return null;
     }
+  };
 
-    const attachments: Array<{ attachment: BsmAttachment; file: string | null }> = [];
-    let downloaded = 0;
-    for (const a of ticket.attachments) {
-      if (downloaded >= MAX_ATTACHMENTS) {
-        attachments.push({ attachment: a, file: null });
-        continue;
-      }
-      const got = await attempt(async () => {
-        const link = downloadSchema.parse(await http.runWorkflow(bsmDocumentRequest(a.opath)));
-        const ext = /^\.[A-Za-z0-9]{1,8}$/.test(link.download_fileextension ?? '')
-          ? link.download_fileextension!
-          : '';
-        return { ext, bytes: await http.download(`/api/core/web/dl/${link.download}`) };
-      });
-      if (!got || got.bytes.byteLength === 0 || got.bytes.byteLength > MAX_FILE_BYTES) {
-        attachments.push({ attachment: a, file: null });
-        continue;
-      }
-      if (imageHashes.has(hash(got.bytes))) continue; // already there as "Bild n"
-      downloaded++;
-      const n = attachments.length + 1;
-      const name =
-        got.ext && !a.name.toLowerCase().endsWith(got.ext.toLowerCase())
-          ? a.name + got.ext
-          : a.name;
-      attachments.push({ attachment: a, file: save(`anhang-${n}-${safeName(name)}`, got.bytes) });
+  const images = new Map<number, string>();
+  const imageHashes = new Set<string>();
+  for (const img of ticket.images.slice(0, MAX_IMAGES)) {
+    const bytes = await attempt(() =>
+      http.download(
+        `/bfres/de/referenced-document/${encodeURIComponent(img.id)}/${encodeURIComponent(img.fileName)}`,
+      ),
+    );
+    if (!bytes || bytes.byteLength === 0 || bytes.byteLength > MAX_FILE_BYTES) continue;
+    imageHashes.add(hash(bytes));
+    images.set(
+      img.n,
+      save(`${ticket.system.toLowerCase()}-${img.n}-${safeName(img.fileName)}`, bytes),
+    );
+  }
+
+  const attachments: Array<{ attachment: BsmAttachment; file: string | null }> = [];
+  let downloaded = 0;
+  for (const a of ticket.attachments) {
+    if (downloaded >= MAX_ATTACHMENTS) {
+      attachments.push({ attachment: a, file: null });
+      continue;
     }
+    const got = await attempt(async () => {
+      const link = downloadSchema.parse(await http.runWorkflow(bsmDocumentRequest(a.opath)));
+      const ext = /^\.[A-Za-z0-9]{1,8}$/.test(link.download_fileextension ?? '')
+        ? link.download_fileextension!
+        : '';
+      return { ext, bytes: await http.download(`/api/core/web/dl/${link.download}`) };
+    });
+    if (!got || got.bytes.byteLength === 0 || got.bytes.byteLength > MAX_FILE_BYTES) {
+      attachments.push({ attachment: a, file: null });
+      continue;
+    }
+    if (imageHashes.has(hash(got.bytes))) continue; // already there as "Bild n"
+    downloaded++;
+    const n = attachments.length + 1;
+    const name =
+      got.ext && !a.name.toLowerCase().endsWith(got.ext.toLowerCase()) ? a.name + got.ext : a.name;
+    attachments.push({ attachment: a, file: save(`anhang-${n}-${safeName(name)}`, got.bytes) });
+  }
 
-    return {
-      markdown: bsmTicketMarkdown(ticket, fetchedAt, { images, attachments }),
-      files: written,
-    };
-  });
+  return {
+    markdown: ticketMarkdown(ticket, fetchedAt, { images, attachments }),
+    files: written,
+  };
 }

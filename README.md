@@ -138,6 +138,11 @@ Worktree `<Kunde>\Todo-<id>` auf einem neuen Branch vom Standard-Branch an und s
 (Claude Code CLI muss installiert sein) mit Notiz, BSM- und OTMA-Ticket. Der Agent liest die Tickets,
 setzt die Lösung um und erstellt den PR. Der Worktree bleibt danach stehen.
 
+Vor dem Start liest BRSOrganizer BSM- und OTMA-Ticket (Text, Kommentare, eingefügte Bilder) über ein
+eigenes Edge-Profil im Datenordner und gibt den Inhalt dem Agenten mit. Beide hängen am selben
+Keycloak-Login: Fehlt die Anmeldung, öffnet sich einmal ein Edge-Fenster. Klappt das Lesen nicht, bekommt
+der Agent nur den Link. Die Dokumentliste von OTMA wird noch nicht gelesen.
+
 Der **BSM/OTMA-Account** (ein Login für beide) wird in den Einstellungen gepflegt und liegt in der
 Windows-Anmeldeinformationsverwaltung. Der Agent bekommt ihn nur über die Umgebungsvariablen
 `BRS_TICKET_USER` / `BRS_TICKET_PASSWORD` seines Fensters, nie über Datei oder Kommandozeile.

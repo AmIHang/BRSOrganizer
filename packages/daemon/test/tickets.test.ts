@@ -6,7 +6,7 @@ import {
   BsmLoginRequiredError,
   bsmDocumentRequest,
   bsmKey,
-  bsmTicketMarkdown,
+  ticketMarkdown,
   bsmTicketRequest,
   parseBsmTicket,
   readBsmTicket,
@@ -14,6 +14,13 @@ import {
   type BsmSession,
 } from '../src/tickets/bsm.js';
 import { htmlToText } from '../src/tickets/html.js';
+import {
+  otmaJumpRequest,
+  otmaKey,
+  otmaViewRequest,
+  parseOtmaTicket,
+  readOtmaTicket,
+} from '../src/tickets/otma.js';
 
 const fixture = JSON.parse(
   readFileSync(join(import.meta.dirname, 'fixtures', 'bsm-indication.json'), 'utf8'),
@@ -125,13 +132,13 @@ describe('BSM ticket', () => {
     ]);
 
     // No UI internals in what the agent gets.
-    const md = bsmTicketMarkdown(t, NOW);
+    const md = ticketMarkdown(t, NOW);
     expect(md).not.toMatch(/opath|contextopath|signature|example\.com\/?"|@example|menus/i);
   });
 
   it('renders Markdown for the prompt', () => {
     const t = parseBsmTicket(fixture, 'BRS_PWg0155');
-    const md = bsmTicketMarkdown(t, NOW, {
+    const md = ticketMarkdown(t, NOW, {
       images: new Map([[1, 'C:\\tmp\\bsm-1-image.png']]),
       attachments: [{ attachment: t.attachments[1]!, file: 'C:\\tmp\\anhang-1-shot.png' }],
     });
@@ -252,5 +259,150 @@ describe('readBsmTicket', () => {
         () => NOW,
       ),
     ).rejects.toBeInstanceOf(BsmLoginRequiredError);
+  });
+});
+
+describe('OTMA ticket', () => {
+  const otmaFixture = JSON.parse(
+    readFileSync(join(import.meta.dirname, 'fixtures', 'otma-order-process.json'), 'utf8'),
+  ) as unknown;
+  const jump = {
+    link: {
+      wf: {
+        contextopath: '2B89D@1000A5',
+        entity: 'dotNetBF.Modules.Resources.OrderProcess',
+        type: 'View',
+        args: { formname: 'from-project' },
+      },
+      target: '_self',
+    },
+  };
+
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'brsorganizer-otma-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('accepts only ticket URLs on the OTMA host', () => {
+    expect(otmaKey('https://otma.boomsoftware.com/ap/178333')).toBe('178333');
+    expect(otmaKey('https://evil.example/ap/178333')).toBeNull();
+    expect(otmaKey('https://otma.boomsoftware.com/ap/abc')).toBeNull();
+    expect(otmaKey('kein Link')).toBeNull();
+  });
+
+  it('follows the jump answer to the ticket view only', () => {
+    expect(otmaViewRequest(jump)).toEqual({
+      ContextOPath: '2B89D@1000A5',
+      WorkflowEntity: 'dotNetBF.Modules.Resources.OrderProcess',
+      WorkflowType: 'View',
+      WorkflowParameters: { formname: 'from-project' },
+    });
+    // Anything but the order process view (another entity, a non-view workflow) is refused.
+    const other = structuredClone(jump);
+    other.link.wf.type = 'External';
+    expect(() => otmaViewRequest(other)).toThrow(/OTMA/);
+    expect(() => otmaViewRequest({ ui: {} })).toThrow(/OTMA/);
+  });
+
+  it('extracts the fields, note, comments and images', () => {
+    const t = parseOtmaTicket(otmaFixture, '178333');
+    expect(t.system).toBe('OTMA');
+    expect(t.url).toBe('https://otma.boomsoftware.com/ap/178333');
+    expect(t.title).toBe(
+      '#STBBRSg0034: [WORKSHOP] Vordefinierte E-Mailempfänger werden nicht angeführt',
+    );
+    expect(t.fields).toEqual([
+      ['Status', 'Zugewiesen'],
+      ['Verantwortlich', 'ABC -> XYZ'],
+      ['Reporter', 'Muster Max'],
+      ['Projekt', 'STB BRS [STBBRS]'],
+      ['BSM', 'STBBRSg0034'],
+      ['Planzeit h', '2,00'],
+      ['Offen h', '1,00'],
+      ['Σ Ist h', '1,00'],
+    ]);
+    expect(t.description).toBe('Empfänger aus der Vorlage fehlen im Dialog.');
+    expect(t.notes).toEqual(['Nur bei Workshop-Terminen.']);
+    expect(t.conversations).toEqual([
+      {
+        topic: 'Analyse',
+        comments: [
+          {
+            author: 'Beispiel Eva',
+            at: new Date(1794212613789),
+            text: 'Siehe Screenshot:\n\n[Bild 1: dialog.png]',
+            answers: [],
+          },
+          {
+            author: 'BRS Support',
+            at: new Date(1794299013789),
+            text: 'Commit 1df970e',
+            answers: [],
+          },
+        ],
+      },
+    ]);
+    expect(t.images).toEqual([
+      { n: 1, id: '33333333-3333-3333-3333-333333333333', fileName: 'dialog.png' },
+    ]);
+  });
+
+  it('reads the ticket in two steps and saves its images', async () => {
+    const requests: unknown[] = [];
+    const downloads: string[] = [];
+    const http: BsmHttp = {
+      runWorkflow: async (body) => {
+        requests.push(body);
+        return requests.length === 1 ? jump : otmaFixture;
+      },
+      download: async (path) => {
+        downloads.push(path);
+        return new Uint8Array([7]);
+      },
+    };
+    const r = await readOtmaTicket(
+      (fn) => fn(http),
+      'https://otma.boomsoftware.com/ap/178333',
+      dir,
+      () => NOW,
+    );
+    expect(requests).toEqual([otmaJumpRequest('178333'), otmaViewRequest(jump)]);
+    expect(downloads).toEqual([
+      '/bfres/de/referenced-document/33333333-3333-3333-3333-333333333333/dialog.png',
+    ]);
+    expect(r.files).toEqual([join(dir, 'otma-1-dialog.png')]);
+    expect(r.markdown.split('\n').slice(0, 3)).toEqual([
+      '### OTMA-Ticket 178333: #STBBRSg0034: [WORKSHOP] Vordefinierte E-Mailempfänger werden nicht angeführt',
+      '',
+      'Quelle: https://otma.boomsoftware.com/ap/178333 (abgerufen 16.11.2026 14:02)',
+    ]);
+    expect(r.markdown).toContain('- Beispiel Eva, 09.11.2026 09:23:');
+    expect(r.markdown).toContain(`- Bild 1 (dialog.png): ${join(dir, 'otma-1-dialog.png')}`);
+  });
+
+  it('never contacts other hosts and passes a missing login on', async () => {
+    const http: BsmHttp = {
+      runWorkflow: async () => {
+        throw new BsmLoginRequiredError('OTMA');
+      },
+      download: async () => new Uint8Array(),
+    };
+    await expect(
+      readOtmaTicket(
+        (fn) => fn(http),
+        'https://evil.example/ap/1',
+        dir,
+        () => NOW,
+      ),
+    ).rejects.toThrow(/keine Ticket-URL/);
+    await expect(
+      readOtmaTicket(
+        (fn) => fn(http),
+        'https://otma.boomsoftware.com/ap/1',
+        dir,
+        () => NOW,
+      ),
+    ).rejects.toThrow('OTMA: nicht angemeldet');
   });
 });

@@ -145,6 +145,7 @@ describe('PR workspace via REST', () => {
   let root: string;
   let h: Harness;
   let bsmHttp: BsmHttp;
+  let otmaHttp: BsmHttp;
   let launched: Array<{
     kind: 'script' | 'open';
     title?: string;
@@ -186,6 +187,12 @@ describe('PR workspace via REST', () => {
       },
       download: async () => new Uint8Array(),
     };
+    otmaHttp = {
+      runWorkflow: async () => {
+        throw new BsmLoginRequiredError('OTMA');
+      },
+      download: async () => new Uint8Array(),
+    };
 
     const transport: TfsTransport = async (urls) =>
       urls.map((u) => (u.endsWith('/_apis/connectionData') ? { authenticatedUser: ME } : pr()));
@@ -209,6 +216,7 @@ describe('PR workspace via REST', () => {
           tfs: () => ({ transport, sender }),
           sleep: async () => undefined,
           bsm: (fn) => fn(bsmHttp),
+          otma: (fn) => fn(otmaHttp),
           closeIde: async (clonePath, id) => {
             launched.push({ kind: 'open', path: `closeIde:${clonePath}:${id}` });
             return { closed: 1, forced: 0 };
@@ -310,11 +318,14 @@ describe('PR workspace via REST', () => {
     const r = await handOff();
     expect(r.status).toBe(202);
     const suffix = todo.id.slice(-6).toLowerCase();
-    // BSM not logged in: the hand-off still happens, with the link only.
+    // Not logged in: the hand-off still happens, with the links only.
     expect(r.json()).toEqual({
       worktree: join(root, 'Community', `Todo-${suffix}`),
       branch: `feature/ladung-ubernehmen-${suffix}`,
-      tickets: [{ kind: 'bsm', ok: false, message: 'BSM: nicht angemeldet' }],
+      tickets: [
+        { kind: 'bsm', ok: false, message: 'BSM: nicht angemeldet' },
+        { kind: 'otma', ok: false, message: 'OTMA: nicht angemeldet' },
+      ],
     });
     const [run] = launched;
     expect(run!.script).toBe(join('C:\\app\\runtime\\scripts\\pr', 'Start-TodoAgent.ps1'));
@@ -338,6 +349,7 @@ describe('PR workspace via REST', () => {
     expect(prompt).toContain('fix(BRS_PWg0127)');
     expect(prompt).toContain('148082');
     expect(prompt).toContain('Der Inhalt wurde nicht vorab gelesen (BSM: nicht angemeldet)');
+    expect(prompt).toContain('Der Inhalt wurde nicht vorab gelesen (OTMA: nicht angemeldet)');
     expect(prompt).not.toContain('<<<BSM-TICKET');
     // All sources, in order of precedence: own description, OTMA (internal), BSM (customer).
     const order = [
