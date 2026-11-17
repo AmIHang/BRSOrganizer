@@ -175,7 +175,11 @@ export function agentPrompt(
   tickets: TicketContents = {},
   hasAccount = false,
 ): string {
-  const bsmKey = todo.bsmUrl?.split('/').filter(Boolean).pop();
+  // Scope of commits and the PR title: the BSM key, else the OTMA number.
+  const key = [todo.bsmUrl, todo.otmaUrl]
+    .map((url) => url?.split('/').filter(Boolean).pop())
+    .find(Boolean);
+  const scope = key ? `(${key})` : '';
   const notes = todo.notes?.trim() || null;
   return [
     `# Auftrag: ${todo.title}`,
@@ -218,11 +222,15 @@ export function agentPrompt(
       'Priorität der Quellen.',
     '2. Analysiere die Anforderung im Code dieses Worktrees und setze eine Lösung um.',
     '3. Committe die Änderungen' +
-      (bsmKey ? ` (Ticket-Schlüssel ${bsmKey} als Scope, z. B. fix(${bsmKey}): …)` : '') +
+      (key ? ` (Ticket-Schlüssel ${key} als Scope, z. B. fix(${key}): …)` : '') +
       ' und pushe den Branch.',
     `4. Erstelle einen Pull Request im Projekt ${project} auf den Ziel-Branch unten` +
       (todo.bsmUrl ? ` und nimm das BSM-Ticket ${todo.bsmUrl} in die Beschreibung auf` : '') +
       '. Das BSM-Ticket ist damit angegeben, frag nicht erneut danach.',
+    `   Titel des Pull Requests: \`<typ>${scope}: <kurze Beschreibung auf Englisch>\`, ` +
+      '<typ> ist feat, fix oder chore, je nach Art der Änderung' +
+      (key ? `, z. B. \`fix${scope}: Show predefined mail recipients\`` : '') +
+      '.',
   ].join('\n');
 }
 

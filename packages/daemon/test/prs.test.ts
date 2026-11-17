@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TfsSender, TfsTransport } from '@brsorganizer/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { StaticSource } from '../../core/test/helpers.js';
+import { makeCore, StaticSource } from '../../core/test/helpers.js';
 import { BsmLoginRequiredError, type BsmHttp } from '../src/tickets/bsm.js';
 import {
   hiddenCommand,
@@ -12,7 +12,7 @@ import {
   startArguments,
   type Launcher,
 } from '../src/prs/launcher.js';
-import { PrWorkspace, type PrDetails } from '../src/prs/service.js';
+import { agentPrompt, PrWorkspace, type PrDetails } from '../src/prs/service.js';
 import { cloneSync, findRepo, normalizeRemote, scanRepos } from '../src/prs/workspace.js';
 import { auth, raw, startHarness, type Harness } from './harness.js';
 
@@ -150,6 +150,24 @@ describe('script launcher', () => {
       "try { & 'C:\\x\\Start-TodoAgent.ps1' -Name 'O''Brien' } " +
         "catch { Write-Output ('FEHLER: ' + $_.Exception.Message); exit 1 }",
     );
+  });
+});
+
+describe('agent prompt', () => {
+  it('names the PR <typ>(<BSM key or OTMA number>): <english description>', () => {
+    const core = makeCore();
+    const title = (input: { bsmUrl?: string; otmaUrl?: string }) =>
+      agentPrompt(core.items.addTodo({ title: 'T', notes: 'n', ...input }, 'user'), 'P')
+        .split('\n')
+        .find((l) => l.includes('Titel des Pull Requests'));
+    expect(title({ bsmUrl: 'STBBRSg0030', otmaUrl: '178317' })).toContain(
+      '`<typ>(STBBRSg0030): <kurze Beschreibung auf Englisch>`',
+    );
+    expect(title({ otmaUrl: '178317' })).toContain(
+      '`<typ>(178317): <kurze Beschreibung auf Englisch>`',
+    );
+    expect(title({})).toContain('`<typ>: <kurze Beschreibung auf Englisch>`');
+    expect(title({})).toContain('feat, fix oder chore');
   });
 });
 
@@ -367,6 +385,10 @@ describe('PR workspace via REST', () => {
     expect(prompt).toContain('siehe Ticket');
     expect(prompt).toContain('https://bsm.boomsoftware.com/indication/BRS_PWg0127');
     expect(prompt).toContain('fix(BRS_PWg0127)');
+    // PR title: the BSM key wins over the OTMA number.
+    expect(prompt).toContain(
+      'Titel des Pull Requests: `<typ>(BRS_PWg0127): <kurze Beschreibung auf Englisch>`',
+    );
     expect(prompt).toContain('148082');
     expect(prompt).toContain('Der Inhalt wurde nicht vorab gelesen (BSM: nicht angemeldet)');
     expect(prompt).toContain('Der Inhalt wurde nicht vorab gelesen (OTMA: nicht angemeldet)');
