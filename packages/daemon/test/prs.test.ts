@@ -170,6 +170,19 @@ describe('agent prompt', () => {
     expect(title({})).toContain('feat, fix oder chore');
     expect(title({})).toContain('frag nicht nach dem Titel');
   });
+
+  it('names the desktop chat (PR<n>) #<BSM key or OTMA number> - <description>', () => {
+    const core = makeCore();
+    const chat = (input: { bsmUrl?: string; otmaUrl?: string }) =>
+      agentPrompt(core.items.addTodo({ title: 'T', notes: 'n', ...input }, 'user'), 'P')
+        .split('\n')
+        .find((l) => l.includes('Claude-Desktop-App'));
+    expect(chat({ bsmUrl: 'STBBRSg0030', otmaUrl: '178317' })).toContain(
+      '`(PR<Nummer>) #STBBRSg0030 - <kurze Beschreibung>`',
+    );
+    expect(chat({ otmaUrl: '178317' })).toContain('`(PR<Nummer>) #178317 - <kurze Beschreibung>`');
+    expect(chat({})).toContain('`(PR<Nummer>) - <kurze Beschreibung>`');
+  });
 });
 
 describe('PR workspace via REST', () => {

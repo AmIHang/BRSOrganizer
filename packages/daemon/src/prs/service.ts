@@ -233,6 +233,11 @@ export function agentPrompt(
       (key ? `, z. B. \`fix${scope}: Show predefined mail recipients\`` : '') +
       '. Typ und Beschreibung legst du selbst anhand deiner Änderung fest; frag nicht nach ' +
       'dem Titel.',
+    '5. Ist die Claude-Desktop-App installiert, leg diese Konversation dort als Chat an ' +
+      '(z. B. `claude --desktop --resume <Session-ID>`) und nenne den Chat ' +
+      `\`(PR<Nummer>)${key ? ` #${key}` : ''} - <kurze Beschreibung>\` (Nummer des Pull ` +
+      'Requests, Beschreibung wie im PR-Titel); dieser Name gilt statt anderer Vorgaben zum ' +
+      'Chat-Namen. Ohne Desktop-App entfällt dieser Schritt.',
   ].join('\n');
 }
 
