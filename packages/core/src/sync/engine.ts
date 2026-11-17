@@ -172,13 +172,18 @@ export class SyncEngine {
     this.db.transaction((tx) => {
       for (const todo of todos) {
         const branch = String(todo.meta!.agentBranch).toLowerCase();
+        // The agent renames its branch after its change but keeps the todo's id suffix.
+        const suffix = `-${todo.id.slice(-6).toLowerCase()}`;
         const project = todo.meta!.project;
-        const pr = prs.find(
-          (p) =>
-            typeof p.meta?.sourceBranch === 'string' &&
-            p.meta.sourceBranch.toLowerCase() === branch &&
-            (typeof project !== 'string' || p.meta.project === project),
-        );
+        const pr = prs.find((p) => {
+          const source =
+            typeof p.meta?.sourceBranch === 'string' ? p.meta.sourceBranch.toLowerCase() : null;
+          return (
+            source !== null &&
+            (source === branch || source.endsWith(suffix)) &&
+            (typeof project !== 'string' || p.meta?.project === project)
+          );
+        });
         if (!pr) continue;
         tx.update(items)
           .set({

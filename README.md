@@ -136,7 +136,13 @@ Todos lassen sich über ⋯ → **In Projekt verschieben** einem Projekt (Kunde 
 Für solche Todos gibt es **An Agent weitergeben**: `Start-TodoAgent.ps1` legt im Repo des Projekts einen
 Worktree `<Kunde>\Todo-<id>` auf einem neuen Branch vom Standard-Branch an und startet dort `claude`
 (Claude Code CLI muss installiert sein) mit Notiz, BSM- und OTMA-Ticket. Der Agent liest die Tickets,
-setzt die Lösung um und erstellt den PR. Der Worktree bleibt danach stehen.
+setzt die Lösung um und erstellt den PR; Branch-Name (`feature/<name>-<id>`) und PR-Titel leitet er aus
+seiner Änderung ab. **Ohne Notiz** analysiert er nur (betroffene Stellen, Ursache, Vorschlag, offene
+Fragen) und ändert nichts; die Analyse erscheint als „Antwort“. Der Worktree bleibt danach stehen.
+
+Während der Agent läuft, zeigt das Todo „Claude arbeitet“ statt der Checkbox. Wartet er auf eine
+Freigabe oder Rückfrage, steht dort „Rückfrage von Claude“ (antworten mit `claude attach Todo-<id>`).
+Über ⋯ → **An Claude abbrechen** wird die Sitzung gestoppt und das Todo wieder ein normales Todo.
 
 Der Agent läuft ohne Fenster als Hintergrundsitzung (`claude --bg`, Berechtigungsmodus `auto`: Claude
 erlaubt die üblichen Schritte selbst und hält Riskantes an). Reinschauen und eingreifen:

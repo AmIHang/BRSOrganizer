@@ -161,7 +161,7 @@ export class ItemService {
     const current = this.getRow(id);
     this.requireTodo(current);
     const meta = { ...current.meta };
-    for (const key of ['project', 'agentBranch', 'agentReply'] as const) {
+    for (const key of ['project', 'agentBranch', 'agentReply', 'agentWaiting'] as const) {
       if (v[key] === null) delete meta[key];
       else if (v[key] !== undefined) meta[key] = v[key];
     }
@@ -175,7 +175,8 @@ export class ItemService {
         ...(v.dueAt !== undefined && { dueAt: v.dueAt }),
         ...((v.project !== undefined ||
           v.agentBranch !== undefined ||
-          v.agentReply !== undefined) && { meta }),
+          v.agentReply !== undefined ||
+          v.agentWaiting !== undefined) && { meta }),
         updatedBy: a,
         updatedAt: this.clock.now(),
       })

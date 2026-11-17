@@ -72,6 +72,14 @@ describe('background agents', () => {
       core.fakeClock.advance(60_000);
       await watch.check();
       expect(core.items.get(todo.id).updatedAt).toEqual(before);
+
+      // Stuck on a permission prompt: shown until the session works on.
+      sessions[1] = { ...sessions[1]!, status: 'waiting', waitingFor: 'permission prompt' };
+      await watch.check();
+      expect(core.items.get(other.id).meta?.agentWaiting).toBe('permission prompt');
+      sessions[1] = { ...sessions[1]!, status: 'busy', waitingFor: undefined };
+      await watch.check();
+      expect(core.items.get(other.id).meta?.agentWaiting).toBeUndefined();
     } finally {
       watch.stop();
     }

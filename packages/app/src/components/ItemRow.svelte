@@ -124,6 +124,10 @@
     }
   }
 
+  /** Handed to a background agent: no checkbox, no second hand-off, can be cancelled. */
+  const agentWorking = $derived(
+    item.type === 'todo' && item.status === 'open' && typeof item.meta?.agentBranch === 'string',
+  );
   const entries = $derived<MenuEntry[]>([
     ...(manageable
       ? [
@@ -143,13 +147,14 @@
     ...(item.type === 'todo'
       ? [{ label: 'In Projekt verschieben …', onclick: () => (movingProject = true) }]
       : []),
+    ...(agentWorking
+      ? [{ label: 'An Claude abbrechen', onclick: () => void cancelHandOff() }]
+      : []),
     { label: 'Archivieren', onclick: () => onarchive(item) },
   ]);
   /** Open todos with something to work on (ticket or description) can go to a Claude agent. */
   const canHandOff = $derived(
-    item.type === 'todo' &&
-      item.status === 'open' &&
-      (!!item.bsmUrl || !!item.otmaUrl || !!item.notes?.trim()),
+    item.type === 'todo' && item.status === 'open' && typeof item.meta?.agentBranch !== 'string',
   );
   /** "An Claude" first asks for the project the agent works in. */
   let pickingHandOffProject = $state(false);
@@ -157,16 +162,32 @@
   const agentReply = $derived(
     item.status === 'open' && typeof item.meta?.agentReply === 'string',
   );
-  const agentWorking = $derived(
-    item.type === 'todo' && item.status === 'open' && typeof item.meta?.agentBranch === 'string',
+  /** Stuck mid-turn on a question or permission prompt (from `claude agents`). */
+  const agentWaiting = $derived(
+    agentWorking && typeof item.meta?.agentWaiting === 'string' ? item.meta.agentWaiting : null,
   );
+  const agentSession = $derived(`Todo-${item.id.slice(-6).toLowerCase()}`);
+
+  async function cancelHandOff() {
+    try {
+      await api.pr.cancelHandOff(item.id);
+      onchanged?.();
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), true);
+    }
+  }
   let showingReply = $state(false);
   let editingTickets = $state(false);
   let movingProject = $state(false);
 </script>
 
 <li class="row" class:done={item.status !== 'open'}>
-  {#if item.type === 'todo'}
+  {#if agentWorking}
+    <!-- Handed to Claude: done when its PR shows up (or after "An Claude abbrechen"). -->
+    <div class="lead">
+      <span class="kind agent" title="An Claude übergeben" aria-label="An Claude übergeben">✦</span>
+    </div>
+  {:else if item.type === 'todo'}
     <input
       type="checkbox"
       title="Erledigt"
@@ -258,16 +279,24 @@
           >{handingOff ? 'An Claude …' : 'An Claude'}</button
         >
       {/if}
-      {#if agentReply}
+      {#if agentWaiting}
+        <span
+          class="chip status asking"
+          title="Claude wartet auf: {agentWaiting}. Antworten im Terminal mit „claude attach {agentSession}“."
+          >Rückfrage von Claude</span
+        >
+      {:else if agentReply}
         <span class="chip status claude" title="Der Agent hat seine Runde beendet und wartet auf dich"
           >Claude wartet</span
         >
+      {:else if agentWorking}
+        <span class="chip working" title="Ein Claude-Agent arbeitet im Hintergrund an diesem Todo"
+          >Claude arbeitet</span
+        >
+      {/if}
+      {#if agentReply}
         <button class="chip action claude" title="Antwort des Agenten anzeigen" onclick={() => (showingReply = true)}
           >Antwort</button
-        >
-      {:else if agentWorking}
-        <span class="chip status claude" title="Ein Claude-Agent arbeitet im Hintergrund an diesem Todo"
-          >Claude arbeitet</span
         >
       {/if}
     </div>
@@ -358,6 +387,20 @@
     background: transparent;
     border: 1px solid var(--chip-orange-fg);
     color: var(--chip-orange-fg);
+  }
+  .chip.working {
+    background: var(--chip-blue-bg);
+    color: var(--chip-blue-fg);
+  }
+  /* Waits for the user mid-turn: must not be overlooked. */
+  .chip.status.asking {
+    background: transparent;
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    font-weight: 600;
+  }
+  .kind.agent {
+    color: var(--chip-blue-fg);
   }
   .chip.action:hover:not(:disabled) {
     filter: brightness(1.1);

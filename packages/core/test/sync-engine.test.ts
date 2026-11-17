@@ -42,6 +42,29 @@ describe('SyncEngine', () => {
     expect(core.items.get(todo.id).status).toBe('open');
   });
 
+  it('finds the PR when the agent renamed its branch but kept the todo id suffix', async () => {
+    const todo = core.items.addTodo({ title: 'Mails' }, 'user');
+    const suffix = todo.id.slice(-6).toLowerCase();
+    core.items.updateTodo(
+      todo.id,
+      { project: 'STB', agentBranch: `feature/todo-${suffix}` },
+      'user',
+    );
+    const tfs = new StaticSource('tfs', [
+      pr('other', { meta: { project: 'STB', sourceBranch: 'feature/show-mail-recipients' } }),
+    ]);
+    await core.sync.run(tfs);
+    expect(core.items.get(todo.id).status).toBe('open'); // no suffix: not this todo's PR
+
+    tfs.snapshot.push(
+      pr('renamed', {
+        meta: { project: 'STB', sourceBranch: `feature/show-mail-recipients-${suffix}` },
+      }),
+    );
+    await core.sync.run(tfs);
+    expect(core.items.get(todo.id).meta).toMatchObject({ prItemId: byExt('renamed').id });
+  });
+
   it('inserts new items as open, created by sync', async () => {
     const r = await core.sync.run(github);
     expect(r).toMatchObject({ ok: true, added: 2, updated: 0, closed: 0, reopened: 0 });

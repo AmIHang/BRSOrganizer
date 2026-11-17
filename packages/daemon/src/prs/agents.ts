@@ -12,19 +12,40 @@ const sessionSchema = z.object({
   name: z.string().optional(),
   sessionId: z.string().regex(/^[\w-]{8,100}$/),
   cwd: z.string(),
-  /** "idle": the session finished its turn and waits for the user. */
+  /**
+   * "busy": working; "idle": finished its turn and waits for the user; "waiting": stuck mid-turn
+   * on something only the user can answer (`waitingFor`, e.g. "permission prompt").
+   */
   status: z.string(),
+  waitingFor: z.string().optional(),
 });
 export type AgentSession = z.infer<typeof sessionSchema>;
 
 /** Lists claude's sessions (`claude agents --json --all`). */
 export type ListAgentSessions = () => Promise<AgentSession[]>;
 
-export function claudeAgentsCli(): ListAgentSessions {
-  // shortcut: only the native installer's claude.exe or one on PATH, not an npm claude.cmd
-  // (would need a shell); extend if someone installs it that way.
+// shortcut: only the native installer's claude.exe or one on PATH, not an npm claude.cmd
+// (would need a shell); extend if someone installs it that way.
+function claudeExe(): string {
   const local = join(homedir(), '.local', 'bin', 'claude.exe');
-  const claude = existsSync(local) ? local : 'claude.exe';
+  return existsSync(local) ? local : 'claude.exe';
+}
+
+/** Stops a background session by name (`claude stop <name>`). */
+export type StopAgentSession = (name: string) => Promise<void>;
+
+export function claudeStopCli(): StopAgentSession {
+  return (name) =>
+    new Promise((resolve) =>
+      // An unknown name (e.g. claude ran in its own window instead) is fine: nothing to stop.
+      execFile(claudeExe(), ['stop', name], { windowsHide: true, timeout: 30_000 }, () =>
+        resolve(),
+      ),
+    );
+}
+
+export function claudeAgentsCli(): ListAgentSessions {
+  const claude = claudeExe();
   return () =>
     new Promise((resolve, reject) =>
       execFile(
@@ -107,7 +128,15 @@ export function watchAgents(
       for (const todo of todos) {
         const name = agentSessionName(todo.id);
         const s = sessions.find((x) => x.name === name);
-        if (s?.status !== 'idle') continue;
+        if (!s) continue;
+        // Mid-turn question or permission prompt: without a hint the user would wait forever.
+        const waiting =
+          s.status === 'waiting' ? (s.waitingFor?.trim() || 'Eingabe').slice(0, 200) : null;
+        const stored = typeof todo.meta?.agentWaiting === 'string' ? todo.meta.agentWaiting : null;
+        if (waiting !== stored) {
+          core.items.updateTodo(todo.id, { agentWaiting: waiting }, 'claude');
+        }
+        if (s.status !== 'idle') continue;
         const reply = read(s);
         if (reply && reply !== todo.meta?.agentReply) {
           core.items.updateTodo(todo.id, { agentReply: reply }, 'claude');

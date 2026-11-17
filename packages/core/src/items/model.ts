@@ -161,6 +161,8 @@ export const updateTodoInput = z
     agentBranch: z.string().trim().min(1).max(200).nullable().optional(),
     /** Last answer of the agent's session (it waits for the user); null removes it. */
     agentReply: z.string().trim().min(1).max(20_000).nullable().optional(),
+    /** What the agent's session waits for (e.g. a permission prompt); null when it works on. */
+    agentWaiting: z.string().trim().min(1).max(200).nullable().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), 'nothing to update');
 export type UpdateTodoInput = z.input<typeof updateTodoInput>;

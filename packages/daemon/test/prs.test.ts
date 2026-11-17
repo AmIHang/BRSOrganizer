@@ -168,7 +168,26 @@ describe('agent prompt', () => {
     );
     expect(title({})).toContain('`<typ>: <kurze Beschreibung auf Englisch>`');
     expect(title({})).toContain('feat, fix oder chore');
-    expect(title({})).toContain('frag nicht nach dem Titel');
+    expect(title({})).toContain('nicht aus dem Titel oder der Beschreibung des Auftrags');
+  });
+
+  it('asks only for an analysis when the developer gave no description', () => {
+    const core = makeCore();
+    const analysis = agentPrompt(
+      core.items.addTodo({ title: 'X', otmaUrl: '178317' }, 'user'),
+      'P',
+    );
+    expect(analysis).toContain('## Vorgehen: nur Analyse');
+    expect(analysis).toContain('erstelle keinen Pull Request');
+    expect(analysis).not.toContain('Erstelle einen Pull Request');
+
+    const todo = core.items.addTodo({ title: 'T', notes: 'tu es' }, 'user');
+    const impl = agentPrompt(todo, 'P');
+    expect(impl).not.toContain('nur Analyse');
+    // The agent names its branch itself but keeps the suffix the sync finds the PR by.
+    expect(impl).toContain(
+      `git branch -m feature/<kurzer-englischer-name>-${todo.id.slice(-6).toLowerCase()}`,
+    );
   });
 
   it('names the desktop chat (PR<n>) #<BSM key or OTMA number> - <description>', () => {
@@ -200,6 +219,7 @@ describe('PR workspace via REST', () => {
   }>;
   let sent: Array<{ method: string; url: string; body: unknown }>;
   let hidden: { code: number; stdout: string; stderr: string };
+  let stopped: string[];
   let prStatus: string;
 
   const pr = () => ({
@@ -227,6 +247,7 @@ describe('PR workspace via REST', () => {
     sent = [];
     hidden = { code: 0, stdout: 'backgrounded · 1a2b3c4d\nAGENT-MODE: background\n', stderr: '' };
     prStatus = 'active';
+    stopped = [];
     bsmHttp = {
       runWorkflow: async () => {
         throw new BsmLoginRequiredError();
@@ -267,6 +288,9 @@ describe('PR workspace via REST', () => {
           sleep: async () => undefined,
           bsm: (fn) => fn(bsmHttp),
           otma: (fn) => fn(otmaHttp),
+          stopAgent: async (name) => {
+            stopped.push(name);
+          },
           closeIde: async (clonePath, id) => {
             launched.push({ kind: 'open', path: `closeIde:${clonePath}:${id}` });
             return { closed: 1, forced: 0 };
@@ -371,7 +395,7 @@ describe('PR workspace via REST', () => {
     // Not logged in: the hand-off still happens, with the links only.
     expect(r.json()).toEqual({
       worktree: join(root, 'Community', `Todo-${suffix}`),
-      branch: `feature/ladung-ubernehmen-${suffix}`,
+      branch: `feature/todo-${suffix}`,
       tickets: [
         { kind: 'bsm', ok: false, message: 'BSM: nicht angemeldet' },
         { kind: 'otma', ok: false, message: 'OTMA: nicht angemeldet' },
@@ -392,7 +416,7 @@ describe('PR workspace via REST', () => {
       '-Name',
       `Todo-${suffix}`,
       '-Branch',
-      `feature/ladung-ubernehmen-${suffix}`,
+      `feature/todo-${suffix}`,
     ]);
     const prompt = readFileSync(args[11]!, 'utf8');
     rmSync(dirname(args[11]!), { recursive: true });
@@ -420,7 +444,7 @@ describe('PR workspace via REST', () => {
     expect(prompt).not.toContain('BRS_TICKET_PASSWORD');
     expect(run!.env).toBeUndefined();
     expect(h.core.items.get(todo.id).meta).toMatchObject({
-      agentBranch: `feature/ladung-ubernehmen-${suffix}`,
+      agentBranch: `feature/todo-${suffix}`,
     });
 
     // With a BSM/OTMA account: credentials only through the environment, never in the prompt.
@@ -457,6 +481,28 @@ describe('PR workspace via REST', () => {
     expect(existsSync(join(root, 'Community', 'Community'))).toBe(true); // repos untouched
     expect((await get()).json()).toEqual({ path: cache, exists: false, bytes: 0 });
     expect((await clear()).status).toBe(200); // already gone: fine
+  });
+
+  it('hands off a todo without note or ticket, and cancels the hand-off', async () => {
+    h.core.settings.update({ workspace: { projectsRoot: root } });
+    const todo = h.core.items.addTodo({ title: 'Nur ein Titel' }, 'user');
+    h.core.items.updateTodo(todo.id, { project: 'Produktion' }, 'user');
+    const post = (path: string) => raw(h.port, { method: 'POST', path, headers: auth });
+    const cancel = () => post(`/api/prs/todos/${todo.id}/agent/cancel`);
+    try {
+      expect((await cancel()).status).toBe(409); // not handed off yet
+      expect((await post(`/api/prs/todos/${todo.id}/agent`)).status).toBe(202);
+      expect(readFileSync(launched[0]!.args![11]!, 'utf8')).toContain('## Vorgehen: nur Analyse');
+
+      h.core.items.updateTodo(todo.id, { agentWaiting: 'permission prompt' }, 'claude');
+      expect((await cancel()).status).toBe(200);
+      expect(stopped).toEqual([`Todo-${todo.id.slice(-6).toLowerCase()}`]);
+      const after = h.core.items.get(todo.id);
+      expect(after.status).toBe('open');
+      expect(after.meta).toEqual({ project: 'Produktion' });
+    } finally {
+      for (const l of launched) rmSync(dirname(l.args![11]!), { recursive: true, force: true });
+    }
   });
 
   it('reports a failed agent start and falls back to a window', async () => {

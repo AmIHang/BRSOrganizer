@@ -131,6 +131,8 @@ export const api = {
         mode: 'background' | 'window';
         session: string;
       }>('POST', `/api/prs/todos/${id}/agent`),
+    /** Stops the agent; the todo becomes a plain open todo again. */
+    cancelHandOff: (id: string) => request<Item>('POST', `/api/prs/todos/${id}/agent/cancel`),
     removeLocal: (id: string) =>
       request<{ clonePath: string; ideClosed: number; ideForced: number }>(
         'POST',

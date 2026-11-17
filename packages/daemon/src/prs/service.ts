@@ -19,7 +19,7 @@ import {
 import { readBsmTicket, type BsmSession, type ReadTicketResult } from '../tickets/bsm.js';
 import { HttpError } from '../http/errors.js';
 import { readOtmaTicket } from '../tickets/otma.js';
-import { agentSessionName } from './agents.js';
+import { agentSessionName, claudeStopCli, type StopAgentSession } from './agents.js';
 import { closeVisualStudio, type CloseIde } from './ide.js';
 import type { Launcher } from './launcher.js';
 import {
@@ -104,6 +104,8 @@ export interface PrWorkspaceDeps {
   bsm?: BsmSession;
   /** OTMA with the user's login (same Edge profile as BSM); none: links only. */
   otma?: BsmSession;
+  /** Test hook; default `claude stop <session>`. */
+  stopAgent?: StopAgentSession;
 }
 
 const strip = (ref: string) => ref.replace(/^refs\/heads\//, '');
@@ -217,28 +219,58 @@ export function agentPrompt(
     ),
     ...ticketSection('### 3. BSM-Ticket (Kunde)', 'BSM', 'BSM-TICKET', todo.bsmUrl, tickets.bsm),
     '',
+    ...(notes ? implementSteps(todo, project, key, scope) : ANALYSIS_STEPS),
+  ].join('\n');
+}
+
+/** Without a description of the developer: only analyse, change nothing, answer with it. */
+const ANALYSIS_STEPS = [
+  '## Vorgehen: nur Analyse',
+  '',
+  'Es gibt keine Beschreibung des Entwicklers. Analysiere die Aufgabe deshalb nur, setze nichts ' +
+    'um.',
+  '',
+  '1. Verschaff dir aus den Informationen oben ein Bild der Aufgabe, beachte dabei die ' +
+    'Priorität der Quellen.',
+  '2. Untersuche den Code dieses Worktrees: betroffene Stellen (Dateien, Klassen, Methoden), bei ' +
+    'einem Fehler die vermutliche Ursache.',
+  '3. Ändere keine Dateien, committe nichts, pushe nichts und erstelle keinen Pull Request.',
+  '4. Antworte zum Schluss mit der Analyse: kurze Zusammenfassung der Aufgabe, betroffene ' +
+    'Stellen, Ursache bzw. Lösungsvorschlag, offene Fragen und grober Aufwand. Diese Antwort ' +
+    'sieht der Entwickler in BRSOrganizer.',
+];
+
+/** Steps of an implementation (the developer described what to do). */
+function implementSteps(todo: Item, project: string, key: string | undefined, scope: string) {
+  const suffix = todo.id.slice(-6).toLowerCase();
+  return [
     '## Vorgehen',
     '',
     '1. Verschaff dir aus den Informationen oben ein Bild der Aufgabe, beachte dabei die ' +
       'Priorität der Quellen.',
     '2. Analysiere die Anforderung im Code dieses Worktrees und setze eine Lösung um.',
-    '3. Committe die Änderungen' +
+    '3. Der Branch hat einen vorläufigen Namen. Benenne ihn vor dem ersten Push passend zu ' +
+      `deiner Änderung um: \`git branch -m feature/<kurzer-englischer-name>-${suffix}\` ` +
+      `(Kleinbuchstaben und Bindestriche; die Endung \`-${suffix}\` muss bleiben, an ihr ` +
+      'erkennt BRSOrganizer den Pull Request). Den Namen leitest du aus deiner Änderung ab, ' +
+      'nicht aus dem Titel des Auftrags.',
+    '4. Committe die Änderungen' +
       (key ? ` (Ticket-Schlüssel ${key} als Scope, z. B. fix(${key}): …)` : '') +
       ' und pushe den Branch.',
-    `4. Erstelle einen Pull Request im Projekt ${project} auf den Ziel-Branch unten` +
+    `5. Erstelle einen Pull Request im Projekt ${project} auf den Ziel-Branch unten` +
       (todo.bsmUrl ? ` und nimm das BSM-Ticket ${todo.bsmUrl} in die Beschreibung auf` : '') +
       '. Das BSM-Ticket ist damit angegeben, frag nicht erneut danach.',
     `   Titel des Pull Requests: \`<typ>${scope}: <kurze Beschreibung auf Englisch>\`, ` +
       '<typ> ist feat, fix oder chore, je nach Art der Änderung' +
       (key ? `, z. B. \`fix${scope}: Show predefined mail recipients\`` : '') +
-      '. Typ und Beschreibung legst du selbst anhand deiner Änderung fest; frag nicht nach ' +
-      'dem Titel.',
-    '5. Ist die Claude-Desktop-App installiert, leg diese Konversation dort als Chat an ' +
+      '. Titel und Beschreibung des Pull Requests leitest du selbst aus deiner Änderung ab, ' +
+      'nicht aus dem Titel oder der Beschreibung des Auftrags; frag nicht danach.',
+    '6. Ist die Claude-Desktop-App installiert, leg diese Konversation dort als Chat an ' +
       '(z. B. `claude --desktop --resume <Session-ID>`) und nenne den Chat ' +
       `\`(PR<Nummer>)${key ? ` #${key}` : ''} - <kurze Beschreibung>\` (Nummer des Pull ` +
       'Requests, Beschreibung wie im PR-Titel); dieser Name gilt statt anderer Vorgaben zum ' +
       'Chat-Namen. Ohne Desktop-App entfällt dieser Schritt.',
-  ].join('\n');
+  ];
 }
 
 /**
@@ -430,6 +462,23 @@ export class PrWorkspace {
    * CLI there (visible console) with the todo's notes and BSM/OTMA tickets. The agent solves the
    * task and opens the pull request itself.
    */
+  /**
+   * Cancels a hand-off: stops the agent's background session and turns the todo back into a
+   * plain open todo (it can be handed off again). The worktree and its branch stay.
+   */
+  async cancelHandOff(itemId: string): Promise<Item> {
+    const todo = this.deps.core.items.get(itemId);
+    if (todo.type !== 'todo' || typeof todo.meta?.agentBranch !== 'string') {
+      throw new ForbiddenOperationError(`item ${itemId} is not handed off to an agent`);
+    }
+    await (this.deps.stopAgent ?? claudeStopCli())(agentSessionName(itemId));
+    return this.deps.core.items.updateTodo(
+      itemId,
+      { agentBranch: null, agentReply: null, agentWaiting: null },
+      'user',
+    );
+  }
+
   async handOffTodo(itemId: string): Promise<{
     worktree: string;
     branch: string;
@@ -441,9 +490,6 @@ export class PrWorkspace {
     const project = todo.meta?.project;
     if (todo.type !== 'todo' || typeof project !== 'string') {
       throw new ForbiddenOperationError(`item ${itemId} is not a todo in a project`);
-    }
-    if (!todo.notes?.trim() && !todo.bsmUrl && !todo.otmaUrl) {
-      throw new ValidationError('the todo has neither a note nor a ticket to work on');
     }
     const root = this.deps.core.settings.get().workspace.projectsRoot;
     if (!root) throw new ValidationError('no projects folder configured (settings → PR workspace)');
@@ -461,16 +507,9 @@ export class PrWorkspace {
       null;
     if (!repo) throw new NotFoundError(`no repository for project ${project} found below ${root}`);
 
-    const slug = todo.title
-      .normalize('NFKD')
-      .replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 40)
-      .replace(/-+$/, '');
     const suffix = todo.id.slice(-6).toLowerCase();
-    const branch = `feature/${slug || 'todo'}-${suffix}`;
+    // Provisional: the agent renames it after its change, keeping "-<suffix>" (see the sync).
+    const branch = `feature/todo-${suffix}`;
     const name = agentSessionName(itemId);
 
     // The task and the ticket images go into one folder per todo; the agent reads it, so it stays.
