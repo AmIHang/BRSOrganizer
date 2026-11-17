@@ -11,11 +11,7 @@ import type {
 } from './types';
 
 type WritableSecret =
-  | 'github-token'
-  | 'calendar-ics-url'
-  | 'tfs-token'
-  | 'ticket-user'
-  | 'ticket-password';
+  'github-token' | 'calendar-ics-url' | 'tfs-token' | 'ticket-user' | 'ticket-password';
 
 interface Connection {
   baseUrl: string;
@@ -118,6 +114,10 @@ export const api = {
         'GET',
         `/api/prs/clone-sync${refresh ? '?refresh=1' : ''}`,
       ),
+    /** BORA module cache of the clone script: <projects folder>\_refcache. */
+    moduleCache: () =>
+      request<{ path: string; exists: boolean; bytes: number }>('GET', '/api/prs/module-cache'),
+    clearModuleCache: () => request<{ path: string }>('POST', '/api/prs/module-cache/clear'),
     details: (id: string, fetch = false) =>
       request<PrDetails>('GET', `/api/prs/${id}${fetch ? '?fetch=1' : ''}`),
     cloneOrUpdate: (id: string) => request<{ clonePath: string }>('POST', `/api/prs/${id}/clone`),

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { TfsSender, TfsTransport } from '@brsorganizer/core';
@@ -421,6 +421,29 @@ describe('PR workspace via REST', () => {
     rmSync(dirname(second.args![11]!), { recursive: true });
     expect(prompt2).toContain('BRS_TICKET_PASSWORD');
     expect(prompt2).not.toContain('geheim!');
+  });
+
+  it('shows and clears the BORA module cache, and nothing else', async () => {
+    const get = () => raw(h.port, { method: 'GET', path: '/api/prs/module-cache', headers: auth });
+    const clear = () =>
+      raw(h.port, { method: 'POST', path: '/api/prs/module-cache/clear', headers: auth });
+    expect((await get()).status).toBe(400); // no projects folder yet
+
+    h.core.settings.update({ workspace: { projectsRoot: root } });
+    const cache = join(root, '_refcache');
+    mkdirSync(join(cache, 'BM.Core', '1.9.0'), { recursive: true });
+    mkdirSync(join(cache, '_patched', 'Community', 'MaintenanceNG', '4.23.0.14-ABC'), {
+      recursive: true,
+    });
+    writeFileSync(join(cache, 'BM.Core', '1.9.0', 'a.dll'), Buffer.alloc(1000));
+    writeFileSync(join(cache, '_patched', 'Community', 'MaintenanceNG', '4.23.0.14-ABC', 'b'), 'x');
+    expect((await get()).json()).toEqual({ path: cache, exists: true, bytes: 1001 });
+
+    expect((await clear()).json()).toEqual({ path: cache });
+    expect(existsSync(cache)).toBe(false);
+    expect(existsSync(join(root, 'Community', 'Community'))).toBe(true); // repos untouched
+    expect((await get()).json()).toEqual({ path: cache, exists: false, bytes: 0 });
+    expect((await clear()).status).toBe(200); // already gone: fine
   });
 
   it('reports a failed agent start and falls back to a window', async () => {

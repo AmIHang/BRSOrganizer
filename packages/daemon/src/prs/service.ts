@@ -1,4 +1,5 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -277,6 +278,45 @@ export class PrWorkspace {
   /** Forget cached clone states (after clone/update/remove/merge). */
   invalidateCloneSync(): void {
     this.syncCache = null;
+  }
+
+  /** Cache of the BORA module references (Clone-Branch.ps1): <projectsRoot>\_refcache. */
+  private moduleCacheDir(): string {
+    const root = this.deps.core.settings.get().workspace.projectsRoot;
+    if (!root) throw new ValidationError('no projects folder configured (settings → PR workspace)');
+    return join(root, '_refcache');
+  }
+
+  /** Where the module cache is and how much it holds. */
+  async moduleCache(): Promise<{ path: string; exists: boolean; bytes: number }> {
+    const path = this.moduleCacheDir();
+    let bytes = 0;
+    let exists = true;
+    try {
+      for (const e of await readdir(path, { recursive: true, withFileTypes: true })) {
+        if (e.isFile()) bytes += (await stat(join(e.parentPath, e.name))).size;
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      exists = false;
+    }
+    return { path, exists, bytes };
+  }
+
+  /**
+   * Deletes the module cache; the next clone loads the references again. Only ever this one
+   * folder below the projects folder.
+   */
+  async clearModuleCache(): Promise<{ path: string }> {
+    const path = this.moduleCacheDir();
+    try {
+      await rm(path, { recursive: true, force: true, maxRetries: 3 });
+    } catch (err) {
+      // e.g. a file still open in a running clone
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new HttpError(409, 'busy', `Modul-Cache nicht vollständig gelöscht: ${reason}`);
+    }
+    return { path };
   }
 
   private tfs() {

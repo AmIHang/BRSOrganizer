@@ -36,6 +36,15 @@ export function prRouter(workspace: PrWorkspace, scheduler: Scheduler): Router {
     res.status(202).json(await workspace.handOffTodo(itemId(req)));
   });
 
+  // BORA module cache of the clone script (before /:id): size, and clearing it.
+  r.get('/module-cache', async (_req, res) => {
+    res.json(await workspace.moduleCache());
+  });
+
+  r.post('/module-cache/clear', async (_req, res) => {
+    res.json(await workspace.clearModuleCache());
+  });
+
   r.get('/:id', async (req, res) => {
     res.json(await workspace.details(itemId(req), { fetch: req.query.fetch === '1' }));
   });

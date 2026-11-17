@@ -36,6 +36,24 @@
 
   async function load() {
     [settings, secrets, status] = await Promise.all([api.settings(), api.secrets(), api.status()]);
+    // Optional: needs a projects folder; summing up a large cache may take a moment.
+    moduleCache = settings.workspace.projectsRoot
+      ? await api.pr.moduleCache().catch(() => null)
+      : null;
+  }
+
+  let moduleCache = $state<{ path: string; exists: boolean; bytes: number } | null>(null);
+  let confirmingClear = $state(false);
+  const formatBytes = (n: number) =>
+    n >= 1024 ** 3
+      ? `${(n / 1024 ** 3).toFixed(1)} GB`
+      : n >= 1024 ** 2
+        ? `${(n / 1024 ** 2).toFixed(0)} MB`
+        : `${Math.ceil(n / 1024)} KB`;
+
+  async function clearModuleCache() {
+    confirmingClear = false;
+    await run(() => api.pr.clearModuleCache(), 'Modul-Cache gelöscht');
   }
 
   onMount(async () => {
@@ -391,6 +409,33 @@
         <code>&lt;Kunde&gt;\PR&lt;Nr&gt;</code> geklont, mit IIS-App-Pool, BORA-Referenzen, NuGet und
         Build. Leer = aus. Bei einem PR über ▸ aufklappen.
       </p>
+      {#if moduleCache}
+        <div class="inline">
+          <span>
+            Modul-Cache: {moduleCache.exists ? formatBytes(moduleCache.bytes) : 'leer'}
+            <span class="muted">({moduleCache.path})</span>
+          </span>
+          {#if moduleCache.exists && !confirmingClear}
+            <button type="button" class="cache-clear" onclick={() => (confirmingClear = true)}
+              >Leeren</button
+            >
+          {/if}
+        </div>
+        {#if confirmingClear}
+          <div class="confirm">
+            <p class="hint">
+              Löscht alle zwischengespeicherten BORA-Module (auch gepatchte). Der nächste Klon lädt
+              sie neu und dauert entsprechend länger. Nicht während eines laufenden Klons.
+            </p>
+            <div class="inline">
+              <button type="button" onclick={() => (confirmingClear = false)}>Behalten</button>
+              <button type="button" class="danger" onclick={() => void clearModuleCache()}
+                >Modul-Cache löschen</button
+              >
+            </div>
+          </div>
+        {/if}
+      {/if}
     </section>
 
     <section>
@@ -601,6 +646,23 @@
   .hint {
     font-size: 12px;
     margin: 0;
+  }
+  .cache-clear {
+    margin-left: auto;
+    font-size: 12px;
+    padding: 2px 8px;
+  }
+  button.danger {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  .confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
   }
   .projects {
     list-style: none;
