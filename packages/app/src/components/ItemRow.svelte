@@ -9,6 +9,7 @@
   import RowMenu from './RowMenu.svelte';
   import TicketDialog from './TicketDialog.svelte';
   import { ticketLabel } from '../lib/tickets';
+  import { handOffs, startHandOff } from '../lib/handoff.svelte';
 
   let {
     item,
@@ -99,17 +100,10 @@
     }
   }
 
-  async function handOff() {
-    if (starting) return;
-    starting = true;
-    setTimeout(() => (starting = false), 5000);
-    try {
-      const r = await api.pr.handOffTodo(item.id);
-      flash(`Agent läuft im PowerShell-Fenster (${r.branch}).`);
-    } catch (e) {
-      flash(e instanceof Error ? e.message : String(e), true);
-    }
-  }
+  /** The hand-off reads the BSM ticket first (Edge may open for the BSM login). */
+  const handOff = $derived(handOffs[item.id]);
+  const handingOff = $derived(handOff?.running === true);
+  const shownNotice = $derived(handOff ?? notice);
 
   async function openSolution() {
     try {
@@ -139,11 +133,16 @@
     ...(item.type === 'todo'
       ? [{ label: 'In Projekt verschieben …', onclick: () => (movingProject = true) }]
       : []),
-    ...(item.type === 'todo' && typeof item.meta?.project === 'string'
-      ? [{ label: 'An Agent weitergeben', onclick: () => void handOff(), disabled: starting }]
-      : []),
     { label: 'Archivieren', onclick: () => onarchive(item) },
   ]);
+  /** Open todos with something to work on (ticket or description) can go to a Claude agent. */
+  const canHandOff = $derived(
+    item.type === 'todo' &&
+      item.status === 'open' &&
+      (!!item.bsmUrl || !!item.otmaUrl || !!item.notes?.trim()),
+  );
+  /** "An Claude" first asks for the project the agent works in. */
+  let pickingHandOffProject = $state(false);
   let editingTickets = $state(false);
   let movingProject = $state(false);
 </script>
@@ -230,11 +229,22 @@
       {/if}
       {#if location}<span>{location}</span>{/if}
       {#if byAssistant}<span class="chip">von {item.createdBy}</span>{/if}
+      {#if canHandOff}
+        <button
+          class="chip action claude"
+          disabled={handingOff}
+          title="Todo an einen Claude-Agenten übergeben (eigener Branch, PowerShell-Fenster); das BSM-Ticket wird vorher gelesen"
+          onclick={() => (pickingHandOffProject = true)}
+          >{handingOff ? 'An Claude …' : 'An Claude'}</button
+        >
+      {/if}
     </div>
     {#if item.notes && item.type === 'todo'}
       <div class="notes">{item.notes}</div>
     {/if}
-    {#if notice}<div class="notice" class:error={notice.error}>{notice.text}</div>{/if}
+    {#if shownNotice}
+      <div class="notice" class:error={shownNotice.error}>{shownNotice.text}</div>
+    {/if}
     {#if expanded}
       <PrPanel {item} onchanged={() => onchanged?.()} />
     {/if}
@@ -264,6 +274,18 @@
   />
 {/if}
 
+{#if pickingHandOffProject}
+  <ProjectDialog
+    {item}
+    {projects}
+    onclose={() => {
+      pickingHandOffProject = false;
+      onchanged?.();
+    }}
+    onhandoff={() => void startHandOff(item)}
+  />
+{/if}
+
 {#if merging}
   <MergeDialog
     {item}
@@ -284,11 +306,23 @@
   .row:hover {
     background: var(--bg-soft);
   }
-  .chip.ticket {
+  .chip.ticket,
+  .chip.action {
     border: none;
     font: inherit;
     font-size: 12px;
     cursor: pointer;
+  }
+  .chip.action.claude {
+    background: var(--chip-orange-bg);
+    color: var(--chip-orange-fg);
+  }
+  .chip.action:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+  .chip.action:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .chip.ticket.bsm {
     background: var(--chip-teal-bg);

@@ -85,6 +85,10 @@ button.primary {
   border-color: var(--accent);
   color: #fff;
 }
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
 button.icon {
   border: none;
