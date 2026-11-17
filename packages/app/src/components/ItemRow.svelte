@@ -81,6 +81,15 @@
     setTimeout(() => (notice = null), error ? 8000 : 5000);
   }
 
+  async function copyPrNumber() {
+    const number = String(item.meta?.number ?? '');
+    try {
+      await navigator.clipboard.writeText(number);
+    } catch (e) {
+      flash(`Kopieren fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`, true);
+    }
+  }
+
   /** Prevents double clicks starting two script windows. */
   let starting = $state(false);
 
@@ -212,7 +221,9 @@
       {#if when}
         <span class:overdue>{formatWhen(when, now, allDay)}</span>
       {/if}
-      {#if prRef}<span>{prRef}</span>{/if}
+      {#if prRef}
+        <button class="pr-ref" onclick={() => void copyPrNumber()}>{prRef}</button>
+      {/if}
       {#each reasons as r (r)}
         <span
           class="chip"
@@ -457,6 +468,14 @@
     font-size: 12px;
     color: var(--muted);
     margin-top: 2px;
+  }
+  /* Plain text to look at; a click copies the PR number. */
+  .pr-ref {
+    all: unset;
+  }
+  .pr-ref:focus-visible {
+    outline: 2px solid var(--accent);
+    border-radius: 3px;
   }
   .chip {
     background: var(--chip);
