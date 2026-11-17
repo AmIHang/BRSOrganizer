@@ -168,6 +168,7 @@ describe('agent prompt', () => {
     );
     expect(title({})).toContain('`<typ>: <kurze Beschreibung auf Englisch>`');
     expect(title({})).toContain('feat, fix oder chore');
+    expect(title({})).toContain('frag nicht nach dem Titel');
   });
 });
 

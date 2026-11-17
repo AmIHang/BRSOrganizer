@@ -230,7 +230,8 @@ export function agentPrompt(
     `   Titel des Pull Requests: \`<typ>${scope}: <kurze Beschreibung auf Englisch>\`, ` +
       '<typ> ist feat, fix oder chore, je nach Art der Änderung' +
       (key ? `, z. B. \`fix${scope}: Show predefined mail recipients\`` : '') +
-      '.',
+      '. Typ und Beschreibung legst du selbst anhand deiner Änderung fest; frag nicht nach ' +
+      'dem Titel.',
   ].join('\n');
 }
 
