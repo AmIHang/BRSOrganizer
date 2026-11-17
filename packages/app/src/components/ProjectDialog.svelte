@@ -30,6 +30,16 @@
   );
   let busy = $state(false);
   let error = $state<string | null>(null);
+  let search = $state('');
+  const filtered = $derived(
+    options.filter((p) => p.toLocaleLowerCase('de').includes(search.trim().toLocaleLowerCase('de'))),
+  );
+
+  /** Typing narrows the list; a selection the filter hides moves to the first match. */
+  function onsearch() {
+    if (project && !filtered.includes(project)) project = filtered[0] ?? '';
+    else if (!project && search.trim()) project = filtered[0] ?? '';
+  }
 
   $effect(() => {
     if (dialog && !dialog.open) dialog.showModal();
@@ -63,15 +73,29 @@
     {/if}
     <label>
       Projekt
-      <select bind:value={project} required={handoff}>
+      <!-- svelte-ignore a11y_autofocus -->
+      <input
+        type="search"
+        placeholder="Suchen …"
+        bind:value={search}
+        oninput={onsearch}
+        autofocus
+      />
+      <select bind:value={project} required={handoff} size={Math.min(8, filtered.length + 1)}>
         <option value="" disabled={handoff}>{handoff ? 'Projekt wählen …' : 'Kein Projekt'}</option>
-        {#each options as p (p)}
+        {#each filtered as p (p)}
           <option value={p}>{p}</option>
         {/each}
       </select>
     </label>
+    {#if search.trim() && filtered.length === 0}
+      <p class="hint">Kein Projekt passt zu „{search.trim()}“ – neue Projekte in den Einstellungen anlegen.</p>
+    {/if}
     {#if handoff && options.length === 0}
-      <p class="error">Noch kein Projekt bekannt – Projekte kommen aus den offenen Pull Requests.</p>
+      <p class="error">
+        Noch kein Projekt bekannt – Projekte kommen aus den offenen Pull Requests oder werden in
+        den Einstellungen angelegt.
+      </p>
     {/if}
     {#if error}<p class="error">{error}</p>{/if}
     <div class="buttons">
@@ -118,8 +142,10 @@
     font-size: 12px;
     color: var(--muted);
   }
-  label select {
+  label select,
+  label input {
     font-size: 14px;
+    color: var(--fg);
   }
   .error {
     margin: 0;

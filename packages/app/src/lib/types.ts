@@ -65,7 +65,7 @@ export interface Settings {
   github: { enabled: boolean; includeAuthored: boolean; includeAssigned: boolean };
   calendar: { enabled: boolean; provider: 'ics' | 'outlook'; lookAheadDays: number };
   tfs: { enabled: boolean; collectionUrl: string; includeAuthored: boolean };
-  workspace: { projectsRoot: string };
+  workspace: { projectsRoot: string; projects: string[]; hiddenProjects: string[] };
   mail: { enabled: boolean; outlookFolder: string; lookBackDays: number };
 }
 

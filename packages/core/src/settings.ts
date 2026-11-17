@@ -5,6 +5,8 @@ import type { Db } from './db/client.js';
 import { settings } from './db/schema.js';
 import { ValidationError } from './errors.js';
 
+const projectName = z.string().trim().min(1).max(100);
+
 export const settingsSchema = z.object({
   syncIntervalMinutes: z
     .number()
@@ -44,6 +46,10 @@ export const settingsSchema = z.object({
     .object({
       /** e.g. C:\projects-git; empty = feature off. Customer folders hold the repos. */
       projectsRoot: z.string().trim().max(260).default(''),
+      /** Projects added by hand (customer folder names), next to those from pull requests. */
+      projects: z.array(projectName).max(200).default([]),
+      /** Projects from pull requests the user removed from the list. */
+      hiddenProjects: z.array(projectName).max(500).default([]),
     })
     .prefault({}),
   /** Fallback when TFS is not configured: PRs from notification mails in an Outlook folder. */
@@ -88,7 +94,14 @@ export const settingsPatchSchema = z.strictObject({
     })
     .partial()
     .optional(),
-  workspace: z.strictObject({ projectsRoot: z.string() }).partial().optional(),
+  workspace: z
+    .strictObject({
+      projectsRoot: z.string(),
+      projects: z.array(z.string()),
+      hiddenProjects: z.array(z.string()),
+    })
+    .partial()
+    .optional(),
   mail: z
     .strictObject({ enabled: z.boolean(), outlookFolder: z.string(), lookBackDays: z.number() })
     .partial()

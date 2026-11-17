@@ -5,7 +5,14 @@
   import { api } from '../lib/api';
   import type { DaemonStatus, SecretsStatus, Settings } from '../lib/types';
 
-  let { onclose }: { onclose: () => void } = $props();
+  let {
+    onclose,
+    prProjects = [],
+  }: {
+    onclose: () => void;
+    /** Projects that come from the current pull requests (removing one only hides it). */
+    prProjects?: string[];
+  } = $props();
 
   interface McpPaths {
     node: string;
@@ -59,6 +66,55 @@
 
   const patch = (p: Record<string, unknown>) =>
     run(() => api.updateSettings(p), 'Gespeichert');
+
+  let newProject = $state('');
+  const projectList = $derived(
+    settings
+      ? [...new Set([...prProjects, ...settings.workspace.projects])]
+          .filter((p) => !settings!.workspace.hiddenProjects.includes(p))
+          .sort((a, b) => a.localeCompare(b, 'de'))
+      : [],
+  );
+
+  async function addProject(event: SubmitEvent) {
+    event.preventDefault();
+    const name = newProject.trim();
+    if (!name || !settings) return;
+    const ws = settings.workspace;
+    await run(
+      () =>
+        api.updateSettings({
+          workspace: {
+            // A removed PR project comes back; anything else is added by hand.
+            hiddenProjects: ws.hiddenProjects.filter((p) => p !== name),
+            projects:
+              prProjects.includes(name) || ws.projects.includes(name)
+                ? ws.projects
+                : [...ws.projects, name],
+          },
+        }),
+      `Projekt „${name}“ hinzugefügt`,
+    );
+    newProject = '';
+  }
+
+  async function removeProject(name: string) {
+    if (!settings) return;
+    const ws = settings.workspace;
+    await run(
+      () =>
+        api.updateSettings({
+          workspace: {
+            projects: ws.projects.filter((p) => p !== name),
+            // Projects of pull requests would come back with the next sync: hide them.
+            hiddenProjects: prProjects.includes(name)
+              ? [...ws.hiddenProjects, name]
+              : ws.hiddenProjects,
+          },
+        }),
+      `Projekt „${name}“ entfernt`,
+    );
+  }
 
   async function saveToken() {
     await run(() => api.setSecret('github-token', githubToken.trim()), 'GitHub-Token gespeichert');
@@ -338,6 +394,33 @@
     </section>
 
     <section>
+      <h3>Projekte</h3>
+      {#if projectList.length}
+        <ul class="projects">
+          {#each projectList as p (p)}
+            <li>
+              <span>{p}</span>
+              {#if prProjects.includes(p)}<span class="muted">aus Pull Requests</span>{/if}
+              <button type="button" class="remove" onclick={() => void removeProject(p)}
+                >Entfernen</button
+              >
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="hint muted">Noch keine Projekte.</p>
+      {/if}
+      <form class="inline" onsubmit={addProject}>
+        <input type="text" placeholder="Projekt (Kundenordner), z. B. Community" bind:value={newProject} />
+        <button type="submit" disabled={!newProject.trim()}>Hinzufügen</button>
+      </form>
+      <p class="hint muted">
+        Projekte, denen Todos zugeordnet und an Claude übergeben werden. Der Name entspricht dem
+        Kundenordner im Projektordner. Entfernte Projekte aus Pull Requests werden ausgeblendet.
+      </p>
+    </section>
+
+    <section>
       <h3>BSM/OTMA-Account</h3>
       <div class="inline">
         <input
@@ -518,6 +601,27 @@
   .hint {
     font-size: 12px;
     margin: 0;
+  }
+  .projects {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .projects li {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .projects li .muted {
+    font-size: 12px;
+  }
+  .projects .remove {
+    margin-left: auto;
+    font-size: 12px;
+    padding: 2px 8px;
   }
   .flash {
     margin: 8px 12px;

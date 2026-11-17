@@ -43,11 +43,18 @@ export function groupByCustomer(sorted: Item[]): CustomerGroup[] {
   return [...groups].map(([customer, items]) => ({ customer, items }));
 }
 
-/** Projects a todo can be filed under: the customers of the current pull requests. */
-export function projectsOf(items: Item[]): string[] {
-  return [...new Set(items.filter((i) => i.type === 'pr').map(customerOf))].sort((a, b) =>
-    a.localeCompare(b, 'de'),
-  );
+/**
+ * Projects a todo can be filed under: the customers of the current pull requests plus the ones
+ * added by hand, without the ones the user removed.
+ */
+export function projectsOf(
+  items: Item[],
+  manage: { projects: string[]; hiddenProjects: string[] } = { projects: [], hiddenProjects: [] },
+): string[] {
+  const hidden = new Set(manage.hiddenProjects);
+  return [...new Set([...items.filter((i) => i.type === 'pr').map(customerOf), ...manage.projects])]
+    .filter((p) => !hidden.has(p))
+    .sort((a, b) => a.localeCompare(b, 'de'));
 }
 
 const TITLES: Record<SectionKey, string> = {
