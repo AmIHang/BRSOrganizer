@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import type { BrowserContext, Cookie } from 'playwright-core';
 import {
   BSM_ORIGIN,
@@ -22,6 +23,29 @@ export interface EdgeBsmOptions {
 const KEYCLOAK_ORIGIN = 'https://auth.boomsoftware.com';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const CLOSE_TIMEOUT_MS = 10_000;
+
+/** Ends the Edge processes running on one profile (Playwright passes it as --user-data-dir). */
+function killEdge(profileDir: string): Promise<void> {
+  const script =
+    'Get-CimInstance Win32_Process -Filter "Name=\'msedge.exe\'" | ' +
+    'Where-Object { $_.CommandLine -and $_.CommandLine.Contains($env:BRS_EDGE_PROFILE) } | ' +
+    'ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }';
+  return new Promise((resolve) =>
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      {
+        // The path travels in the environment: no quoting of user paths in the command.
+        env: { ...process.env, BRS_EDGE_PROFILE: `--user-data-dir=${profileDir}` },
+        windowsHide: true,
+        timeout: 30_000,
+      },
+      () => resolve(),
+    ),
+  );
+}
 
 /** BSM and OTMA run on the same web framework (same API, same Keycloak login). */
 interface System {
@@ -88,6 +112,25 @@ export function edgeTicketSessions(options: EdgeBsmOptions): { bsm: BsmSession; 
     const valid = sessionCookies.filter((c) => c.expires === -1 || c.expires > now);
     if (valid.length) await ctx.addCookies(valid);
     return ctx;
+  };
+
+  /**
+   * Edge sometimes never finishes closing (seen with headless Edge once another automated Edge
+   * was left over). Unbounded, every later run would queue behind it forever; the hung Edge also
+   * keeps the profile locked, so it is ended.
+   */
+  const close = async (ctx: BrowserContext) => {
+    const closed = await Promise.race([
+      ctx.close().then(
+        () => true,
+        () => true,
+      ),
+      sleep(CLOSE_TIMEOUT_MS).then(() => false),
+    ]);
+    if (!closed) {
+      log('Edge did not close, ending its processes');
+      await killEdge(options.profileDir);
+    }
   };
 
   const remember = async (ctx: BrowserContext) => {
@@ -163,7 +206,7 @@ export function edgeTicketSessions(options: EdgeBsmOptions): { bsm: BsmSession; 
       }
     } finally {
       await remember(headless);
-      await headless.close().catch(() => undefined);
+      await close(headless);
     }
 
     log(`${system.label} login required, opening Edge for the user`);
@@ -175,7 +218,7 @@ export function edgeTicketSessions(options: EdgeBsmOptions): { bsm: BsmSession; 
       return done.result;
     } finally {
       await remember(ctx);
-      await ctx.close().catch(() => undefined);
+      await close(ctx);
     }
   }
 
