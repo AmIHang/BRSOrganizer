@@ -21,6 +21,7 @@ import { legacyName, migrateLegacy } from './legacy.js';
 import { createWindowsLauncher } from './prs/launcher.js';
 import { PrWorkspace } from './prs/service.js';
 import { edgeTicketSessions } from './tickets/edge.js';
+import { fillBsmFromOtma } from './tickets/otma.js';
 import { createScheduler } from './scheduler.js';
 import { VERSION } from './version.js';
 
@@ -109,16 +110,23 @@ const scriptsDir =
     existsSync(join(d, 'Clone-Branch.ps1')),
   ) ?? null;
 if (!scriptsDir) logger.warn('PR scripts not found; clone/remove actions are unavailable');
+// Own Edge profile in the data folder (dev and installed app each have their own login).
+const tickets = edgeTicketSessions({
+  profileDir: join(dataDir(), 'edge-profile'),
+  log: (msg, extra) => logger.info(extra ?? {}, msg),
+  account: () => {
+    const user = core.secrets.get('ticket-user');
+    const password = core.secrets.get('ticket-password');
+    return user && password ? { user, password } : null;
+  },
+});
 const prWorkspace = new PrWorkspace({
   core,
   launcher: createWindowsLauncher((err) => logger.error({ err }, 'could not start script window')),
   scriptsDir,
-  // Own Edge profile in the data folder (dev and installed app each have their own login).
-  ...edgeTicketSessions({
-    profileDir: join(dataDir(), 'edge-profile'),
-    log: (msg, extra) => logger.info(extra ?? {}, msg),
-  }),
+  ...tickets,
 });
+fillBsmFromOtma(core, tickets.otma, (msg, extra) => logger.warn(extra ?? {}, msg));
 const { app, close: closeApp } = createApp({
   core,
   scheduler,

@@ -1,4 +1,4 @@
-import { OTMA_TICKET_BASE } from '@brsorganizer/core';
+import { OTMA_TICKET_BASE, type Core } from '@brsorganizer/core';
 import { z } from 'zod';
 import {
   nodes,
@@ -8,6 +8,7 @@ import {
   title,
   parseDate,
   type BsmComment,
+  type BsmHttp,
   type BsmSession,
   type BsmTicket,
   type ReadTicketResult,
@@ -62,6 +63,11 @@ export function otmaViewRequest(jump: unknown) {
     WorkflowType: wf.type,
     WorkflowParameters: { formname: wf.args.formname },
   };
+}
+
+/** Both steps: the ticket view for an OTMA ticket number. */
+export async function otmaView(http: BsmHttp, key: string): Promise<unknown> {
+  return http.runWorkflow(otmaViewRequest(await http.runWorkflow(otmaJumpRequest(key))));
 }
 
 const viewSchema = z.object({
@@ -162,10 +168,48 @@ export async function readOtmaTicket(
 ): Promise<ReadTicketResult> {
   const key = otmaKey(url);
   if (!key) throw new Error(`OTMA: keine Ticket-URL unter ${OTMA_ORIGIN}: ${url}`);
-  return session(async (http) => {
-    const view = await http.runWorkflow(
-      otmaViewRequest(await http.runWorkflow(otmaJumpRequest(key))),
-    );
-    return saveTicket(http, parseOtmaTicket(view, key), filesDir, now());
+  return session(async (http) =>
+    saveTicket(http, parseOtmaTicket(await otmaView(http, key), key), filesDir, now()),
+  );
+}
+
+/** The BSM ticket key an OTMA ticket links to ("BSM" field), or null if it has none. */
+export function otmaBsmKey(view: unknown): string | null {
+  const parsed = viewSchema.safeParse(view);
+  if (!parsed.success) throw new Error('OTMA: unerwartete Antwort (kein Ticket-Formular)');
+  const v = str(nodes(parsed.data.ui.form).find((n) => n.feat === 'cfSupportIDLink')?.value);
+  return /^[A-Za-z][A-Za-z0-9_]*\d+$/.test(v) ? v : null;
+}
+
+/**
+ * New todos with an OTMA but no BSM ticket get the BSM ticket the OTMA ticket links to. Runs in
+ * the background (reading OTMA may need the Edge login); a failure only leaves the field empty.
+ */
+export function fillBsmFromOtma(
+  core: Core,
+  session: BsmSession,
+  log: (msg: string, extra?: Record<string, unknown>) => void = () => undefined,
+): void {
+  core.events.on('items-changed', ({ reason, actor, ids }) => {
+    if (reason !== 'created' || actor === 'sync') return;
+    for (const id of ids) {
+      const item = core.items.get(id);
+      const key = item.otmaUrl ? otmaKey(item.otmaUrl) : null;
+      if (item.type !== 'todo' || item.bsmUrl || !key) continue;
+      void session(async (http) => otmaBsmKey(await otmaView(http, key)))
+        .then((bsm) => {
+          const now = core.items.get(id);
+          // Only if nobody set a BSM ticket or changed the OTMA ticket in the meantime.
+          if (bsm && !now.bsmUrl && now.otmaUrl === item.otmaUrl) {
+            core.items.setTickets(id, { bsmUrl: bsm }, actor);
+          }
+        })
+        .catch((err: unknown) =>
+          log('could not read the BSM ticket from OTMA', {
+            id,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+    }
   });
 }

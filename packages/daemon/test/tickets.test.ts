@@ -14,7 +14,10 @@ import {
   type BsmSession,
 } from '../src/tickets/bsm.js';
 import { htmlToText } from '../src/tickets/html.js';
+import { makeCore } from '../../core/test/helpers.js';
 import {
+  fillBsmFromOtma,
+  otmaBsmKey,
   otmaJumpRequest,
   otmaKey,
   otmaViewRequest,
@@ -404,5 +407,69 @@ describe('OTMA ticket', () => {
         () => NOW,
       ),
     ).rejects.toThrow('OTMA: nicht angemeldet');
+  });
+});
+
+describe('BSM ticket from OTMA', () => {
+  const view = JSON.parse(
+    readFileSync(join(import.meta.dirname, 'fixtures', 'otma-order-process.json'), 'utf8'),
+  ) as { ui: { form: unknown[] } };
+  const jump = {
+    link: {
+      wf: {
+        contextopath: '2B89D@1000A5',
+        entity: 'dotNetBF.Modules.Resources.OrderProcess',
+        type: 'View',
+        args: { formname: 'from-project' },
+      },
+    },
+  };
+  const withBsm = (value: string) =>
+    JSON.parse(JSON.stringify(view).replace('"value":"STBBRSg0034"', `"value":"${value}"`));
+
+  it('takes the key from the BSM field and ignores the placeholder', () => {
+    expect(otmaBsmKey(view)).toBe('STBBRSg0034');
+    expect(otmaBsmKey(withBsm('Kein Ticket zugewiesen'))).toBeNull();
+  });
+
+  it('fills a new todo with an OTMA but no BSM ticket, and nothing else', async () => {
+    const core = makeCore();
+    const reads: string[] = [];
+    const session: BsmSession = (fn) =>
+      fn({
+        runWorkflow: async (body) => {
+          const b = body as { WorkflowName?: string; WorkflowParameters: { publicurl?: string } };
+          if (b.WorkflowName) reads.push(b.WorkflowParameters.publicurl!);
+          return b.WorkflowName ? jump : view;
+        },
+        download: async () => new Uint8Array(),
+      });
+    fillBsmFromOtma(core, session);
+    const settle = () => new Promise((r) => setTimeout(r, 10));
+
+    const todo = core.items.addTodo({ title: 'A', otmaUrl: '165071' }, 'claude');
+    const own = core.items.addTodo({ title: 'B', otmaUrl: '1', bsmUrl: 'X_1' }, 'user');
+    core.items.addTodo({ title: 'C' }, 'user');
+    await settle();
+    expect(reads).toEqual(['ap/165071']);
+    expect(core.items.get(todo.id)).toMatchObject({
+      bsmUrl: 'https://bsm.boomsoftware.com/indication/STBBRSg0034',
+      updatedBy: 'claude',
+    });
+    expect(core.items.get(own.id).bsmUrl).toBe('https://bsm.boomsoftware.com/indication/X_1');
+
+    // Set by the user while OTMA was read: stays.
+    let release!: () => void;
+    const slow: BsmSession = async (fn) => {
+      await new Promise<void>((r) => (release = r));
+      return session(fn);
+    };
+    const core2 = makeCore();
+    fillBsmFromOtma(core2, slow);
+    const t2 = core2.items.addTodo({ title: 'D', otmaUrl: '2' }, 'user');
+    core2.items.setTickets(t2.id, { bsmUrl: 'Y_2' }, 'user');
+    release();
+    await settle();
+    expect(core2.items.get(t2.id).bsmUrl).toBe('https://bsm.boomsoftware.com/indication/Y_2');
   });
 });

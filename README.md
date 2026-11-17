@@ -140,8 +140,12 @@ setzt die Lösung um und erstellt den PR. Der Worktree bleibt danach stehen.
 
 Vor dem Start liest BRSOrganizer BSM- und OTMA-Ticket (Text, Kommentare, eingefügte Bilder) über ein
 eigenes Edge-Profil im Datenordner und gibt den Inhalt dem Agenten mit. Beide hängen am selben
-Keycloak-Login: Fehlt die Anmeldung, öffnet sich einmal ein Edge-Fenster. Klappt das Lesen nicht, bekommt
-der Agent nur den Link. Die Dokumentliste von OTMA wird noch nicht gelesen.
+Keycloak-Login: Ist der BSM/OTMA-Account hinterlegt, meldet sich BRSOrganizer damit unsichtbar an (nur auf
+`auth.boomsoftware.com`, einmal pro Versuch); sonst oder wenn das scheitert, öffnet sich ein Edge-Fenster.
+Klappt das Lesen nicht, bekommt der Agent nur den Link. Die Dokumentliste von OTMA wird noch nicht gelesen.
+
+Wird ein Todo mit OTMA-, aber ohne BSM-Ticket angelegt (App oder MCP), übernimmt BRSOrganizer im
+Hintergrund das BSM-Ticket, das im OTMA-Ticket steht.
 
 Der **BSM/OTMA-Account** (ein Login für beide) wird in den Einstellungen gepflegt und liegt in der
 Windows-Anmeldeinformationsverwaltung. Der Agent bekommt ihn nur über die Umgebungsvariablen

@@ -14,7 +14,12 @@ export interface EdgeBsmOptions {
   /** How long the login window waits for the user. */
   loginTimeoutMs?: number;
   log?: (msg: string, extra?: Record<string, unknown>) => void;
+  /** The stored BSM/OTMA account; with it the login form is filled in without a window. */
+  account?: () => { user: string; password: string } | null;
 }
+
+/** Keycloak of BSM and OTMA: the only page the stored password is ever typed into. */
+const KEYCLOAK_ORIGIN = 'https://auth.boomsoftware.com';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -108,6 +113,8 @@ export function edgeTicketSessions(options: EdgeBsmOptions): { bsm: BsmSession; 
     await page.goto(`${system.origin}/`).catch(() => undefined);
     if (visible) await page.bringToFront().catch(() => undefined);
     const deadline = Date.now() + timeoutMs;
+    // Once per attempt: a wrong password must not run into Keycloak's lockout.
+    let filled = visible;
     for (;;) {
       if (page.isClosed()) {
         throw new Error(`${system.label}-Anmeldung abgebrochen (Fenster geschlossen)`);
@@ -119,6 +126,19 @@ export function edgeTicketSessions(options: EdgeBsmOptions): { bsm: BsmSession; 
           return { result: await fn(httpFor(ctx, system)) };
         } catch (err) {
           if (!(err instanceof BsmLoginRequiredError)) throw err;
+        }
+      }
+      if (!filled && new URL(url).origin === KEYCLOAK_ORIGIN) {
+        const account = options.account?.();
+        if (!account) filled = true;
+        else if (await page.locator('#kc-form-login').count()) {
+          filled = true;
+          await page.fill('#username', account.user);
+          await page.fill('#password', account.password);
+          // Keeps the SSO login in the profile, so later runs need no password.
+          await page.check('#rememberMe').catch(() => undefined);
+          await page.click('#kc-login');
+          log(`${system.label} login with the stored account`);
         }
       }
       if (Date.now() > deadline) return undefined;
