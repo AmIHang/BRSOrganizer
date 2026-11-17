@@ -6,7 +6,12 @@ import type { TfsSender, TfsTransport } from '@brsorganizer/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StaticSource } from '../../core/test/helpers.js';
 import { BsmLoginRequiredError, type BsmHttp } from '../src/tickets/bsm.js';
-import { scriptCommand, startArguments, type Launcher } from '../src/prs/launcher.js';
+import {
+  hiddenCommand,
+  scriptCommand,
+  startArguments,
+  type Launcher,
+} from '../src/prs/launcher.js';
 import { PrWorkspace, type PrDetails } from '../src/prs/service.js';
 import { cloneSync, findRepo, normalizeRemote, scanRepos } from '../src/prs/workspace.js';
 import { auth, raw, startHarness, type Harness } from './harness.js';
@@ -139,6 +144,13 @@ describe('script launcher', () => {
       "& 'C:\\Program Files\\BRSOrganizer\\Clone-Branch.ps1' -Project 'O''Brien' -Root 'C:\\projects git'",
     );
   });
+
+  it("reports a hidden script run's error as one line with exit code 1", () => {
+    expect(hiddenCommand('C:\\x\\Start-TodoAgent.ps1', ['-Name', "O'Brien"])).toContain(
+      "try { & 'C:\\x\\Start-TodoAgent.ps1' -Name 'O''Brien' } " +
+        "catch { Write-Output ('FEHLER: ' + $_.Exception.Message); exit 1 }",
+    );
+  });
 });
 
 describe('PR workspace via REST', () => {
@@ -155,6 +167,7 @@ describe('PR workspace via REST', () => {
     env?: Record<string, string>;
   }>;
   let sent: Array<{ method: string; url: string; body: unknown }>;
+  let hidden: { code: number; stdout: string; stderr: string };
   let prStatus: string;
 
   const pr = () => ({
@@ -180,6 +193,7 @@ describe('PR workspace via REST', () => {
     makeRepo(join(root, 'Community', 'Community'), REPO_URL);
     launched = [];
     sent = [];
+    hidden = { code: 0, stdout: 'backgrounded · 1a2b3c4d\nAGENT-MODE: background\n', stderr: '' };
     prStatus = 'active';
     bsmHttp = {
       runWorkflow: async () => {
@@ -204,6 +218,10 @@ describe('PR workspace via REST', () => {
     const launcher: Launcher = {
       runScript: (title, script, args, env) =>
         launched.push({ kind: 'script', title, script, args, ...(env && { env }) }),
+      runHidden: async (script, args, env) => {
+        launched.push({ kind: 'script', script, args, ...(env && { env }) });
+        return hidden;
+      },
       open: (path) => launched.push({ kind: 'open', path }),
     };
 
@@ -326,6 +344,8 @@ describe('PR workspace via REST', () => {
         { kind: 'bsm', ok: false, message: 'BSM: nicht angemeldet' },
         { kind: 'otma', ok: false, message: 'OTMA: nicht angemeldet' },
       ],
+      mode: 'background',
+      session: `Todo-${suffix}`,
     });
     const [run] = launched;
     expect(run!.script).toBe(join('C:\\app\\runtime\\scripts\\pr', 'Start-TodoAgent.ps1'));
@@ -378,6 +398,35 @@ describe('PR workspace via REST', () => {
     rmSync(dirname(second.args![11]!), { recursive: true });
     expect(prompt2).toContain('BRS_TICKET_PASSWORD');
     expect(prompt2).not.toContain('geheim!');
+  });
+
+  it('reports a failed agent start and falls back to a window', async () => {
+    h.core.settings.update({ workspace: { projectsRoot: root } });
+    const todo = h.core.items.addTodo({ title: 'X', notes: 'tu was' }, 'user');
+    h.core.items.updateTodo(todo.id, { project: 'Produktion' }, 'user');
+    const handOff = () =>
+      raw(h.port, { method: 'POST', path: `/api/prs/todos/${todo.id}/agent`, headers: auth });
+    try {
+      hidden = {
+        code: 1,
+        stdout: 'Repo:     C:\\x\r\nFEHLER: git fetch fehlgeschlagen\r\n',
+        stderr: '#< CLIXML\r\n<Objs Version="1.1.0.1"></Objs>',
+      };
+      const failed = await handOff();
+      expect(failed.status).toBe(502);
+      expect(failed.json()).toMatchObject({
+        message: 'Agent-Start fehlgeschlagen: git fetch fehlgeschlagen',
+      });
+
+      hidden = {
+        code: 0,
+        stdout: 'claude --bg: Workspace not trusted.\nAGENT-MODE: window\n',
+        stderr: '',
+      };
+      expect((await handOff()).json()).toMatchObject({ mode: 'window' });
+    } finally {
+      for (const l of launched) rmSync(dirname(l.args![11]!), { recursive: true, force: true });
+    }
   });
 
   it('puts the BSM ticket contents and images into the agent task', async () => {

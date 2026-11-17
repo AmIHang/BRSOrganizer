@@ -138,6 +138,12 @@ Worktree `<Kunde>\Todo-<id>` auf einem neuen Branch vom Standard-Branch an und s
 (Claude Code CLI muss installiert sein) mit Notiz, BSM- und OTMA-Ticket. Der Agent liest die Tickets,
 setzt die Lösung um und erstellt den PR. Der Worktree bleibt danach stehen.
 
+Der Agent läuft ohne Fenster als Hintergrundsitzung (`claude --bg`, Berechtigungsmodus `auto`: Claude
+erlaubt die üblichen Schritte selbst und hält Riskantes an). Reinschauen und eingreifen:
+`claude agents` bzw. `claude attach Todo-<id>`. Voraussetzung: Claude vertraut dem Projektordner (einmal
+`claude` z. B. in `C:\projects-git` starten und bestätigen). Sonst startet `claude` wie früher in einem
+eigenen Fenster. Fehler beim Anlegen des Worktrees zeigt die App direkt an.
+
 Vor dem Start liest BRSOrganizer BSM- und OTMA-Ticket (Text, Kommentare, eingefügte Bilder) über ein
 eigenes Edge-Profil im Datenordner und gibt den Inhalt dem Agenten mit. Beide hängen am selben
 Keycloak-Login: Ist der BSM/OTMA-Account hinterlegt, meldet sich BRSOrganizer damit unsichtbar an (nur auf

@@ -6,6 +6,7 @@
   import MergeDialog from './MergeDialog.svelte';
   import PrPanel from './PrPanel.svelte';
   import ProjectDialog from './ProjectDialog.svelte';
+  import ReplyDialog from './ReplyDialog.svelte';
   import RowMenu from './RowMenu.svelte';
   import TicketDialog from './TicketDialog.svelte';
   import { ticketLabel } from '../lib/tickets';
@@ -143,6 +144,14 @@
   );
   /** "An Claude" first asks for the project the agent works in. */
   let pickingHandOffProject = $state(false);
+  /** Background agent: works until the PR shows up, or answers and waits for the user. */
+  const agentReply = $derived(
+    item.status === 'open' && typeof item.meta?.agentReply === 'string',
+  );
+  const agentWorking = $derived(
+    item.type === 'todo' && item.status === 'open' && typeof item.meta?.agentBranch === 'string',
+  );
+  let showingReply = $state(false);
   let editingTickets = $state(false);
   let movingProject = $state(false);
 </script>
@@ -233,9 +242,21 @@
         <button
           class="chip action claude"
           disabled={handingOff}
-          title="Todo an einen Claude-Agenten übergeben (eigener Branch, PowerShell-Fenster); das BSM-Ticket wird vorher gelesen"
+          title="Todo an einen Claude-Agenten übergeben (eigener Branch, läuft im Hintergrund); BSM- und OTMA-Ticket werden vorher gelesen"
           onclick={() => (pickingHandOffProject = true)}
           >{handingOff ? 'An Claude …' : 'An Claude'}</button
+        >
+      {/if}
+      {#if agentReply}
+        <span class="chip status claude" title="Der Agent hat seine Runde beendet und wartet auf dich"
+          >Claude wartet</span
+        >
+        <button class="chip action claude" title="Antwort des Agenten anzeigen" onclick={() => (showingReply = true)}
+          >Antwort</button
+        >
+      {:else if agentWorking}
+        <span class="chip status claude" title="Ein Claude-Agent arbeitet im Hintergrund an diesem Todo"
+          >Claude arbeitet</span
         >
       {/if}
     </div>
@@ -272,6 +293,10 @@
       onchanged?.();
     }}
   />
+{/if}
+
+{#if showingReply}
+  <ReplyDialog {item} onclose={() => (showingReply = false)} />
 {/if}
 
 {#if pickingHandOffProject}
@@ -315,6 +340,12 @@
   }
   .chip.action.claude {
     background: var(--chip-orange-bg);
+    color: var(--chip-orange-fg);
+  }
+  /* Status, not a button: outlined in the agent's colour. */
+  .chip.status.claude {
+    background: transparent;
+    border: 1px solid var(--chip-orange-fg);
     color: var(--chip-orange-fg);
   }
   .chip.action:hover:not(:disabled) {

@@ -159,6 +159,8 @@ export const updateTodoInput = z
     project: z.string().trim().min(1).max(100).nullable().optional(),
     /** Branch an agent works on for this todo; the sync turns the todo into its PR. */
     agentBranch: z.string().trim().min(1).max(200).nullable().optional(),
+    /** Last answer of the agent's session (it waits for the user); null removes it. */
+    agentReply: z.string().trim().min(1).max(20_000).nullable().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), 'nothing to update');
 export type UpdateTodoInput = z.input<typeof updateTodoInput>;

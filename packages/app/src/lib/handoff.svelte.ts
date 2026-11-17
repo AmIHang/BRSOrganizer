@@ -23,14 +23,18 @@ export async function startHandOff(item: Item): Promise<void> {
   let done: HandOffState;
   try {
     const r = await api.pr.handOffTodo(item.id);
+    const where =
+      r.mode === 'background'
+        ? `im Hintergrund (${r.branch}) – ansehen mit „claude attach ${r.session}“`
+        : `im eigenen Fenster (${r.branch}), Hintergrund nicht möglich (Ordner nicht vertraut?)`;
     const failed = r.tickets.find((t) => !t.ok);
     done = failed
       ? {
           running: false,
-          text: `Agent läuft (${r.branch}), aber ohne ${failed.kind.toUpperCase()}-Inhalt – nur Link übergeben: ${failed.message ?? 'Fehler'}`,
+          text: `Agent läuft ${where}, aber ohne ${failed.kind.toUpperCase()}-Inhalt – nur Link übergeben: ${failed.message ?? 'Fehler'}`,
           error: true,
         }
-      : { running: false, text: `Agent läuft im PowerShell-Fenster (${r.branch}).`, error: false };
+      : { running: false, text: `Agent läuft ${where}.`, error: false };
   } catch (e) {
     done = { running: false, text: e instanceof Error ? e.message : String(e), error: true };
   }

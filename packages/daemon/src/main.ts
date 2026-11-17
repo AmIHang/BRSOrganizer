@@ -22,6 +22,7 @@ import { createWindowsLauncher } from './prs/launcher.js';
 import { PrWorkspace } from './prs/service.js';
 import { edgeTicketSessions } from './tickets/edge.js';
 import { linkTickets } from './tickets/link.js';
+import { claudeAgentsCli, watchAgents } from './prs/agents.js';
 import { createScheduler } from './scheduler.js';
 import { VERSION } from './version.js';
 
@@ -127,6 +128,11 @@ const prWorkspace = new PrWorkspace({
   ...tickets,
 });
 linkTickets(core, tickets, (msg, extra) => logger.warn(extra ?? {}, msg));
+// Answers of background agents (claude --bg) go on their todos.
+watchAgents(core, {
+  list: claudeAgentsCli(),
+  log: (msg, extra) => logger.warn(extra ?? {}, msg),
+});
 const { app, close: closeApp } = createApp({
   core,
   scheduler,

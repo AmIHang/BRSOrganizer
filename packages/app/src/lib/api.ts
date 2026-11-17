@@ -126,6 +126,9 @@ export const api = {
         worktree: string;
         branch: string;
         tickets: Array<{ kind: 'bsm' | 'otma'; ok: boolean; message?: string }>;
+        /** background: claude --bg, `claude attach <session>`; window: its own console. */
+        mode: 'background' | 'window';
+        session: string;
       }>('POST', `/api/prs/todos/${id}/agent`),
     removeLocal: (id: string) =>
       request<{ clonePath: string; ideClosed: number; ideForced: number }>(

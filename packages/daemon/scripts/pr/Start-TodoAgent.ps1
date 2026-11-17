@@ -4,9 +4,12 @@
 
 .DESCRIPTION
   Started by BRSOrganizer ("An Agent weitergeben"). Fetches the project's main repo, creates
-  <Root>\<Project>\<Name> as a worktree on a new branch from the remote default branch and runs
-  claude there, interactively, with the prompt from -PromptFile. The agent reads the BSM/OTMA
-  tickets, implements the solution and creates the pull request itself.
+  <Root>\<Project>\<Name> as a worktree on a new branch from the remote default branch and starts
+  claude there as a background session (claude --bg, permission mode auto) with the prompt from
+  -PromptFile; the user looks in with `claude attach <Name>`. Where that is refused (e.g. the
+  folder is not trusted yet), claude runs interactively in its own window instead. The agent
+  implements the solution and creates the pull request itself. Prints "AGENT-MODE: background"
+  or "AGENT-MODE: window" as its last line.
 
 .PARAMETER Root     Projects folder (e.g. C:\projects-git).
 .PARAMETER Project  Customer folder below Root.
@@ -65,4 +68,19 @@ Add-Content -LiteralPath $PromptFile -Encoding UTF8 -Value @(
 # The task travels as a file: multi-line arguments with quotes do not survive PowerShell 5.1
 # native argument passing (or claude.cmd) intact.
 Set-Location -LiteralPath $worktree
-& $claude "Lies deinen Auftrag aus der Datei $PromptFile und fuehre ihn vollstaendig aus."
+$task = "Lies deinen Auftrag aus der Datei $PromptFile und fuehre ihn vollstaendig aus."
+
+# Background session without a window. Permission mode auto: a classifier approves the usual
+# steps (edit, build, commit, push, PR) and stops risky ones; the ticket texts are external.
+$ErrorActionPreference = 'Continue' # claude writes progress to stderr
+$out = (& $claude --bg -n $Name --permission-mode auto $task 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -eq 0) {
+  Write-Output $out
+  Write-Output 'AGENT-MODE: background'
+  return
+}
+
+# Refused (e.g. "Workspace not trusted"): interactively in its own window, as before.
+Write-Output "claude --bg: $out"
+Start-Process -FilePath $claude -WorkingDirectory $worktree -ArgumentList "`"$task`""
+Write-Output 'AGENT-MODE: window'

@@ -16,7 +16,9 @@ import {
   type TfsTransport,
 } from '@brsorganizer/core';
 import { readBsmTicket, type BsmSession, type ReadTicketResult } from '../tickets/bsm.js';
+import { HttpError } from '../http/errors.js';
 import { readOtmaTicket } from '../tickets/otma.js';
+import { agentSessionName } from './agents.js';
 import { closeVisualStudio, type CloseIde } from './ide.js';
 import type { Launcher } from './launcher.js';
 import {
@@ -374,9 +376,13 @@ export class PrWorkspace {
    * CLI there (visible console) with the todo's notes and BSM/OTMA tickets. The agent solves the
    * task and opens the pull request itself.
    */
-  async handOffTodo(
-    itemId: string,
-  ): Promise<{ worktree: string; branch: string; tickets: TicketStatus[] }> {
+  async handOffTodo(itemId: string): Promise<{
+    worktree: string;
+    branch: string;
+    tickets: TicketStatus[];
+    mode: 'background' | 'window';
+    session: string;
+  }> {
     const todo = this.deps.core.items.get(itemId);
     const project = todo.meta?.project;
     if (todo.type !== 'todo' || typeof project !== 'string') {
@@ -411,7 +417,7 @@ export class PrWorkspace {
       .replace(/-+$/, '');
     const suffix = todo.id.slice(-6).toLowerCase();
     const branch = `feature/${slug || 'todo'}-${suffix}`;
-    const name = `Todo-${suffix}`;
+    const name = agentSessionName(itemId);
 
     // The task and the ticket images go into one folder per todo; the agent reads it, so it stays.
     const taskDir = join(tmpdir(), `brsorganizer-agent-${suffix}`);
@@ -453,9 +459,10 @@ export class PrWorkspace {
     // BOM: Windows PowerShell 5.1 (Add-Content in the script) would read it as ANSI otherwise.
     writeFileSync(promptFile, '﻿' + agentPrompt(todo, project, contents, !!account), 'utf8');
     // Lets the sync turn the todo into the pull request once it shows up.
-    this.deps.core.items.updateTodo(itemId, { agentBranch: branch }, 'user');
-    this.deps.launcher.runScript(
-      `Agent – ${todo.title}`,
+    this.deps.core.items.updateTodo(itemId, { agentBranch: branch, agentReply: null }, 'user');
+    // Hidden and awaited: takes seconds (fetch, worktree, claude --bg returns at once), and
+    // errors reach the app instead of a console window.
+    const run = await this.deps.launcher.runHidden(
       this.script('Start-TodoAgent.ps1'),
       [
         '-Root',
@@ -473,7 +480,18 @@ export class PrWorkspace {
       ],
       account ? { [TICKET_USER_ENV]: user, [TICKET_PASSWORD_ENV]: password } : undefined,
     );
-    return { worktree: join(repo.customerDir, name), branch, tickets };
+    if (run.code !== 0) {
+      const reason = /^FEHLER: (.+)$/m.exec(run.stdout)?.[1]?.trim() || `Exit-Code ${run.code}`;
+      throw new HttpError(502, 'agent', `Agent-Start fehlgeschlagen: ${reason}`);
+    }
+    return {
+      worktree: join(repo.customerDir, name),
+      branch,
+      tickets,
+      // background: look in with `claude attach <session>`; window: claude has its own console.
+      mode: run.stdout.includes('AGENT-MODE: background') ? 'background' : 'window',
+      session: name,
+    };
   }
 
   /** Clone (first time) or update and rebuild, in a visible console window. */
