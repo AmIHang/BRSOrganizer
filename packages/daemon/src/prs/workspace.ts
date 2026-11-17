@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 /**
  * Local PR checkouts as created by Clone-Branch.ps1:
@@ -90,7 +90,7 @@ export function findRepo(repos: RepoInfo[], prRepoUrl: string): RepoInfo | null 
   );
 }
 
-function git(cwd: string, args: string[], timeoutMs = 30_000): Promise<string> {
+export function git(cwd: string, args: string[], timeoutMs = 30_000): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(
       'git',
@@ -99,6 +99,27 @@ function git(cwd: string, args: string[], timeoutMs = 30_000): Promise<string> {
       (err, stdout) => (err ? reject(err) : resolve(stdout.trim())),
     );
   });
+}
+
+/**
+ * Removes a git worktree and, if git considers it merged, its local branch. Never forced: with
+ * uncommitted changes git refuses and nothing is lost; an unmerged branch stays (-d, not -D).
+ */
+export async function removeWorktree(
+  path: string,
+): Promise<{ branch: string | null; branchDeleted: boolean }> {
+  const common = await git(path, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
+  const repo = dirname(common);
+  const head = await git(path, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => null);
+  const branch = head && head !== 'HEAD' ? head : null;
+  await git(repo, ['worktree', 'remove', path]);
+  const branchDeleted = branch
+    ? await git(repo, ['branch', '-d', branch]).then(
+        () => true,
+        () => false,
+      )
+    : false;
+  return { branch, branchDeleted };
 }
 
 export interface LocalCheckout {

@@ -163,6 +163,10 @@ export const updateTodoInput = z
     agentReply: z.string().trim().min(1).max(20_000).nullable().optional(),
     /** What the agent's session waits for (e.g. a permission prompt); null when it works on. */
     agentWaiting: z.string().trim().min(1).max(200).nullable().optional(),
+    /** The agent's session is gone (ended, crashed, stopped elsewhere) before a PR showed up. */
+    agentEnded: z.boolean().nullable().optional(),
+    /** Worktree the agent worked in; kept after the hand-off so it can be removed later. */
+    agentWorktree: z.string().trim().min(1).max(500).nullable().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), 'nothing to update');
 export type UpdateTodoInput = z.input<typeof updateTodoInput>;

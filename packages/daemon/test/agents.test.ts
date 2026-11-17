@@ -80,6 +80,16 @@ describe('background agents', () => {
       sessions[1] = { ...sessions[1]!, status: 'busy', waitingFor: undefined };
       await watch.check();
       expect(core.items.get(other.id).meta?.agentWaiting).toBeUndefined();
+
+      // Session gone: ended only after two checks in a row (a new one may still be starting).
+      const gone = sessions.splice(1, 1)[0]!;
+      await watch.check();
+      expect(core.items.get(other.id).meta?.agentEnded).toBeUndefined();
+      await watch.check();
+      expect(core.items.get(other.id).meta?.agentEnded).toBe(true);
+      sessions.push(gone); // resumed
+      await watch.check();
+      expect(core.items.get(other.id).meta?.agentEnded).toBeUndefined();
     } finally {
       watch.stop();
     }

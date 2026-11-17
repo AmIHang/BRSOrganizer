@@ -125,9 +125,12 @@
   }
 
   /** Handed to a background agent: no checkbox, no second hand-off, can be cancelled. */
-  const agentWorking = $derived(
+  const handedOff = $derived(
     item.type === 'todo' && item.status === 'open' && typeof item.meta?.agentBranch === 'string',
   );
+  /** The session is gone without a PR: the todo is the user's again. */
+  const agentEnded = $derived(handedOff && item.meta?.agentEnded === true);
+  const agentWorking = $derived(handedOff && !agentEnded);
   const entries = $derived<MenuEntry[]>([
     ...(manageable
       ? [
@@ -150,12 +153,13 @@
     ...(agentWorking
       ? [{ label: 'An Claude abbrechen', onclick: () => void cancelHandOff() }]
       : []),
+    ...(item.type === 'todo' && typeof item.meta?.agentWorktree === 'string' && !agentWorking
+      ? [{ label: 'Worktree entfernen', onclick: () => void removeWorktree() }]
+      : []),
     { label: 'Archivieren', onclick: () => onarchive(item) },
   ]);
   /** Open todos with something to work on (ticket or description) can go to a Claude agent. */
-  const canHandOff = $derived(
-    item.type === 'todo' && item.status === 'open' && typeof item.meta?.agentBranch !== 'string',
-  );
+  const canHandOff = $derived(item.type === 'todo' && item.status === 'open' && !agentWorking);
   /** "An Claude" first asks for the project the agent works in. */
   let pickingHandOffProject = $state(false);
   /** Background agent: works until the PR shows up, or answers and waits for the user. */
@@ -167,6 +171,29 @@
     agentWorking && typeof item.meta?.agentWaiting === 'string' ? item.meta.agentWaiting : null,
   );
   const agentSession = $derived(`Todo-${item.id.slice(-6).toLowerCase()}`);
+
+  async function openSession() {
+    try {
+      await api.pr.attachAgent(item.id);
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), true);
+    }
+  }
+
+  async function removeWorktree() {
+    try {
+      const r = await api.pr.removeAgentWorktree(item.id);
+      const branch = r.branch
+        ? r.branchDeleted
+          ? `, Branch ${r.branch} gelöscht`
+          : `, Branch ${r.branch} bleibt (nicht gemergt)`
+        : '';
+      flash(`Worktree entfernt${branch}.`);
+      onchanged?.();
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), true);
+    }
+  }
 
   async function cancelHandOff() {
     try {
@@ -280,18 +307,24 @@
         >
       {/if}
       {#if agentWaiting}
-        <span
+        <button
           class="chip status asking"
-          title="Claude wartet auf: {agentWaiting}. Antworten im Terminal mit „claude attach {agentSession}“."
-          >Rückfrage von Claude</span
+          title="Claude wartet auf: {agentWaiting}. Klick öffnet die Sitzung ({agentSession}) im Terminal."
+          onclick={() => void openSession()}>Rückfrage von Claude</button
         >
       {:else if agentReply}
         <span class="chip status claude" title="Der Agent hat seine Runde beendet und wartet auf dich"
           >Claude wartet</span
         >
       {:else if agentWorking}
-        <span class="chip working" title="Ein Claude-Agent arbeitet im Hintergrund an diesem Todo"
-          >Claude arbeitet</span
+        <button
+          class="chip working"
+          title="Ein Claude-Agent arbeitet im Hintergrund an diesem Todo. Klick öffnet die Sitzung im Terminal."
+          onclick={() => void openSession()}>Claude arbeitet</button
+        >
+      {:else if agentEnded}
+        <span class="chip status ended" title="Die Sitzung des Agenten ist beendet, ohne Pull Request"
+          >Agent beendet</span
         >
       {/if}
       {#if agentReply}
@@ -336,7 +369,11 @@
 {/if}
 
 {#if showingReply}
-  <ReplyDialog {item} onclose={() => (showingReply = false)} />
+  <ReplyDialog
+    {item}
+    onclose={() => (showingReply = false)}
+    onopen={agentWorking ? () => void openSession() : undefined}
+  />
 {/if}
 
 {#if pickingHandOffProject}
@@ -387,6 +424,15 @@
     background: transparent;
     border: 1px solid var(--chip-orange-fg);
     color: var(--chip-orange-fg);
+  }
+  .chip.status.ended {
+    background: transparent;
+    border: 1px solid var(--muted);
+    color: var(--muted);
+  }
+  button.chip.working,
+  button.chip.status.asking {
+    cursor: pointer;
   }
   .chip.working {
     background: var(--chip-blue-bg);

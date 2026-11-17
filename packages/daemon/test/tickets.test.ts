@@ -353,17 +353,49 @@ describe('OTMA ticket', () => {
     ]);
   });
 
-  it('reads the ticket in two steps and saves its images', async () => {
+  it('reads the "Dokumente" list by its columns and only OTMA object paths', () => {
+    expect(parseOtmaTicket(otmaFixture, '178333').attachments).toEqual([
+      {
+        opath: 'CB0A@1003A2',
+        name: 'image',
+        type: 'Anhang',
+        author: '',
+        at: new Date(1793965022505),
+      },
+      {
+        opath: 'CB0B@1003A2',
+        name: 'Testdaten Zug',
+        type: 'Anhang',
+        author: '',
+        at: new Date(1794897646574),
+      },
+      {
+        opath: 'CB0C@1003A2',
+        name: 'image',
+        type: 'Anhang',
+        author: '',
+        at: new Date(1793965022505),
+      },
+    ]);
+  });
+
+  it('reads the ticket in two steps and saves its images and documents once', async () => {
     const requests: unknown[] = [];
     const downloads: string[] = [];
     const http: BsmHttp = {
       runWorkflow: async (body) => {
         requests.push(body);
+        const op = (body as { ContextOPath: string }).ContextOPath;
+        if (/^CB0/.test(op))
+          return { download: `token-${op.slice(0, 4)}`, download_fileextension: '.png' };
         return requests.length === 1 ? jump : otmaFixture;
       },
       download: async (path) => {
         downloads.push(path);
-        return new Uint8Array([7]);
+        // CB0A is a copy of the pasted image, CB0C a copy of CB0B.
+        return path.includes('token-CB0B') || path.includes('token-CB0C')
+          ? new Uint8Array([8])
+          : new Uint8Array([7]);
       },
     };
     const r = await readOtmaTicket(
@@ -372,11 +404,26 @@ describe('OTMA ticket', () => {
       dir,
       () => NOW,
     );
-    expect(requests).toEqual([otmaJumpRequest('178333'), otmaViewRequest(jump)]);
+    expect(requests.slice(0, 2)).toEqual([otmaJumpRequest('178333'), otmaViewRequest(jump)]);
+    expect(requests.slice(2)).toEqual([
+      bsmDocumentRequest('CB0A@1003A2'),
+      bsmDocumentRequest('CB0B@1003A2'),
+      bsmDocumentRequest('CB0C@1003A2'),
+    ]);
     expect(downloads).toEqual([
       '/bfres/de/referenced-document/33333333-3333-3333-3333-333333333333/dialog.png',
+      '/api/core/web/dl/token-CB0A',
+      '/api/core/web/dl/token-CB0B',
+      '/api/core/web/dl/token-CB0C',
     ]);
-    expect(r.files).toEqual([join(dir, 'otma-1-dialog.png')]);
+    expect(r.files).toEqual([
+      join(dir, 'otma-1-dialog.png'),
+      join(dir, 'anhang-1-Testdaten_Zug.png'),
+    ]);
+    expect(r.markdown).toContain(
+      `- Anhang 1 (Testdaten Zug; Anhang, 17.11.2026 07:40): ${join(dir, 'anhang-1-Testdaten_Zug.png')}`,
+    );
+    expect(r.markdown).not.toContain('Anhang 2');
     expect(r.markdown.split('\n').slice(0, 3)).toEqual([
       '### OTMA-Ticket 178333: #STBBRSg0034: [WORKSHOP] Vordefinierte E-Mailempfänger werden nicht angeführt',
       '',

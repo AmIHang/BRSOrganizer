@@ -45,6 +45,14 @@ export function prRouter(workspace: PrWorkspace, scheduler: Scheduler): Router {
     res.json(await workspace.clearModuleCache());
   });
 
+  r.post('/todos/:id/agent/worktree/remove', async (req, res) => {
+    res.json(await workspace.removeAgentWorktree(itemId(req)));
+  });
+
+  r.post('/todos/:id/agent/attach', (req, res) => {
+    res.status(202).json(workspace.attachAgent(itemId(req)));
+  });
+
   // Stops the agent of a handed-off todo; the todo becomes a plain todo again.
   r.post('/todos/:id/agent/cancel', async (req, res) => {
     res.json(await workspace.cancelHandOff(itemId(req)));

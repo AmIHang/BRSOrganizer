@@ -1,7 +1,16 @@
 <script lang="ts">
   import type { Item } from '../lib/types';
 
-  let { item, onclose }: { item: Item; onclose: () => void } = $props();
+  let {
+    item,
+    onclose,
+    onopen,
+  }: {
+    item: Item;
+    onclose: () => void;
+    /** Opens the agent's session in a terminal (only while it still runs). */
+    onopen?: () => void;
+  } = $props();
 
   let dialog = $state<HTMLDialogElement | null>(null);
   const reply = $derived(typeof item.meta?.agentReply === 'string' ? item.meta.agentReply : '');
@@ -22,6 +31,9 @@
       Der Agent wartet auf dich. Weiter im Terminal mit <code>claude attach {session}</code>.
     </p>
     <div class="buttons">
+      {#if onopen}
+        <button type="button" onclick={() => (onopen(), onclose())}>Im Terminal öffnen</button>
+      {/if}
       <button type="button" class="primary" onclick={onclose}>Schließen</button>
     </div>
   </div>

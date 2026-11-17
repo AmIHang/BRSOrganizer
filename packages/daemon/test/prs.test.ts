@@ -499,10 +499,59 @@ describe('PR workspace via REST', () => {
       expect(stopped).toEqual([`Todo-${todo.id.slice(-6).toLowerCase()}`]);
       const after = h.core.items.get(todo.id);
       expect(after.status).toBe('open');
-      expect(after.meta).toEqual({ project: 'Produktion' });
+      // Back to a plain todo; the worktree is remembered so it can be removed afterwards.
+      expect(after.meta).toEqual({
+        project: 'Produktion',
+        agentWorktree: join(root, 'Community', `Todo-${todo.id.slice(-6).toLowerCase()}`),
+      });
     } finally {
       for (const l of launched) rmSync(dirname(l.args![11]!), { recursive: true, force: true });
     }
+  });
+
+  it('opens the agent session in a console and removes its worktree safely', async () => {
+    const git = (cwd: string, ...args: string[]) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+        cwd,
+        stdio: 'pipe',
+      });
+    const repo = join(root, 'Kunde', 'Repo');
+    mkdirSync(repo, { recursive: true });
+    git(repo, 'init', '-q', '-b', 'main');
+    git(repo, 'commit', '-q', '--allow-empty', '-m', 'init');
+    const todo = h.core.items.addTodo({ title: 'Wt' }, 'user');
+    const suffix = todo.id.slice(-6).toLowerCase();
+    const worktree = join(root, 'Kunde', `Todo-${suffix}`);
+    git(repo, 'worktree', 'add', '-q', '-b', `feature/todo-${suffix}`, worktree);
+    const post = (path: string) => raw(h.port, { method: 'POST', path, headers: auth });
+    const remove = () => post(`/api/prs/todos/${todo.id}/agent/worktree/remove`);
+
+    // While the agent works: it can be opened, but its worktree stays.
+    h.core.items.updateTodo(
+      todo.id,
+      { agentBranch: `feature/todo-${suffix}`, agentWorktree: worktree },
+      'user',
+    );
+    expect((await post(`/api/prs/todos/${todo.id}/agent/attach`)).status).toBe(202);
+    expect(launched.at(-1)).toMatchObject({
+      script: join('C:\\app\\runtime\\scripts\\pr', 'Open-AgentSession.ps1'),
+      args: ['-Name', `Todo-${suffix}`],
+    });
+    expect((await remove()).status).toBe(409);
+
+    // Ended, with an untracked file: git refuses, nothing is lost.
+    h.core.items.updateTodo(todo.id, { agentEnded: true }, 'claude');
+    writeFileSync(join(worktree, 'notes.txt'), 'wip');
+    const refused = await remove();
+    expect(refused.status).toBe(409);
+    expect(refused.json<{ message: string }>().message).toMatch(/^Worktree nicht entfernt: /);
+    expect(existsSync(join(worktree, 'notes.txt'))).toBe(true);
+
+    rmSync(join(worktree, 'notes.txt'));
+    const r = await remove();
+    expect(r.json()).toEqual({ worktree, branch: `feature/todo-${suffix}`, branchDeleted: true });
+    expect(existsSync(worktree)).toBe(false);
+    expect(h.core.items.get(todo.id).meta?.agentWorktree).toBeUndefined();
   });
 
   it('reports a failed agent start and falls back to a window', async () => {

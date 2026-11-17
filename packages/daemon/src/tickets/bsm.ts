@@ -485,7 +485,10 @@ export async function saveTicket(
       attachments.push({ attachment: a, file: null });
       continue;
     }
-    if (imageHashes.has(hash(got.bytes))) continue; // already there as "Bild n"
+    // Already there as "Bild n" or as an earlier attachment with the same content.
+    const sha = hash(got.bytes);
+    if (imageHashes.has(sha)) continue;
+    imageHashes.add(sha);
     downloaded++;
     const n = attachments.length + 1;
     const name =

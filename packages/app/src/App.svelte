@@ -8,7 +8,7 @@
   import Settings from './components/Settings.svelte';
   import { api, subscribe } from './lib/api';
   import { groupItems, projectsOf } from './lib/group';
-  import { announceNewItems, remindUpcoming } from './lib/notify';
+  import { announceAgentUpdates, announceNewItems, remindUpcoming } from './lib/notify';
   import { savedAlwaysOnTop, setAlwaysOnTop } from './lib/pin';
   import type {
     CloneSync,
@@ -73,6 +73,7 @@
     try {
       items = await api.listItems();
       error = null;
+      void announceAgentUpdates(items);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }

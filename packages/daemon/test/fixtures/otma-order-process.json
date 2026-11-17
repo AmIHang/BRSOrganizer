@@ -8,49 +8,64 @@
     "form": [
       {
         "type": "section",
-        "style": { "title": "Allgemein" },
+        "style": {
+          "title": "Allgemein"
+        },
         "items": [
           {
             "type": "bfres!boomcrm-js://Forms/WorkflowRunnerLinkControl",
             "context": "2B89D@1000A5",
             "feat": "cfSupportIDLink",
             "value": "STBBRSg0034",
-            "style": { "link": "Workflow:OpenBSPId", "title": "BSM" }
+            "style": {
+              "link": "Workflow:OpenBSPId",
+              "title": "BSM"
+            }
           },
           {
             "type": "link",
             "context": "2B89D@1000A5",
             "feat": "cfDevOpsWorkItemIdLink",
             "value": "Kein Workitem zugewiesen?",
-            "style": { "title": "DevOps WorkItem" }
+            "style": {
+              "title": "DevOps WorkItem"
+            }
           },
           {
             "type": "label",
             "context": "2B89D@1000A5",
             "feat": "Name",
             "value": "#STBBRSg0034: [WORKSHOP] Vordefinierte E-Mailempfänger werden nicht angeführt",
-            "style": { "title": "Bezeichnung" }
+            "style": {
+              "title": "Bezeichnung"
+            }
           },
           {
             "type": "label",
             "context": "2B89D@1000A5",
             "feat": "Status",
             "value": "Zugewiesen",
-            "style": { "title": "Status" }
+            "style": {
+              "title": "Status"
+            }
           },
           {
             "type": "label",
             "context": "2B89D@1000A5",
             "feat": "cfResponsiblePersonDisplayText",
             "value": "ABC -> XYZ",
-            "style": { "title": "Verantwortlich" }
+            "style": {
+              "title": "Verantwortlich"
+            }
           },
           {
             "type": "label",
             "context": "2B89D@1000A5",
             "feat": "cfReporter",
             "value": "Muster Max",
-            "style": { "title": "Reporter" }
+            "style": {
+              "title": "Reporter"
+            }
           },
           {
             "type": "link",
@@ -58,35 +73,46 @@
             "feat": "Project",
             "value": "STB BRS [STBBRS]",
             "linkContext": "10EC@10388D",
-            "style": { "link": "Workflow:ShowProject@View", "title": "Projekt" }
+            "style": {
+              "link": "Workflow:ShowProject@View",
+              "title": "Projekt"
+            }
           },
           {
             "type": "label",
             "context": "2B89D@1000A5",
             "feat": "Worktime",
             "value": "2,00",
-            "style": { "title": "Planzeit h" }
+            "style": {
+              "title": "Planzeit h"
+            }
           },
           {
             "type": "label",
             "context": "2B89D@1000A5",
             "feat": "WorktimeUndone",
             "value": "1,00",
-            "style": { "title": "Offen h" }
+            "style": {
+              "title": "Offen h"
+            }
           },
           {
             "type": "label",
             "context": "2B89D@1000A5",
             "feat": "cfTimeRecordingsSumRecursive",
             "value": "1,00",
-            "style": { "title": "Σ Ist h" }
+            "style": {
+              "title": "Σ Ist h"
+            }
           },
           {
             "type": "link",
             "context": "2B89D@1000A5",
             "feat": "cfAssignReleaseLink",
             "value": "Release zuordnen",
-            "style": { "title": "Release" }
+            "style": {
+              "title": "Release"
+            }
           },
           {
             "type": "bfres!boomservices-js://ExtendedLabelFeatureControl",
@@ -94,7 +120,10 @@
             "feat": "Note",
             "value": "<p>Empfänger aus der <strong>Vorlage</strong> fehlen im Dialog.</p>\n",
             "documents": [],
-            "style": { "multiLine": true, "title": "Bemerkung" }
+            "style": {
+              "multiLine": true,
+              "title": "Bemerkung"
+            }
           },
           {
             "type": "context",
@@ -108,18 +137,84 @@
                 "value": "<p>Nur bei Workshop-Terminen.</p>"
               }
             ]
+          },
+          {
+            "type": "bfres!system-js://Forms/ObjectList",
+            "context": "2B89D@1000A5",
+            "feat": "Documents",
+            "style": {
+              "title": "Dokumente"
+            },
+            "columns": [
+              {
+                "title": "Typ",
+                "name": "Type",
+                "order": 1
+              },
+              {
+                "title": "Bezeichnung",
+                "name": "Name",
+                "order": 2
+              },
+              {
+                "title": "Erstelldatum",
+                "name": "CreateDate",
+                "order": 3,
+                "type": "Date"
+              }
+            ],
+            "data": [
+              [
+                {
+                  "op": "CB0A@1003A2"
+                },
+                1,
+                2,
+                1
+              ],
+              [
+                {
+                  "op": "CB0B@1003A2"
+                },
+                1,
+                3,
+                2
+              ],
+              [
+                {
+                  "op": "CB0C@1003A2"
+                },
+                1,
+                2,
+                1
+              ],
+              [
+                {
+                  "op": "*not-otma"
+                },
+                1,
+                2,
+                1
+              ]
+            ],
+            "strings": ["", "Anhang", "image", "Testdaten Zug"],
+            "dates": [1793965022505, 1794897646574]
           }
         ]
       },
       {
         "type": "section",
-        "style": { "title": "Konversationen" },
+        "style": {
+          "title": "Konversationen"
+        },
         "items": [
           {
             "type": "context",
             "context": "2B89D@1000A5",
             "feat": "Conversations",
-            "style": { "title": "Konversationen" },
+            "style": {
+              "title": "Konversationen"
+            },
             "ui": [
               {
                 "type": "section",
@@ -134,14 +229,18 @@
                     "type": "context",
                     "context": "DAD1@1109EB",
                     "feat": "cfSortedComments",
-                    "style": { "title": "Kommentare" },
+                    "style": {
+                      "title": "Kommentare"
+                    },
                     "ui": [
                       {
                         "type": "label",
                         "context": "64687@1109FA",
                         "feat": "CombinedCreateBy",
                         "value": "Beispiel Eva -",
-                        "style": { "css": "createInfo" }
+                        "style": {
+                          "css": "createInfo"
+                        }
                       },
                       {
                         "type": "label",
@@ -155,7 +254,10 @@
                         "feat": "CommentText",
                         "value": "<p>Siehe Screenshot:</p><p><img src=\"33333333-3333-3333-3333-333333333333\" alt=\"image.png\" /></p>",
                         "documents": [
-                          { "id": "33333333-3333-3333-3333-333333333333", "fileName": "dialog.png" }
+                          {
+                            "id": "33333333-3333-3333-3333-333333333333",
+                            "fileName": "dialog.png"
+                          }
                         ]
                       },
                       {
@@ -169,7 +271,9 @@
                         "context": "64688@1109FA",
                         "feat": "CombinedCreateBy",
                         "value": "BRS Support -",
-                        "style": { "css": "createInfo" }
+                        "style": {
+                          "css": "createInfo"
+                        }
                       },
                       {
                         "type": "label",
@@ -190,7 +294,9 @@
                     "type": "bfres!boomservices-js://CommentInput",
                     "context": "DAD1@1109EB",
                     "feat": "cfReplyBox",
-                    "style": { "title": "Deine Antwort" }
+                    "style": {
+                      "title": "Deine Antwort"
+                    }
                   }
                 ]
               }

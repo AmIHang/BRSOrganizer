@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,6 +26,7 @@ import {
   cloneSync,
   findRepo,
   localCheckout,
+  removeWorktree,
   scanRepos,
   type CloneSync,
   type LocalCheckout,
@@ -474,9 +475,57 @@ export class PrWorkspace {
     await (this.deps.stopAgent ?? claudeStopCli())(agentSessionName(itemId));
     return this.deps.core.items.updateTodo(
       itemId,
-      { agentBranch: null, agentReply: null, agentWaiting: null },
+      { agentBranch: null, agentReply: null, agentWaiting: null, agentEnded: null },
       'user',
     );
+  }
+
+  /**
+   * Removes the worktree an agent worked in (after a cancel, its PR or the end of its session).
+   * Uncommitted changes make git refuse; an unmerged branch stays.
+   */
+  async removeAgentWorktree(
+    itemId: string,
+  ): Promise<{ worktree: string; branch: string | null; branchDeleted: boolean }> {
+    const todo = this.deps.core.items.get(itemId);
+    const worktree = todo.meta?.agentWorktree;
+    if (todo.type !== 'todo' || typeof worktree !== 'string') {
+      throw new ForbiddenOperationError(`item ${itemId} has no agent worktree`);
+    }
+    const working =
+      todo.status === 'open' &&
+      typeof todo.meta?.agentBranch === 'string' &&
+      todo.meta.agentEnded !== true;
+    if (working) {
+      throw new ForbiddenOperationError('the agent still works in it – cancel it first');
+    }
+    let result = { branch: null as string | null, branchDeleted: false };
+    if (existsSync(worktree)) {
+      try {
+        result = await removeWorktree(worktree);
+      } catch (err) {
+        // git's own reason, e.g. "contains modified or untracked files, use --force to delete it"
+        const lines = (err instanceof Error ? err.message : String(err)).split(/\r?\n/);
+        const reason = lines.filter((l) => l.trim()).pop() ?? 'unbekannter Fehler';
+        throw new HttpError(409, 'worktree', `Worktree nicht entfernt: ${reason}`);
+      }
+    }
+    this.deps.core.items.updateTodo(itemId, { agentWorktree: null }, 'user');
+    return { worktree, ...result };
+  }
+
+  /** Opens the agent's session of a handed-off todo in a visible console (claude attach). */
+  attachAgent(itemId: string): { session: string } {
+    const todo = this.deps.core.items.get(itemId);
+    if (todo.type !== 'todo' || typeof todo.meta?.agentBranch !== 'string') {
+      throw new ForbiddenOperationError(`item ${itemId} is not handed off to an agent`);
+    }
+    const session = agentSessionName(itemId);
+    this.deps.launcher.runScript(`Claude – ${todo.title}`, this.script('Open-AgentSession.ps1'), [
+      '-Name',
+      session,
+    ]);
+    return { session };
   }
 
   async handOffTodo(itemId: string): Promise<{
@@ -552,7 +601,17 @@ export class PrWorkspace {
     // BOM: Windows PowerShell 5.1 (Add-Content in the script) would read it as ANSI otherwise.
     writeFileSync(promptFile, '﻿' + agentPrompt(todo, project, contents, !!account), 'utf8');
     // Lets the sync turn the todo into the pull request once it shows up.
-    this.deps.core.items.updateTodo(itemId, { agentBranch: branch, agentReply: null }, 'user');
+    this.deps.core.items.updateTodo(
+      itemId,
+      {
+        agentBranch: branch,
+        agentWorktree: join(repo.customerDir, name),
+        agentReply: null,
+        agentWaiting: null,
+        agentEnded: null,
+      },
+      'user',
+    );
     // Hidden and awaited: takes seconds (fetch, worktree, claude --bg returns at once), and
     // errors reach the app instead of a console window.
     const run = await this.deps.launcher.runHidden(

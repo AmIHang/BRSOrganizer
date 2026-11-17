@@ -131,6 +131,15 @@ export const api = {
         mode: 'background' | 'window';
         session: string;
       }>('POST', `/api/prs/todos/${id}/agent`),
+    /** Removes the agent's worktree (git refuses with uncommitted changes). */
+    removeAgentWorktree: (id: string) =>
+      request<{ worktree: string; branch: string | null; branchDeleted: boolean }>(
+        'POST',
+        `/api/prs/todos/${id}/agent/worktree/remove`,
+      ),
+    /** Opens the agent's session in a console window (claude attach). */
+    attachAgent: (id: string) =>
+      request<{ session: string }>('POST', `/api/prs/todos/${id}/agent/attach`),
     /** Stops the agent; the todo becomes a plain open todo again. */
     cancelHandOff: (id: string) => request<Item>('POST', `/api/prs/todos/${id}/agent/cancel`),
     removeLocal: (id: string) =>

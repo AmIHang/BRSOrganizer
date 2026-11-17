@@ -7,6 +7,7 @@ import {
   str,
   title,
   parseDate,
+  type BsmAttachment,
   type BsmComment,
   type BsmHttp,
   type BsmSession,
@@ -150,10 +151,41 @@ export function parseOtmaTicket(json: unknown, key: string): BsmTicket {
     deliveries: [],
     conversations,
     images,
-    // shortcut: the "Dokumente" list is not read yet (no sample ticket with documents); the agent
-    // gets the link. Add it like BSM's FilteredDocuments once a ticket with documents is at hand.
-    attachments: [],
+    attachments: otmaDocuments(feat('Documents')),
   };
+}
+
+/**
+ * The "Dokumente" list: rows [{op}, …cells] in the order of `columns` (Typ, Bezeichnung,
+ * Erstelldatum), texts as 0-based indexes into `strings`, dates as 1-based indexes into `dates`.
+ */
+function otmaDocuments(list: Record<string, unknown> | undefined): BsmAttachment[] {
+  if (!list) return [];
+  const arr = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : []);
+  const strings = arr(list.strings);
+  const dates = arr(list.dates);
+  const columns = arr(list.columns).map((c) => str((c as Record<string, unknown>)?.name));
+  const out: BsmAttachment[] = [];
+  for (const row of arr(list.data)) {
+    if (!Array.isArray(row)) continue;
+    const opath = str((row[0] as Record<string, unknown> | undefined)?.op);
+    if (!/^[0-9A-F]{1,12}@[0-9A-F]{1,12}$/i.test(opath)) continue;
+    const cell = (column: string) => row[columns.indexOf(column) + 1];
+    const text = (column: string) => {
+      const i = cell(column);
+      return typeof i === 'number' ? str(strings[i]) : '';
+    };
+    const d = cell('CreateDate');
+    const ms = typeof d === 'number' ? dates[d - 1] : undefined;
+    out.push({
+      opath,
+      name: text('Name') || 'Anhang',
+      type: text('Type'),
+      author: '',
+      at: typeof ms === 'number' ? new Date(ms) : null,
+    });
+  }
+  return out;
 }
 
 /**

@@ -141,8 +141,13 @@ seiner Änderung ab. **Ohne Notiz** analysiert er nur (betroffene Stellen, Ursac
 Fragen) und ändert nichts; die Analyse erscheint als „Antwort“. Der Worktree bleibt danach stehen.
 
 Während der Agent läuft, zeigt das Todo „Claude arbeitet“ statt der Checkbox. Wartet er auf eine
-Freigabe oder Rückfrage, steht dort „Rückfrage von Claude“ (antworten mit `claude attach Todo-<id>`).
-Über ⋯ → **An Claude abbrechen** wird die Sitzung gestoppt und das Todo wieder ein normales Todo.
+Freigabe oder Rückfrage, steht dort „Rückfrage von Claude“; ein Klick darauf (oder auf „Claude arbeitet“)
+öffnet die Sitzung im Terminal (`claude attach Todo-<id>`). Rückfragen, Antworten und ein Ende ohne PR
+melden sich zusätzlich per Windows-Benachrichtigung. Ist die Sitzung weg, ohne dass ein PR kam
+(abgestürzt, anderswo beendet), steht „Agent beendet“ und das Todo ist wieder normal bedienbar.
+Über ⋯ → **An Claude abbrechen** wird die Sitzung gestoppt und das Todo wieder ein normales Todo;
+⋯ → **Worktree entfernen** räumt danach den Worktree weg (nie erzwungen: mit ungesicherten Änderungen
+lehnt git ab; der Branch wird nur gelöscht, wenn er gemergt ist).
 
 Der Agent läuft ohne Fenster als Hintergrundsitzung (`claude --bg`, Berechtigungsmodus `auto`: Claude
 erlaubt die üblichen Schritte selbst und hält Riskantes an). Reinschauen und eingreifen:
@@ -154,7 +159,8 @@ Vor dem Start liest BRSOrganizer BSM- und OTMA-Ticket (Text, Kommentare, eingef�
 eigenes Edge-Profil im Datenordner und gibt den Inhalt dem Agenten mit. Beide hängen am selben
 Keycloak-Login: Ist der BSM/OTMA-Account hinterlegt, meldet sich BRSOrganizer damit unsichtbar an (nur auf
 `auth.boomsoftware.com`, einmal pro Versuch); sonst oder wenn das scheitert, öffnet sich ein Edge-Fenster.
-Klappt das Lesen nicht, bekommt der Agent nur den Link. Die Dokumentliste von OTMA wird noch nicht gelesen.
+Klappt das Lesen nicht, bekommt der Agent nur den Link. Die Dokumente beider Tickets (OTMA: Liste
+„Dokumente“) liegen als Dateien bereit; doppelte Inhalte nur einmal.
 
 Hat ein Todo oder PR nur eines der beiden Tickets (beim Anlegen oder nachträglich gesetzt, über App oder
 MCP), ergänzt BRSOrganizer im Hintergrund das andere: das BSM-Ticket, das im OTMA-Ticket steht, bzw. das

@@ -82,5 +82,6 @@ if ($LASTEXITCODE -eq 0) {
 
 # Refused (e.g. "Workspace not trusted"): interactively in its own window, as before.
 Write-Output "claude --bg: $out"
-Start-Process -FilePath $claude -WorkingDirectory $worktree -ArgumentList "`"$task`""
+# Same session name as in the background, so BRSOrganizer sees while the window is open.
+Start-Process -FilePath $claude -WorkingDirectory $worktree -ArgumentList "-n $Name `"$task`""
 Write-Output 'AGENT-MODE: window'

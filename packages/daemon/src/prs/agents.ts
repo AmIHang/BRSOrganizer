@@ -116,6 +116,8 @@ export function watchAgents(
   },
 ): { check(): Promise<void>; stop(): void } {
   const read = options.read ?? ((s) => lastReply(s));
+  // Checks in a row a todo's session was missing: one alone may be a session still starting.
+  const missing = new Map<string, number>();
   let running = false;
   const check = async () => {
     const todos = core.items
@@ -128,7 +130,18 @@ export function watchAgents(
       for (const todo of todos) {
         const name = agentSessionName(todo.id);
         const s = sessions.find((x) => x.name === name);
-        if (!s) continue;
+        const ended = todo.meta?.agentEnded === true;
+        if (!s) {
+          // Gone without a PR (crashed, stopped elsewhere, reboot): the todo must not look busy.
+          const n = (missing.get(todo.id) ?? 0) + 1;
+          missing.set(todo.id, n);
+          if (n >= 2 && !ended) {
+            core.items.updateTodo(todo.id, { agentEnded: true, agentWaiting: null }, 'claude');
+          }
+          continue;
+        }
+        missing.delete(todo.id);
+        if (ended) core.items.updateTodo(todo.id, { agentEnded: null }, 'claude'); // resumed
         // Mid-turn question or permission prompt: without a hint the user would wait forever.
         const waiting =
           s.status === 'waiting' ? (s.waitingFor?.trim() || 'Eingabe').slice(0, 200) : null;

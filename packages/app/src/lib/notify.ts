@@ -54,6 +54,51 @@ export async function announceNewItems(items: Item[]): Promise<void> {
   remember(fresh.map((i) => `pr:${i.id}`));
 }
 
+/** Short, stable key for a text (which answer was announced). */
+function textKey(text: string): string {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (Math.imul(31, h) + text.charCodeAt(i)) | 0;
+  return `${text.length}.${(h >>> 0).toString(36)}`;
+}
+
+/**
+ * Todos handed to Claude: a toast when the agent asks something, has answered, or ended without
+ * a pull request - otherwise one would only notice by looking at the list.
+ */
+export async function announceAgentUpdates(items: Item[]): Promise<void> {
+  const seen = notified();
+  const toasts: Array<{ key: string; title: string; body: string }> = [];
+  for (const t of items) {
+    if (t.type !== 'todo' || t.status !== 'open' || typeof t.meta?.agentBranch !== 'string') {
+      continue;
+    }
+    const m = t.meta;
+    if (typeof m.agentWaiting === 'string') {
+      toasts.push({
+        key: `agent-wait:${t.id}:${m.agentWaiting}`,
+        title: 'Rückfrage von Claude',
+        body: `${t.title} – wartet auf: ${m.agentWaiting}`,
+      });
+    } else if (typeof m.agentReply === 'string') {
+      toasts.push({
+        key: `agent-reply:${t.id}:${textKey(m.agentReply)}`,
+        title: 'Claude hat geantwortet',
+        body: t.title,
+      });
+    }
+    if (m.agentEnded === true) {
+      toasts.push({
+        key: `agent-ended:${t.id}`,
+        title: 'Claude-Agent beendet',
+        body: `${t.title} – ohne Pull Request`,
+      });
+    }
+  }
+  const fresh = toasts.filter((x) => !seen.has(x.key));
+  for (const x of fresh) await toast(x.title, x.body);
+  remember(fresh.map((x) => x.key));
+}
+
 /** Reminder shortly before an event starts (checked periodically by the UI). */
 export async function remindUpcoming(items: Item[], now: Date): Promise<void> {
   const seen = notified();
