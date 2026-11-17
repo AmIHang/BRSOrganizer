@@ -26,16 +26,19 @@
   let lastSyncError = $state<string | null>(null);
   let pinned = $state(savedAlwaysOnTop());
   let creating = $state(false);
+  /** Set by the "+" of a project: the new todo goes there. */
+  let creatingProject = $state<string | null>(null);
 
   async function createItem(input: NewItem) {
     // Errors propagate to the dialog, which shows them and stays open.
     if (input.type === 'todo') {
-      await api.addTodo({
+      const todo = await api.addTodo({
         title: input.title,
         dueAt: input.dueAt,
         bsmUrl: input.bsmUrl,
         otmaUrl: input.otmaUrl,
       });
+      if (input.project) await api.updateTodo(todo.id, { project: input.project });
     }
     else await api.addEvent({ title: input.title, startsAt: input.startsAt, endsAt: input.endsAt });
     await refresh();
@@ -202,13 +205,21 @@
     </div>
   </header>
 
-  <button class="fab" title="Neu (Todo oder Termin)" aria-label="Neu" onclick={() => (creating = true)}>
+  <button class="fab" title="Neu (Todo oder Termin)" aria-label="Neu" onclick={() => {
+      creatingProject = null;
+      creating = true;
+    }}>
     <!-- Drawn, not a "+" glyph: font metrics put the glyph off-center. -->
     <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
       <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
     </svg>
   </button>
-  <NewItemDialog open={creating} oncreate={createItem} onclose={() => (creating = false)} />
+  <NewItemDialog
+    open={creating}
+    project={creatingProject}
+    oncreate={createItem}
+    onclose={() => (creating = false)}
+  />
 
   {#if error}
     <p class="banner error">{error}</p>
@@ -243,6 +254,17 @@
         {#each section.groups as group (group.customer)}
           <h3 class="customer">
             {group.customer} <span class="count">{group.items.length}</span>
+            {#if group.customer !== 'Sonstige'}
+              <button
+                class="add-todo"
+                title="Neues Todo in {group.customer}"
+                aria-label="Neues Todo in {group.customer}"
+                onclick={() => {
+                  creatingProject = group.customer;
+                  creating = true;
+                }}>+</button
+              >
+            {/if}
           </h3>
           {@render rows(group.items)}
         {/each}
@@ -337,6 +359,24 @@
     margin: 0;
     padding: 8px 12px 2px;
     border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .add-todo {
+    margin-left: auto;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 6px;
+    font-size: 16px;
+    line-height: 1;
+    color: var(--accent);
+    background: transparent;
+    border: 1px solid transparent;
+  }
+  .add-todo:hover {
+    border-color: var(--accent);
   }
   .actions {
     display: flex;

@@ -60,7 +60,7 @@ export function projectsOf(
 const TITLES: Record<SectionKey, string> = {
   overdue: 'Überfällig',
   now: 'Jetzt',
-  reviews: 'Pull Requests',
+  reviews: 'Aufgaben',
   today: 'Heute',
   soon: 'Nächste 7 Tage',
   later: 'Später',

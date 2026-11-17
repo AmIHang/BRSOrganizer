@@ -3,10 +3,13 @@
 
   let {
     open,
+    project = null,
     oncreate,
     onclose,
   }: {
     open: boolean;
+    /** From the "+" of a project: a todo filed under it (no event). */
+    project?: string | null;
     oncreate: (item: NewItem) => Promise<void>;
     onclose: () => void;
   } = $props();
@@ -71,6 +74,7 @@
           dueAt: when ? new Date(when).toISOString() : null,
           bsmUrl: bsm.trim() || null,
           otmaUrl: otma.trim() || null,
+          project,
         });
       } else {
         const start = new Date(when);
@@ -99,9 +103,10 @@
   }}
 >
   <form onsubmit={submit}>
-    <h2>Neu</h2>
+    <h2>{project ? 'Neues Todo' : 'Neu'}</h2>
+    {#if project}<p class="project">Projekt: {project}</p>{/if}
 
-    <div class="types" role="radiogroup" aria-label="Typ">
+    <div class="types" role="radiogroup" aria-label="Typ" hidden={!!project}>
       <button
         type="button"
         role="radio"
@@ -190,6 +195,14 @@
   h2 {
     margin: 0;
     font-size: 16px;
+  }
+  .project {
+    margin: 0;
+    font-size: 13px;
+    color: var(--accent);
+  }
+  .types[hidden] {
+    display: none;
   }
   label {
     display: flex;

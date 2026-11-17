@@ -56,6 +56,8 @@ export type NewItem =
       dueAt: string | null;
       bsmUrl: string | null;
       otmaUrl: string | null;
+      /** Project the new todo is filed under (from the "+" of a project). */
+      project?: string | null;
     }
   | { type: 'event'; title: string; startsAt: string; endsAt: string };
 
