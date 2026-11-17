@@ -36,6 +36,9 @@
 .NOTES
     BORA-Referenzen werden unter -RefCache pro Modul und Version zwischengespeichert. bfdesignc
     ueberspringt Referenzen mit passender Version und laedt nur Fehlendes oder andere Versionen.
+    Gepatchte Module (HintPath auf ein .bfpackage im Repo) liegen getrennt pro Projekt und
+    Paketinhalt unter _patched\<Projekt>\<Modul>\<Version>-<Hash> und werden bei jedem Lauf frisch
+    eingesetzt, nie aus dem kundenuebergreifenden Teil.
     Alte Versionen sammeln sich dort an und koennen jederzeit geloescht werden.
 #>
 param(
@@ -109,6 +112,44 @@ function Get-RealizedVersion([string]$RefDir) {
     $f = Join-Path $RefDir '_bfpackageexpansion.xml'
     if ((Test-Path $f) -and ((Get-Content $f -Raw) -match 'PackageVersion="([^"]+)"')) { return $Matches[1] }
     return $null
+}
+
+# Referenzen der Module: Zielordner -> @{ Version; Cache; Patched }. Verweist ein Eintrag per HintPath
+# auf ein .bfpackage im Repo, ist das Modul gepatcht (gleiche Versionsnummer, anderer Inhalt). Es liegt
+# dann pro Projekt und Paketinhalt im Cache (_patched\<Projekt>\<Modul>\<Version>-<Hash>), nie im
+# kundenuebergreifenden Teil. Cache = $null: nicht cachen (Paketdatei fehlt).
+function Get-WantedReferences([string]$Target, [string[]]$Projects, [string]$CacheRoot, [string]$ProjectName) {
+    $wanted = @{}
+    foreach ($proj in $Projects) {
+        $full = Join-Path $Target $proj
+        if (-not (Test-Path $full)) { continue }
+        $base = Split-Path $full
+        foreach ($el in [regex]::Matches((Get-Content $full -Raw), '<ReferenceProjectItem\b[^>]*>')) {
+            $a = @{}
+            foreach ($m in [regex]::Matches($el.Value, '(\w+)="([^"]*)"')) { $a[$m.Groups[1].Value] = $m.Groups[2].Value }
+            if (-not $a.RealizationPath -or $a.Reference -notmatch '^[^:]+:([^:]+):') { continue }
+            $ver = $Matches[1]
+            $dir = [IO.Path]::GetFullPath((Join-Path $base $a.RealizationPath))
+            $module = Split-Path $dir -Leaf
+            $patched = [bool]($a.HintPath -like '*.bfpackage')
+            $cache = Join-Path $CacheRoot "$module\$ver"
+            if ($patched) {
+                $pkg = [IO.Path]::GetFullPath((Join-Path $base $a.HintPath))
+                $cache = $null
+                if (Test-Path $pkg) {
+                    $hash = (Get-FileHash $pkg -Algorithm SHA256).Hash.Substring(0, 12)
+                    $cache = Join-Path $CacheRoot "_patched\$ProjectName\$module\$ver-$hash"
+                }
+            }
+            # Mehrere Module koennen dieselbe Referenz verlangen: gepatcht vor offiziell, sonst hoechste Version
+            $old = $wanted[$dir]
+            $take = -not $old
+            if ($old -and $patched -ne $old.Patched) { $take = $patched }
+            elseif ($old) { try { $take = [version]$ver -gt [version]$old.Version } catch { $take = $false } }
+            if ($take) { $wanted[$dir] = @{ Version = $ver; Cache = $cache; Patched = $patched } }
+        }
+    }
+    return $wanted
 }
 
 function Invoke-PrIis([string[]]$IisArgs) {
@@ -415,31 +456,26 @@ if (-not $projects) {
     $useCache = -not $NoRefCache
     $wanted = @{}
     if ($useCache) {
-        $refPattern = 'RealizationPath="(?<path>[^"]+)"\s+Reference="[^":]+:(?<ver>[^":]+):(?<name>[^"]+)"'
-        foreach ($proj in $projects) {
-            $full = Join-Path $target $proj
-            if (-not (Test-Path $full)) { continue }
-            foreach ($m in [regex]::Matches((Get-Content $full -Raw), $refPattern)) {
-                $dir = [IO.Path]::GetFullPath((Join-Path (Split-Path $full) $m.Groups['path'].Value))
-                # Mehrere Module koennen dieselbe Referenz in versch. Versionen verlangen - hoechste gewinnt
-                $ver = $m.Groups['ver'].Value
-                $newer = $true
-                if ($wanted.ContainsKey($dir)) { try { $newer = [version]$ver -gt [version]$wanted[$dir] } catch { $newer = $false } }
-                if ($newer) { $wanted[$dir] = $ver }
-            }
-        }
+        $wanted = Get-WantedReferences $target $projects $RefCache $Project
         $hit = 0; $miss = 0
         foreach ($dir in $wanted.Keys) {
-            $ver = $wanted[$dir]
-            if ((Get-RealizedVersion $dir) -eq $ver) { $hit++; continue }   # schon da (z.B. erneuter Lauf)
-            $src = Join-Path $RefCache "$(Split-Path $dir -Leaf)\$ver"
-            if (Test-Path (Join-Path $src '_bfpackageexpansion.xml')) {
+            $w = $wanted[$dir]
+            # Offizielle Module: passende Version im Klon genuegt (z.B. erneuter Lauf). Gepatchte nicht -
+            # die Versionsnummer verraet nicht, ob der Patch (oder ein neuerer) drin ist.
+            if (-not $w.Patched -and (Get-RealizedVersion $dir) -eq $w.Version) { $hit++; continue }
+            if ($w.Cache -and (Test-Path (Join-Path $w.Cache '_bfpackageexpansion.xml'))) {
                 if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
-                Copy-Dir $src $dir
+                Copy-Dir $w.Cache $dir
                 $hit++
-            } else { $miss++ }
+            } else {
+                # Gepatcht und noch nicht im Cache: weg damit, sonst haelt bfdesignc ein offizielles
+                # Modul gleicher Version fuer aktuell und spielt den Patch nicht ein.
+                if ($w.Patched -and (Test-Path $dir)) { Remove-Item $dir -Recurse -Force }
+                $miss++
+            }
         }
-        Write-Host "Referenz-Cache ($RefCache): $hit aus Cache, $miss werden geladen"
+        $patchedCount = @($wanted.Values | Where-Object { $_.Patched }).Count
+        Write-Host "Referenz-Cache ($RefCache): $hit aus Cache, $miss werden geladen, davon gepatcht: $patchedCount"
     }
 
     foreach ($proj in $projects) {
@@ -457,7 +493,13 @@ if (-not $projects) {
         foreach ($dir in $realized) {
             $ver = Get-RealizedVersion $dir
             if (-not $ver) { continue }
+            # Eigener Cache-Ort der Referenz (gepatcht: pro Projekt); sonst (z.B. transitive) global
             $dst = Join-Path $RefCache "$(Split-Path $dir -Leaf)\$ver"
+            if ($wanted.ContainsKey($dir)) {
+                $w = $wanted[$dir]
+                if (-not $w.Cache -or $ver -ne $w.Version) { continue }
+                $dst = $w.Cache
+            }
             if (Test-Path (Join-Path $dst '_bfpackageexpansion.xml')) { continue }
             $tmp = "$dst.tmp"
             if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }

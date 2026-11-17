@@ -13,4 +13,9 @@
 Die App ruft `Clone-Branch.ps1` immer mit `-Root <Projektordner>` auf. Dort liegen auch `_refcache`
 und ein bei Bedarf geladenes `nuget.exe` – nie im Programmordner.
 
+`_refcache` hält BORA-Referenzen pro Modul und Version (`<Modul>\<Version>`, kundenübergreifend).
+Gepatchte Module – ein `ReferenceProjectItem` mit `HintPath` auf ein `.bfpackage` im Repo – haben bei
+gleicher Versionsnummer anderen Inhalt: Sie liegen unter `_patched\<Projekt>\<Modul>\<Version>-<Hash>`
+(Hash des Pakets), landen nie im kundenübergreifenden Teil und werden bei jedem Lauf frisch eingesetzt.
+
 Die Skripte müssen für Windows PowerShell 5.1 lesbar bleiben: ASCII oder UTF-8 mit BOM.
