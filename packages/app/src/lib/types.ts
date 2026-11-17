@@ -93,6 +93,14 @@ export interface SyncRun {
   error: string | null;
 }
 
+/** Newer release on GitHub? latest null: could not be checked. */
+export interface UpdateInfo {
+  current: string;
+  latest: string | null;
+  url: string | null;
+  available: boolean;
+}
+
 export interface DaemonStatus {
   version: string;
   sources: SourceStatus;

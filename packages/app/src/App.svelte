@@ -1,5 +1,6 @@
 <script lang="ts">
   import { listen } from '@tauri-apps/api/event';
+  import { openUrl } from '@tauri-apps/plugin-opener';
   import { enable, isEnabled } from '@tauri-apps/plugin-autostart';
   import { onMount } from 'svelte';
   import ItemRow from './components/ItemRow.svelte';
@@ -15,6 +16,7 @@
     NewItem,
     Settings as AppSettings,
     SourceStatus,
+    UpdateInfo,
   } from './lib/types';
 
   let items = $state<Item[]>([]);
@@ -101,6 +103,12 @@
     }
   }
 
+  /** Newer release on GitHub (the daemon asks at most every few hours). */
+  let update = $state<UpdateInfo | null>(null);
+  async function refreshUpdate() {
+    update = await api.update().catch(() => null);
+  }
+
   /** Folded sections ("section:<key>") and projects ("project:<name>"), stored in the daemon. */
   let collapsed = $state<string[]>([]);
   function toggle(key: string) {
@@ -142,6 +150,7 @@
   onMount(() => {
     void refresh();
     void refreshStatus();
+    void refreshUpdate();
     if (pinned) void setAlwaysOnTop(true).catch(() => (pinned = false));
 
     // Autostart is on by default for installed (release) builds; the user can turn it off in the
@@ -172,6 +181,7 @@
     }, 30_000);
     // New commits on PR branches show up without waiting for the next sync.
     const cloneTick = setInterval(() => void refreshCloneSync(), 3 * 60_000);
+    const updateTick = setInterval(() => void refreshUpdate(), 60 * 60_000);
 
     const unlisten = listen('tray-sync', () => void syncNow()).catch(() => () => undefined);
 
@@ -179,6 +189,7 @@
       unsubscribe();
       clearInterval(tick);
       clearInterval(cloneTick);
+      clearInterval(updateTick);
       void unlisten.then((f) => f());
     };
   });
@@ -214,6 +225,13 @@
       <button class="icon" title="Jetzt synchronisieren" onclick={syncNow} disabled={syncing}>
         <span class:spin={syncing}>⟳</span>
       </button>
+      {#if update?.available && update.url}
+        <button
+          class="update"
+          title="Neue Version {update.latest} herunterladen (installiert: {update.current})"
+          onclick={() => update?.url && void openUrl(update.url)}>Update {update.latest}</button
+        >
+      {/if}
       <button class="icon" title="Einstellungen" onclick={() => (view = 'settings')}>⚙</button>
     </div>
   </header>
@@ -402,6 +420,17 @@
   .actions {
     display: flex;
     gap: 2px;
+  }
+  /* Shown only when GitHub has a newer release: small, but not to be missed. */
+  .update {
+    align-self: center;
+    margin-right: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    border-radius: 10px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    background: transparent;
   }
   .actions .icon {
     font-size: 16px;

@@ -8,6 +8,7 @@ import type {
   SecretsStatus,
   Settings,
   StreamEvent,
+  UpdateInfo,
 } from './types';
 
 type WritableSecret =
@@ -141,6 +142,7 @@ export const api = {
       request<CompleteResult>('POST', `/api/prs/${id}/complete`, { approve }),
   },
   status: () => request<DaemonStatus>('GET', '/api/status'),
+  update: () => request<UpdateInfo>('GET', '/api/update'),
   settings: () => request<Settings>('GET', '/api/settings'),
   updateSettings: (patch: Record<string, unknown>) =>
     request<Settings>('PATCH', '/api/settings', patch),

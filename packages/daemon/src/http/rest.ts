@@ -11,12 +11,14 @@ import { z } from 'zod';
 import { prRouter } from '../prs/routes.js';
 import type { PrWorkspace } from '../prs/service.js';
 import type { Scheduler } from '../scheduler.js';
+import type { UpdateInfo } from '../update.js';
 import { sseHandler } from './sse.js';
 
 export interface RestDeps {
   core: Core;
   scheduler: Scheduler;
   version: string;
+  checkUpdate?: () => Promise<UpdateInfo>;
   /** Graceful stop requested by the app (a hard kill would skip cleanup). */
   onShutdown?: () => void;
   prWorkspace?: PrWorkspace;
@@ -82,6 +84,7 @@ export function restRouter({
   core,
   scheduler,
   version,
+  checkUpdate,
   onShutdown,
   prWorkspace,
 }: RestDeps): Router {
@@ -96,6 +99,15 @@ export function restRouter({
     }
     res.status(202).json({ ok: true });
     res.on('finish', () => setImmediate(onShutdown));
+  });
+
+  // Newer release on GitHub? Without a checker (tests, offline use): nothing to report.
+  r.get('/update', async (_req, res) => {
+    res.json(
+      checkUpdate
+        ? await checkUpdate()
+        : { current: version, latest: null, url: null, available: false },
+    );
   });
 
   r.get('/status', (_req, res) => {

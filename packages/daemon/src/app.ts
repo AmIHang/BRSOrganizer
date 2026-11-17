@@ -7,6 +7,7 @@ import { bearerAuth, hostCheck, originCheck } from './http/security.js';
 import { mcpRouter } from './mcp/http.js';
 import type { PrWorkspace } from './prs/service.js';
 import type { Scheduler } from './scheduler.js';
+import type { UpdateInfo } from './update.js';
 
 export interface AppDeps {
   core: Core;
@@ -18,6 +19,8 @@ export interface AppDeps {
   getPort: () => number;
   allowedOrigins: readonly string[];
   version: string;
+  /** Is there a newer release? (default: never asked) */
+  checkUpdate?: () => Promise<UpdateInfo>;
   onShutdown?: () => void;
   /** PR workspace (clone/open/remove/complete); REST only, never exposed to MCP. */
   prWorkspace?: PrWorkspace;

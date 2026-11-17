@@ -219,6 +219,7 @@
   <header>
     <button class="icon" onclick={onclose} aria-label="Zurück">←</button>
     <h2>Einstellungen</h2>
+    {#if status}<span class="version muted" title="Installierte Version">v{status.version}</span>{/if}
   </header>
 
   {#if message}
@@ -611,6 +612,10 @@
   h2 {
     font-size: 16px;
     margin: 0;
+  }
+  .version {
+    margin-left: auto;
+    font-size: 11px;
   }
   h3 {
     font-size: 13px;

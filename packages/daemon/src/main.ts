@@ -24,6 +24,7 @@ import { edgeTicketSessions } from './tickets/edge.js';
 import { linkTickets } from './tickets/link.js';
 import { claudeAgentsCli, watchAgents } from './prs/agents.js';
 import { createScheduler } from './scheduler.js';
+import { updateChecker } from './update.js';
 import { VERSION } from './version.js';
 
 const HOST = '127.0.0.1';
@@ -141,6 +142,7 @@ const { app, close: closeApp } = createApp({
   getPort: () => port,
   allowedOrigins,
   version: VERSION,
+  checkUpdate: updateChecker(VERSION),
   onShutdown: () => void shutdown('api'),
   prWorkspace,
 });
