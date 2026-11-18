@@ -89,6 +89,10 @@ describe('ItemService', () => {
       );
       const cleared = core.items.setTickets(t.id, { otmaUrl: null }, 'claude');
       expect(cleared).toMatchObject({ bsmUrl: t.bsmUrl, otmaUrl: null, updatedBy: 'claude' });
+      // BSM keys with a hyphen, as OTMA lists them.
+      expect(core.items.setTickets(t.id, { bsmUrl: 'JV-BRSg0002' }, 'user').bsmUrl).toBe(
+        'https://bsm.boomsoftware.com/indication/JV-BRSg0002',
+      );
     });
 
     it('validates input', () => {
@@ -178,7 +182,9 @@ describe('ItemService', () => {
 
     it('files a todo under a project and removes it again', () => {
       const t = core.items.addTodo({ title: 'a' }, 'user');
-      expect(core.items.updateTodo(t.id, { project: ' STB ' }, 'user').meta).toEqual({ project: 'STB' });
+      expect(core.items.updateTodo(t.id, { project: ' STB ' }, 'user').meta).toEqual({
+        project: 'STB',
+      });
       expect(core.items.updateTodo(t.id, { title: 'b' }, 'user').meta).toEqual({ project: 'STB' });
       expect(core.items.updateTodo(t.id, { project: null }, 'user').meta).toEqual({});
     });

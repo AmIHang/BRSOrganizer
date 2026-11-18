@@ -58,7 +58,9 @@ describe('paths', () => {
       join('C:\\Users\\x\\AppData\\Local', 'BRSOrganizer'),
     );
     expect(dataDir({ BRSORGANIZER_DATA_DIR: 'D:\\data', LOCALAPPDATA: 'C:\\x' })).toBe('D:\\data');
-    expect(databaseFile({ BRSORGANIZER_DATA_DIR: 'D:\\data' })).toBe(join('D:\\data', 'brsorganizer.db'));
+    expect(databaseFile({ BRSORGANIZER_DATA_DIR: 'D:\\data' })).toBe(
+      join('D:\\data', 'brsorganizer.db'),
+    );
   });
 });
 
@@ -81,10 +83,19 @@ describe('settings', () => {
         github: { enabled: true, includeAuthored: true, includeAssigned: true },
         calendar: { enabled: true, provider: 'ics', lookAheadDays: 14 },
         tfs: { enabled: true, collectionUrl: '', includeAuthored: true },
-        workspace: { projectsRoot: '', projects: [], hiddenProjects: [] },
+        workspace: { projectsRoot: '', projects: [], hiddenProjects: [], otmaProjects: {} },
         mail: { enabled: false, outlookFolder: 'Posteingang/PR', lookBackDays: 90 },
         ui: { collapsed: [] },
       });
+      core.settings.update({
+        workspace: { otmaProjects: { 'STB BRS [STBBRS]': 'Steiermarkbahn' } },
+      });
+      expect(core.settings.get().workspace.otmaProjects).toEqual({
+        'STB BRS [STBBRS]': 'Steiermarkbahn',
+      });
+      expect(() => core.settings.update({ workspace: { otmaProjects: { x: '' } } })).toThrow(
+        ValidationError,
+      );
       expect(() => core.settings.update({ tfs: { collectionUrl: 'not a url' } })).toThrow(
         ValidationError,
       );

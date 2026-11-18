@@ -4,6 +4,7 @@ import type {
   CompleteResult,
   DaemonStatus,
   Item,
+  OtmaTicket,
   PrDetails,
   SecretsStatus,
   Settings,
@@ -109,6 +110,9 @@ export const api = {
   archive: (id: string) => request<Item>('POST', `/api/items/${id}/archive`),
   reopen: (id: string) => request<Item>('POST', `/api/items/${id}/reopen`),
   sync: () => request<unknown>('POST', '/api/sync'),
+  /** Read live from OTMA; may open the Edge login window. */
+  otmaTickets: () =>
+    request<{ tickets: OtmaTicket[] }>('GET', '/api/otma/tickets').then((r) => r.tickets),
   pr: {
     cloneSync: (refresh = false) =>
       request<Record<string, CloneSync>>(

@@ -46,8 +46,20 @@ describe('background agents', () => {
     core.items.updateTodo(todo.id, { agentBranch: 'feature/a' }, 'user');
     core.items.updateTodo(other.id, { agentBranch: 'feature/b' }, 'user');
     const sessions: AgentSession[] = [
-      { name: agentSessionName(todo.id), sessionId: 's-000001', cwd: 'C:\\a', status: 'idle' },
-      { name: agentSessionName(other.id), sessionId: 's-000002', cwd: 'C:\\b', status: 'busy' },
+      {
+        name: agentSessionName(todo.id),
+        sessionId: 's-000001',
+        cwd: 'C:\\a',
+        status: 'idle',
+        pid: 11,
+      },
+      {
+        name: agentSessionName(other.id),
+        sessionId: 's-000002',
+        cwd: 'C:\\b',
+        status: 'busy',
+        pid: 12,
+      },
     ];
     const reads: string[] = [];
     const watch = watchAgents(core, {
@@ -90,6 +102,39 @@ describe('background agents', () => {
       sessions.push(gone); // resumed
       await watch.check();
       expect(core.items.get(other.id).meta?.agentEnded).toBeUndefined();
+    } finally {
+      watch.stop();
+    }
+  });
+
+  it('sees a session ended by a restart, checking right at start', async () => {
+    const core = makeCore();
+    const todo = core.items.addTodo({ title: 'A', notes: 'x' }, 'user');
+    core.items.updateTodo(todo.id, { agentBranch: 'feature/a', agentReply: 'Analyse …' }, 'user');
+    const name = agentSessionName(todo.id);
+    // As `claude agents --json --all` lists them after a reboot: no pid, no status.
+    const sessions = [
+      { name, sessionId: 's-000001', cwd: 'C:\\a', state: 'done' },
+    ] as AgentSession[];
+    let listed = 0;
+    const watch = watchAgents(core, {
+      list: async () => {
+        listed++;
+        return sessions;
+      },
+      read: () => null,
+      intervalMs: 60_000,
+    });
+    try {
+      await watch.check(); // waits for the check started with the watch
+      expect(listed).toBe(1);
+      await watch.check();
+      expect(core.items.get(todo.id).meta).toMatchObject({ agentEnded: true });
+
+      // A live idle session also reports state "done"; its pid tells it runs (resumed).
+      sessions[0] = { name, sessionId: 's-000001', cwd: 'C:\\a', status: 'idle', pid: 7 };
+      await watch.check();
+      expect(core.items.get(todo.id).meta?.agentEnded).toBeUndefined();
     } finally {
       watch.stop();
     }

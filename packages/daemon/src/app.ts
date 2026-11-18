@@ -7,6 +7,7 @@ import { bearerAuth, hostCheck, originCheck } from './http/security.js';
 import { mcpRouter } from './mcp/http.js';
 import type { PrWorkspace } from './prs/service.js';
 import type { Scheduler } from './scheduler.js';
+import type { BsmSession } from './tickets/bsm.js';
 import type { UpdateInfo } from './update.js';
 
 export interface AppDeps {
@@ -24,6 +25,8 @@ export interface AppDeps {
   onShutdown?: () => void;
   /** PR workspace (clone/open/remove/complete); REST only, never exposed to MCP. */
   prWorkspace?: PrWorkspace;
+  /** OTMA through the user's login, for the ticket list (REST only). */
+  otma?: BsmSession;
 }
 
 export function createApp(deps: AppDeps): { app: Express; close(): Promise<void> } {

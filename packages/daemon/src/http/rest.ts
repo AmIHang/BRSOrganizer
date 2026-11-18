@@ -11,6 +11,8 @@ import { z } from 'zod';
 import { prRouter } from '../prs/routes.js';
 import type { PrWorkspace } from '../prs/service.js';
 import type { Scheduler } from '../scheduler.js';
+import type { BsmSession } from '../tickets/bsm.js';
+import { otmaMyTickets } from '../tickets/otma.js';
 import type { UpdateInfo } from '../update.js';
 import { sseHandler } from './sse.js';
 
@@ -22,6 +24,7 @@ export interface RestDeps {
   /** Graceful stop requested by the app (a hard kill would skip cleanup). */
   onShutdown?: () => void;
   prWorkspace?: PrWorkspace;
+  otma?: BsmSession;
 }
 
 /** Secrets the UI may write (never read back). The local access token is not among them. */
@@ -87,6 +90,7 @@ export function restRouter({
   checkUpdate,
   onShutdown,
   prWorkspace,
+  otma,
 }: RestDeps): Router {
   const r = Router();
 
@@ -204,6 +208,15 @@ export function restRouter({
   r.delete('/secrets/:name', (req, res) => {
     core.secrets.delete(secretName(req));
     res.status(204).end();
+  });
+
+  // Read live on request (may open the Edge login window), never stored.
+  r.get('/otma/tickets', async (_req, res) => {
+    if (!otma) {
+      res.status(404).json({ error: 'not_found' });
+      return;
+    }
+    res.json({ tickets: await otmaMyTickets(otma) });
   });
 
   r.get('/stream', sseHandler(core));

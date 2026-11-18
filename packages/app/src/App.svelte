@@ -5,10 +5,12 @@
   import { onMount } from 'svelte';
   import ItemRow from './components/ItemRow.svelte';
   import NewItemDialog from './components/NewItemDialog.svelte';
+  import OtmaTickets from './components/OtmaTickets.svelte';
   import Settings from './components/Settings.svelte';
   import { api, subscribe } from './lib/api';
   import { groupItems, projectsOf } from './lib/group';
   import { announceAgentUpdates, announceNewItems, remindUpcoming } from './lib/notify';
+  import { loadOtma, otma } from './lib/otma.svelte';
   import { savedAlwaysOnTop, setAlwaysOnTop } from './lib/pin';
   import type {
     CloneSync,
@@ -21,7 +23,8 @@
 
   let items = $state<Item[]>([]);
   let now = $state(new Date());
-  let view = $state<'list' | 'settings'>('list');
+  let view = $state<'list' | 'otma' | 'settings'>('list');
+  let otmaList = $state<OtmaTickets>();
   let error = $state<string | null>(null);
   let syncing = $state(false);
   let sources = $state<SourceStatus | null>(null);
@@ -183,6 +186,13 @@
     // New commits on PR branches show up without waiting for the next sync.
     const cloneTick = setInterval(() => void refreshCloneSync(), 3 * 60_000);
     const updateTick = setInterval(() => void refreshUpdate(), 60 * 60_000);
+    // New OTMA tickets for the tab's bubble (may open the OTMA login window).
+    // Off in the settings: no tab, no loads (and no login window).
+    const pollOtma = () => {
+      if (otma.enabled) void loadOtma();
+    };
+    pollOtma();
+    const otmaTick = setInterval(pollOtma, 10 * 60_000);
 
     const unlisten = listen('tray-sync', () => void syncNow()).catch(() => () => undefined);
 
@@ -191,6 +201,7 @@
       clearInterval(tick);
       clearInterval(cloneTick);
       clearInterval(updateTick);
+      clearInterval(otmaTick);
       void unlisten.then((f) => f());
     };
   });
@@ -206,7 +217,20 @@
   />
 {:else}
   <header>
-    <h1>Todos</h1>
+    <nav class="tabs">
+      <button class:active={view === 'list'} aria-pressed={view === 'list'} onclick={() => (view = 'list')}
+        >Todos</button
+      >
+      {#if otma.enabled}
+      <button class:active={view === 'otma'} aria-pressed={view === 'otma'} onclick={() => (view = 'otma')}
+        >OTMA{#if otma.unseen.length}<span
+            class="bubble"
+            title="{otma.unseen.length} neue OTMA-Tickets"
+            aria-label="{otma.unseen.length} neue">{otma.unseen.length}</span
+          >{/if}</button
+      >
+      {/if}
+    </nav>
     <div class="actions">
       <button
         class="icon pin"
@@ -223,9 +247,13 @@
           />
         </svg>
       </button>
-      <button class="icon" title="Jetzt synchronisieren" onclick={syncNow} disabled={syncing}>
-        <span class:spin={syncing}>⟳</span>
-      </button>
+      {#if view === 'otma'}
+        <button class="icon" title="OTMA-Tickets neu laden" onclick={() => void otmaList?.reload()}>⟳</button>
+      {:else}
+        <button class="icon" title="Jetzt synchronisieren" onclick={syncNow} disabled={syncing}>
+          <span class:spin={syncing}>⟳</span>
+        </button>
+      {/if}
       {#if update?.available && update.url}
         <button
           class="update"
@@ -237,6 +265,18 @@
     </div>
   </header>
 
+  {#if view === 'otma'}
+    <OtmaTickets
+      bind:this={otmaList}
+      {items}
+      {projects}
+      mapping={workspace?.otmaProjects ?? {}}
+      onchanged={() => {
+        void refresh();
+        void refreshStatus();
+      }}
+    />
+  {:else}
   <button class="fab" title="Neu (Todo oder Termin)" aria-label="Neu" onclick={() => {
       creatingProject = null;
       creating = true;
@@ -313,6 +353,7 @@
       {/if}
     </section>
   {/each}
+  {/if}
 {/if}
 
 {#snippet rows(list: Item[])}
@@ -346,9 +387,38 @@
     background: var(--bg);
     z-index: 1;
   }
-  h1 {
+  .tabs {
+    display: flex;
+    gap: 4px;
+  }
+  .tabs button {
+    all: unset;
+    cursor: pointer;
     font-size: 16px;
-    margin: 0;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 6px;
+    color: var(--muted);
+  }
+  .tabs button.active {
+    color: var(--fg);
+  }
+  .tabs button:focus-visible {
+    outline: 2px solid var(--accent);
+  }
+  .bubble {
+    display: inline-block;
+    min-width: 16px;
+    margin-left: 4px;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border-radius: 8px;
+    font-size: 10px;
+    line-height: 16px;
+    text-align: center;
+    vertical-align: 3px;
+    color: #fff;
+    background: var(--danger);
   }
   .fab {
     position: fixed;

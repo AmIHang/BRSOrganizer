@@ -28,6 +28,7 @@ import {
   localCheckout,
   removeWorktree,
   scanRepos,
+  unsavedWork,
   type CloneSync,
   type LocalCheckout,
   type RepoInfo,
@@ -107,6 +108,11 @@ export interface PrWorkspaceDeps {
   otma?: BsmSession;
   /** Test hook; default `claude stop <session>`. */
   stopAgent?: StopAgentSession;
+  /**
+   * Where each hand-off's task (auftrag.md, ticket images) goes; the agent reads it again when
+   * resumed, so not %TEMP% (Storage Sense). Default: the temp folder (tests).
+   */
+  tasksDir?: string;
 }
 
 const strip = (ref: string) => ref.replace(/^refs\/heads\//, '');
@@ -224,6 +230,12 @@ export function agentPrompt(
   ].join('\n');
 }
 
+/** Every analysis ends with an effort estimate (in PT, as the planned effort in OTMA). */
+const ESTIMATE =
+  'Aufwandschätzung (Pflicht, auch bei Unsicherheit): Spanne in Personentagen (PT) für ' +
+  'Umsetzung inkl. Test, aufgeteilt nach den wesentlichen Arbeitsschritten, mit den Annahmen ' +
+  'und Risiken, die die Spanne bestimmen.';
+
 /** Without a description of the developer: only analyse, change nothing, answer with it. */
 const ANALYSIS_STEPS = [
   '## Vorgehen: nur Analyse',
@@ -237,8 +249,9 @@ const ANALYSIS_STEPS = [
     'einem Fehler die vermutliche Ursache.',
   '3. Ändere keine Dateien, committe nichts, pushe nichts und erstelle keinen Pull Request.',
   '4. Antworte zum Schluss mit der Analyse: kurze Zusammenfassung der Aufgabe, betroffene ' +
-    'Stellen, Ursache bzw. Lösungsvorschlag, offene Fragen und grober Aufwand. Diese Antwort ' +
-    'sieht der Entwickler in BRSOrganizer.',
+    'Stellen, Ursache bzw. Lösungsvorschlag, offene Fragen und eine ' +
+    ESTIMATE +
+    ' Diese Antwort sieht der Entwickler in BRSOrganizer.',
 ];
 
 /** Steps of an implementation (the developer described what to do). */
@@ -246,6 +259,12 @@ function implementSteps(todo: Item, project: string, key: string | undefined, sc
   const suffix = todo.id.slice(-6).toLowerCase();
   return [
     '## Vorgehen',
+    '',
+    'Verlangt die Beschreibung des Entwicklers nur eine Analyse (oder eine Schätzung), setz ' +
+      'nichts um: Analysiere wie beschrieben, ändere keine Dateien, committe und pushe nichts, ' +
+      'erstelle keinen Pull Request, und antworte mit der Analyse samt ' +
+      ESTIMATE +
+      ' Sonst:',
     '',
     '1. Verschaff dir aus den Informationen oben ein Bild der Aufgabe, beachte dabei die ' +
       'Priorität der Quellen.',
@@ -521,11 +540,23 @@ export class PrWorkspace {
       throw new ForbiddenOperationError(`item ${itemId} is not handed off to an agent`);
     }
     const session = agentSessionName(itemId);
-    this.deps.launcher.runScript(`Claude – ${todo.title}`, this.script('Open-AgentSession.ps1'), [
-      '-Name',
-      session,
-    ]);
+    // An ended session (e.g. after a restart) resumes in this console: it needs the login again.
+    this.deps.launcher.runScript(
+      `Claude – ${todo.title}`,
+      this.script('Open-AgentSession.ps1'),
+      ['-Name', session],
+      this.accountEnv(),
+    );
     return { session };
+  }
+
+  /** BSM/OTMA account for the agent: only through the console's environment, never in files. */
+  private accountEnv(): Record<string, string> | undefined {
+    const user = this.deps.core.secrets.get('ticket-user');
+    const password = this.deps.core.secrets.get('ticket-password');
+    return user && password
+      ? { [TICKET_USER_ENV]: user, [TICKET_PASSWORD_ENV]: password }
+      : undefined;
   }
 
   async handOffTodo(itemId: string): Promise<{
@@ -539,6 +570,15 @@ export class PrWorkspace {
     const project = todo.meta?.project;
     if (todo.type !== 'todo' || typeof project !== 'string') {
       throw new ForbiddenOperationError(`item ${itemId} is not a todo in a project`);
+    }
+    // Still there from an earlier hand-off (ended, e.g. by a restart): starting anew would fail at
+    // `git worktree add` and lose that agent's task, so it is resumed or removed first.
+    const existing = todo.meta?.agentWorktree;
+    if (typeof existing === 'string' && existsSync(existing)) {
+      throw new ForbiddenOperationError(
+        `Der Worktree ${existing} einer früheren Übergabe besteht noch – Agent fortsetzen ` +
+          '(„Agent beendet“ anklicken) oder Worktree entfernen.',
+      );
     }
     const root = this.deps.core.settings.get().workspace.projectsRoot;
     if (!root) throw new ValidationError('no projects folder configured (settings → PR workspace)');
@@ -562,7 +602,7 @@ export class PrWorkspace {
     const name = agentSessionName(itemId);
 
     // The task and the ticket images go into one folder per todo; the agent reads it, so it stays.
-    const taskDir = join(tmpdir(), `brsorganizer-agent-${suffix}`);
+    const taskDir = join(this.deps.tasksDir ?? tmpdir(), `brsorganizer-agent-${suffix}`);
     rmSync(taskDir, { recursive: true, force: true });
     mkdirSync(taskDir, { recursive: true });
 
@@ -593,9 +633,8 @@ export class PrWorkspace {
     await read('otma', todo.otmaUrl, this.deps.otma, readOtmaTicket);
 
     // BSM/OTMA account: only through the console's environment, never in files or arguments.
-    const user = this.deps.core.secrets.get('ticket-user');
-    const password = this.deps.core.secrets.get('ticket-password');
-    const account = user && password;
+    const env = this.accountEnv();
+    const account = env !== undefined;
 
     const promptFile = join(taskDir, 'auftrag.md');
     // BOM: Windows PowerShell 5.1 (Add-Content in the script) would read it as ANSI otherwise.
@@ -630,7 +669,7 @@ export class PrWorkspace {
         '-PromptFile',
         promptFile,
       ],
-      account ? { [TICKET_USER_ENV]: user, [TICKET_PASSWORD_ENV]: password } : undefined,
+      env,
     );
     if (run.code !== 0) {
       const reason = /^FEHLER: (.+)$/m.exec(run.stdout)?.[1]?.trim() || `Exit-Code ${run.code}`;
@@ -691,6 +730,66 @@ export class PrWorkspace {
       '-Force',
     ]);
     return { clonePath: local.clonePath, ideClosed: ide.closed, ideForced: ide.forced };
+  }
+
+  /**
+   * Cleans up after an item left the list (PR completed/abandoned, item done or archived): the
+   * PR checkout with its IIS app pool, and the agent worktree of a todo. Nothing is deleted that
+   * holds work: a checkout with uncommitted or unpushed changes and a worktree git refuses to
+   * remove stay. A todo that became a pull request keeps its worktree until that PR leaves.
+   * Returns what was done or why not, for the log.
+   */
+  async cleanUpLeftItem(itemId: string): Promise<string[]> {
+    const item = this.deps.core.items.get(itemId);
+    if (item.status === 'open') return [];
+    const done: string[] = [];
+
+    const worktreeOf = async (todo: Item) => {
+      if (typeof todo.meta?.agentWorktree !== 'string') return;
+      try {
+        // A session still running would keep writing into the folder.
+        await (this.deps.stopAgent ?? claudeStopCli())(agentSessionName(todo.id)).catch(
+          () => undefined,
+        );
+        const r = await this.removeAgentWorktree(todo.id);
+        done.push(`worktree ${r.worktree} removed`);
+      } catch (err) {
+        done.push(`worktree kept: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+
+    if (item.type === 'todo') {
+      if (typeof item.meta?.prItemId !== 'string') await worktreeOf(item);
+      return done;
+    }
+    if (item.type !== 'pr') return done;
+
+    // The agent worktree of the todo this PR came from.
+    for (const todo of this.deps.core.items.list({ type: 'todo', status: 'all', limit: 1000 })) {
+      if (todo.meta?.prItemId === itemId) await worktreeOf(todo);
+    }
+
+    let local: { ref: { id: number }; checkout: Awaited<ReturnType<typeof localCheckout>> };
+    try {
+      const { ref, repo } = this.requireLocal(itemId);
+      local = { ref, checkout: await localCheckout(repo, ref.id) };
+    } catch {
+      return done; // not a TFS PR, no projects folder or repo: nothing local
+    }
+    const { checkout, ref } = local;
+    if (!checkout.cloned || !checkout.managed) return done;
+    const keep = await unsavedWork(checkout.clonePath, ref.id);
+    if (keep) {
+      done.push(`checkout ${checkout.clonePath} kept: ${keep}`);
+      return done;
+    }
+    this.deps.launcher.runScript(`PR ${ref.id} aufräumen`, this.script('Remove-PrClone.ps1'), [
+      '-Path',
+      checkout.clonePath,
+      '-Force',
+    ]);
+    done.push(`checkout ${checkout.clonePath} and app pool PR${ref.id} being removed`);
+    return done;
   }
 
   async open(itemId: string, target: 'solution' | 'folder'): Promise<void> {

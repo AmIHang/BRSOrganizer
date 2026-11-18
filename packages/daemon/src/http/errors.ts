@@ -29,10 +29,11 @@ export function errorHandler(logger: Logger): ErrorRequestHandler {
       return;
     }
     // Errors from Azure DevOps (e.g. a branch policy blocking the merge) or from the TFS/script
-    // plumbing: the message is meant for the user and contains no secrets.
+    // plumbing, or from OTMA (login, unexpected answer): the message is meant for the user and
+    // contains no secrets.
     if (
       err instanceof TfsRequestError ||
-      (err instanceof Error && /^(Azure DevOps|PR scripts)/.test(err.message))
+      (err instanceof Error && /^(Azure DevOps|PR scripts|OTMA)/.test(err.message))
     ) {
       res.status(502).json({ error: 'upstream', message: (err as Error).message });
       return;

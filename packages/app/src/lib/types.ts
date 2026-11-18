@@ -67,7 +67,13 @@ export interface Settings {
   github: { enabled: boolean; includeAuthored: boolean; includeAssigned: boolean };
   calendar: { enabled: boolean; provider: 'ics' | 'outlook'; lookAheadDays: number };
   tfs: { enabled: boolean; collectionUrl: string; includeAuthored: boolean };
-  workspace: { projectsRoot: string; projects: string[]; hiddenProjects: string[] };
+  workspace: {
+    projectsRoot: string;
+    projects: string[];
+    hiddenProjects: string[];
+    /** OTMA project → customer folder (learned when taking a ticket over as a todo). */
+    otmaProjects: Record<string, string>;
+  };
   mail: { enabled: boolean; outlookFolder: string; lookBackDays: number };
   /** Folded list parts ("section:<key>", "project:<name>"), kept in the daemon's DB. */
   ui: { collapsed: string[] };
@@ -94,6 +100,19 @@ export interface SyncRun {
 }
 
 /** Newer release on GitHub? latest null: could not be checked. */
+/** One of the user's open OTMA work packages (GET /api/otma/tickets). */
+export interface OtmaTicket {
+  key: string;
+  url: string;
+  title: string;
+  /** Linked BSM ticket key, '' if none. */
+  bsm: string;
+  status: string;
+  responsible: string;
+  project: string;
+  changedAt: string | null;
+}
+
 export interface UpdateInfo {
   current: string;
   latest: string | null;

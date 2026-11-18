@@ -50,6 +50,11 @@ export const settingsSchema = z.object({
       projects: z.array(projectName).max(200).default([]),
       /** Projects from pull requests the user removed from the list. */
       hiddenProjects: z.array(projectName).max(500).default([]),
+      /** OTMA project ("STB BRS [STBBRS]") → customer folder, for todos taken over from OTMA. */
+      otmaProjects: z
+        .record(z.string().trim().min(1).max(300), projectName)
+        .refine((m) => Object.keys(m).length <= 500, 'too many OTMA projects')
+        .default({}),
     })
     .prefault({}),
   /** Fallback when TFS is not configured: PRs from notification mails in an Outlook folder. */
@@ -106,6 +111,7 @@ export const settingsPatchSchema = z.strictObject({
       projectsRoot: z.string(),
       projects: z.array(z.string()),
       hiddenProjects: z.array(z.string()),
+      otmaProjects: z.record(z.string(), z.string()),
     })
     .partial()
     .optional(),

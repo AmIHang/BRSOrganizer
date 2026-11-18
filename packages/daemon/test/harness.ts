@@ -7,6 +7,7 @@ import { createApp } from '../src/app.js';
 import { DEFAULT_ALLOWED_ORIGINS } from '../src/http/security.js';
 import type { PrWorkspace } from '../src/prs/service.js';
 import { createScheduler } from '../src/scheduler.js';
+import type { BsmSession } from '../src/tickets/bsm.js';
 
 export const TOKEN = 'test-token-0123456789abcdefghijklmnopqrstuv';
 
@@ -24,9 +25,10 @@ export async function startHarness(
     port?: number;
     /** Builds the PR workspace from the harness core (default: none). */
     prWorkspace?: (core: ReturnType<typeof makeCore>) => PrWorkspace;
+    otma?: BsmSession;
   } & Parameters<typeof makeCore>[0] = {},
 ): Promise<Harness> {
-  const { secrets, port: fixedPort, prWorkspace, ...coreOptions } = options;
+  const { secrets, port: fixedPort, prWorkspace, otma, ...coreOptions } = options;
   const core = makeCore({ secrets: new MemorySecretStore(secrets ?? {}), ...coreOptions });
   const logger = pino({ level: 'silent' });
   const scheduler = createScheduler({ core, logger });
@@ -41,6 +43,7 @@ export async function startHarness(
     allowedOrigins: [...DEFAULT_ALLOWED_ORIGINS, 'http://localhost:1420'],
     version: 'test',
     ...(workspace && { prWorkspace: workspace }),
+    ...(otma && { otma }),
   });
   const server: Server = createServer(app);
   await new Promise<void>((resolve) => server.listen(fixedPort ?? 0, '127.0.0.1', resolve));

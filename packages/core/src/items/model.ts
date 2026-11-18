@@ -88,7 +88,8 @@ const link = z.url({ protocol: /^https?$/, error: 'link must be an http(s) URL' 
 
 /** BSM tickets live at <base><key>, e.g. https://bsm.boomsoftware.com/indication/BRS_PWg0127. */
 export const BSM_TICKET_BASE = 'https://bsm.boomsoftware.com/indication/';
-const BSM_KEY = /^[A-Za-z][A-Za-z0-9_]*\d+$/;
+// Keys may contain hyphens ("JV-BRSg0002").
+const BSM_KEY = /^[A-Za-z][A-Za-z0-9_-]*\d+$/;
 
 /** A BSM ticket: full URL, or just the key ("BRS_PWg0127"), which is expanded to the URL. */
 export const bsmTicketInput = z

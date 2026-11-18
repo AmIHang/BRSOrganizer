@@ -159,7 +159,13 @@
     { label: 'Archivieren', onclick: () => onarchive(item) },
   ]);
   /** Open todos with something to work on (ticket or description) can go to a Claude agent. */
-  const canHandOff = $derived(item.type === 'todo' && item.status === 'open' && !agentWorking);
+  // Not while the worktree of an ended hand-off still exists: resume it or remove it first.
+  const canHandOff = $derived(
+    item.type === 'todo' &&
+      item.status === 'open' &&
+      !agentWorking &&
+      !(agentEnded && typeof item.meta?.agentWorktree === 'string'),
+  );
   /** "An Claude" first asks for the project the agent works in. */
   let pickingHandOffProject = $state(false);
   /** Background agent: works until the PR shows up, or answers and waits for the user. */
@@ -312,6 +318,14 @@
           title="Claude wartet auf: {agentWaiting}. Klick öffnet die Sitzung ({agentSession}) im Terminal."
           onclick={() => void openSession()}>Rückfrage von Claude</button
         >
+      {:else if agentEnded}
+        <!-- Before "Claude wartet": an earlier answer must not hide that the session is gone
+             (e.g. after a restart). Attaching resumes it; the daemon then sees it running again. -->
+        <button
+          class="chip status ended"
+          title="Die Sitzung des Agenten ist beendet (z. B. nach einem Neustart), ohne Pull Request. Klick setzt sie im Terminal fort ({agentSession})."
+          onclick={() => void openSession()}>Agent beendet – fortsetzen</button
+        >
       {:else if agentReply}
         <span class="chip status claude" title="Der Agent hat seine Runde beendet und wartet auf dich"
           >Claude wartet</span
@@ -321,10 +335,6 @@
           class="chip working"
           title="Ein Claude-Agent arbeitet im Hintergrund an diesem Todo. Klick öffnet die Sitzung im Terminal."
           onclick={() => void openSession()}>Claude arbeitet</button
-        >
-      {:else if agentEnded}
-        <span class="chip status ended" title="Die Sitzung des Agenten ist beendet, ohne Pull Request"
-          >Agent beendet</span
         >
       {/if}
       {#if agentReply}
@@ -372,7 +382,7 @@
   <ReplyDialog
     {item}
     onclose={() => (showingReply = false)}
-    onopen={agentWorking ? () => void openSession() : undefined}
+    onopen={handedOff ? () => void openSession() : undefined}
   />
 {/if}
 
@@ -431,8 +441,11 @@
     color: var(--muted);
   }
   button.chip.working,
-  button.chip.status.asking {
+  button.chip.status.asking,
+  button.chip.status.ended {
     cursor: pointer;
+    font: inherit;
+    font-size: 12px;
   }
   .chip.working {
     background: var(--chip-blue-bg);

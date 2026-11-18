@@ -103,11 +103,25 @@ export function edgeTicketSessions(options: EdgeBsmOptions): { bsm: BsmSession; 
 
   const launch = async (headless: boolean) => {
     const { chromium } = await import('playwright-core');
-    const ctx = await chromium.launchPersistentContext(options.profileDir, {
-      channel: 'msedge',
-      headless,
-      ...(headless ? {} : { viewport: null }),
-    });
+    const open = () =>
+      chromium.launchPersistentContext(options.profileDir, {
+        channel: 'msedge',
+        headless,
+        ...(headless ? {} : { viewport: null }),
+      });
+    let ctx: BrowserContext;
+    try {
+      ctx = await open();
+    } catch (err) {
+      // A leftover Edge still holds the profile: one that was still shutting down after a hung
+      // close, or one of a daemon that was killed. Runs are serialized, so it is never in use.
+      if (!(err instanceof Error && /ProcessSingleton|already in use/i.test(err.message)))
+        throw err;
+      log('Edge profile still in use, ending the leftover Edge');
+      await killEdge(options.profileDir);
+      await sleep(1_000);
+      ctx = await open();
+    }
     const now = Date.now() / 1000;
     const valid = sessionCookies.filter((c) => c.expires === -1 || c.expires > now);
     if (valid.length) await ctx.addCookies(valid);
@@ -225,10 +239,17 @@ export function edgeTicketSessions(options: EdgeBsmOptions): { bsm: BsmSession; 
   const session =
     (system: System): BsmSession =>
     <T>(fn: (http: BsmHttp) => Promise<T>): Promise<T> => {
-      const next = queue.then(
-        () => run(system, fn),
-        () => run(system, fn),
-      );
+      const next = queue
+        .then(
+          () => run(system, fn),
+          () => run(system, fn),
+        )
+        .catch((err: unknown) => {
+          // Edge/Playwright errors as "<system>: <first line>", so the user sees what failed
+          // instead of an internal error (the call log behind it is long and of no use there).
+          if (!(err instanceof Error) || err.message.startsWith(system.label)) throw err;
+          throw new Error(`${system.label}: ${err.message.split('\n')[0]}`, { cause: err });
+        });
       queue = next.catch(() => undefined);
       return next;
     };

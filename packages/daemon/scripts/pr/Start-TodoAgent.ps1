@@ -59,11 +59,51 @@ Write-Host "Worktree: $worktree ($Branch von $base)"
 git -C $repoDir worktree add -b $Branch $worktree $base
 if ($LASTEXITCODE -ne 0) { throw 'git worktree add fehlgeschlagen' }
 
-Add-Content -LiteralPath $PromptFile -Encoding UTF8 -Value @(
+$notes = @()
+
+# IIS URLs with -<Name>, as for PR clones, so the worktree runs next to the others. Only local:
+# a clean filter strips the suffix again whenever a *.csproj is staged, so it is never committed,
+# while other changes to the same file are. sed -b keeps CRLF; the pattern only matches
+# "-Todo-<id>" suffixes, so the filter changes nothing in the main repo or other worktrees.
+$webApps = @(& (Join-Path $PSScriptRoot 'Set-IisUrls.ps1') -Target $worktree -Name $Name)
+if ($webApps) {
+  git -C $repoDir config filter.brsorganizer-iisurl.clean "sed -b -E 's#(<IISUrl>[^<]*)-Todo-[a-z0-9]+/</IISUrl>#\1/</IISUrl>#'"
+  if ($LASTEXITCODE -ne 0) { throw 'git config fuer den IISUrl-Filter fehlgeschlagen' }
+  $commonDir = (git -C $worktree rev-parse --path-format=absolute --git-common-dir).Trim()
+  $attributes = Join-Path $commonDir 'info\attributes'
+  $line = '*.csproj filter=brsorganizer-iisurl'
+  New-Item -ItemType Directory -Force -Path (Split-Path $attributes) | Out-Null
+  if (-not ((Test-Path $attributes) -and (Get-Content $attributes) -contains $line)) {
+    Add-Content -LiteralPath $attributes -Encoding ASCII -Value $line
+  }
+  # Stages the files through the filter (same content as HEAD), so git status and
+  # `git worktree remove` do not see them as modified just because their size changed.
+  git -C $worktree add -- @($webApps | ForEach-Object File)
+  if ($LASTEXITCODE -ne 0) { throw 'git add der angepassten *.csproj fehlgeschlagen' }
+  Write-Host "IIS-URLs: $(($webApps | ForEach-Object Url) -join ', ')"
+  $notes += "Die IISUrl in $(($webApps | ForEach-Object File) -join ', ') ist nur lokal auf -$Name angepasst " +
+    '(eigene IIS-App neben anderen Klonen). Ein Git-Filter entfernt den Suffix beim Committen automatisch - ' +
+    'die Zeile also nicht von Hand zuruecksetzen und nicht selbst committen.'
+}
+
+# BORA module references, as for PR clones: from the shared cache, missing ones via bfdesignc.
+# A failure does not stop the agent; it is told about it.
+try {
+  $refArgs = @{ Target = $worktree; Project = $Project; RefCache = (Join-Path $Root '_refcache') }
+  $failedRefs = @(& (Join-Path $PSScriptRoot 'Update-BoraReferences.ps1') @refArgs)
+  if ($failedRefs) {
+    $notes += "Hinweis: BORA-Modulreferenzen konnten nicht geladen werden fuer: $($failedRefs -join ', ') " +
+      '(bfdesignc /updatereferences). Vor dem Bauen erneut versuchen.'
+  }
+} catch {
+  $notes += "Hinweis: BORA-Modulreferenzen wurden nicht geladen: $($_.Exception.Message)"
+}
+
+Add-Content -LiteralPath $PromptFile -Encoding UTF8 -Value (@(
   '',
   "Arbeitsverzeichnis: $worktree (git worktree, Branch $Branch, abgezweigt von $base).",
   "Ziel-Branch des Pull Requests: $target."
-)
+) + $notes)
 
 # The task travels as a file: multi-line arguments with quotes do not survive PowerShell 5.1
 # native argument passing (or claude.cmd) intact.

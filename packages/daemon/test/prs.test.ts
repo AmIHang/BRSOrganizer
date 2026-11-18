@@ -13,7 +13,14 @@ import {
   type Launcher,
 } from '../src/prs/launcher.js';
 import { agentPrompt, PrWorkspace, type PrDetails } from '../src/prs/service.js';
-import { cloneSync, findRepo, normalizeRemote, scanRepos } from '../src/prs/workspace.js';
+import { cleanUpLeftItems } from '../src/prs/cleanup.js';
+import {
+  cloneSync,
+  findRepo,
+  normalizeRemote,
+  scanRepos,
+  unsavedWork,
+} from '../src/prs/workspace.js';
 import { auth, raw, startHarness, type Harness } from './harness.js';
 
 const COLLECTION = 'https://tfs.example.com/tfs/boom';
@@ -115,6 +122,34 @@ describe('cloneSync with real git', () => {
 
     expect(await cloneSync(repo, 8)).toEqual({ cloned: false, behind: null, remoteGone: false });
   });
+
+  it('tells whether a PR checkout holds work that must not be deleted', async () => {
+    const server = join(dir, 'server.git');
+    const work = join(dir, 'work');
+    sh(dir, 'init', '-q', '--bare', server);
+    sh(dir, 'clone', '-q', server, work);
+    sh(work, 'checkout', '-q', '-b', 'feature/x');
+    const csproj = '<Project>\r\n<IISUrl>http://localhost/BM.Web/</IISUrl>\r\n</Project>\r\n';
+    writeFileSync(join(work, 'Web.csproj'), csproj);
+    writeFileSync(join(work, 'a.txt'), '1');
+    sh(work, 'add', '.');
+    sh(work, 'commit', '-q', '-m', 'one');
+    sh(work, 'push', '-q', 'origin', 'feature/x');
+    const clone = join(dir, 'PR7');
+    sh(dir, 'clone', '-q', '--branch', 'feature/x', server, clone);
+
+    expect(await unsavedWork(clone, 7)).toBeNull();
+    // What the clone script changes itself does not count.
+    writeFileSync(join(clone, 'Web.csproj'), csproj.replace('BM.Web/', 'BM.Web-PR7/'));
+    expect(await unsavedWork(clone, 7)).toBeNull();
+    // A real change does.
+    writeFileSync(join(clone, 'a.txt'), 'changed');
+    expect(await unsavedWork(clone, 7)).toMatch(/uncommitted changes in a\.txt/);
+    sh(clone, 'commit', '-q', '-am', 'local');
+    expect(await unsavedWork(clone, 7)).toBe('1 commit(s) not pushed');
+    sh(clone, 'push', '-q', 'origin', 'feature/x');
+    expect(await unsavedWork(clone, 7)).toBeNull();
+  });
 });
 
 describe('script launcher', () => {
@@ -180,10 +215,15 @@ describe('agent prompt', () => {
     expect(analysis).toContain('## Vorgehen: nur Analyse');
     expect(analysis).toContain('erstelle keinen Pull Request');
     expect(analysis).not.toContain('Erstelle einen Pull Request');
+    // An analysis always ends with an effort estimate.
+    expect(analysis).toContain('Aufwandschätzung (Pflicht');
 
     const todo = core.items.addTodo({ title: 'T', notes: 'tu es' }, 'user');
     const impl = agentPrompt(todo, 'P');
     expect(impl).not.toContain('nur Analyse');
+    // Also when the description itself only asks for an analysis.
+    expect(impl).toContain('nur eine Analyse (oder eine Schätzung)');
+    expect(impl).toContain('Aufwandschätzung (Pflicht');
     // The agent names its branch itself but keeps the suffix the sync finds the PR by.
     expect(impl).toContain(
       `git branch -m feature/<kurzer-englischer-name>-${todo.id.slice(-6).toLowerCase()}`,
@@ -221,6 +261,7 @@ describe('PR workspace via REST', () => {
   let hidden: { code: number; stdout: string; stderr: string };
   let stopped: string[];
   let prStatus: string;
+  let workspace: PrWorkspace;
 
   const pr = () => ({
     pullRequestId: 4393,
@@ -280,7 +321,7 @@ describe('PR workspace via REST', () => {
 
     h = await startHarness({
       prWorkspace: (core) =>
-        new PrWorkspace({
+        (workspace = new PrWorkspace({
           core,
           launcher,
           scriptsDir: 'C:\\app\\runtime\\scripts\\pr',
@@ -295,7 +336,7 @@ describe('PR workspace via REST', () => {
             launched.push({ kind: 'open', path: `closeIde:${clonePath}:${id}` });
             return { closed: 1, forced: 0 };
           },
-        }),
+        })),
     });
     await h.core.sync.run(
       new StaticSource('tfs', [
@@ -539,8 +580,23 @@ describe('PR workspace via REST', () => {
     });
     expect((await remove()).status).toBe(409);
 
-    // Ended, with an untracked file: git refuses, nothing is lost.
+    // Ended (e.g. by a restart): resuming runs in a console that gets the BSM/OTMA login again.
     h.core.items.updateTodo(todo.id, { agentEnded: true }, 'claude');
+    h.core.secrets.set('ticket-user', 'max');
+    h.core.secrets.set('ticket-password', 'geheim');
+    expect((await post(`/api/prs/todos/${todo.id}/agent/attach`)).status).toBe(202);
+    expect(launched.at(-1)).toMatchObject({
+      args: ['-Name', `Todo-${suffix}`],
+      env: { BRS_TICKET_USER: 'max', BRS_TICKET_PASSWORD: 'geheim' },
+    });
+    // A new hand-off would fail at `git worktree add` after deleting the old task: refused.
+    h.core.settings.update({ workspace: { projectsRoot: root } });
+    h.core.items.updateTodo(todo.id, { project: 'Kunde' }, 'user');
+    const again = await post(`/api/prs/todos/${todo.id}/agent`);
+    expect(again.status).toBe(409);
+    expect(again.json<{ message: string }>().message).toMatch(/Worktree .* besteht noch/);
+
+    // Ended, with an untracked file: git refuses, nothing is lost.
     writeFileSync(join(worktree, 'notes.txt'), 'wip');
     const refused = await remove();
     expect(refused.status).toBe(409);
@@ -639,6 +695,97 @@ describe('PR workspace via REST', () => {
       `closeIde:${join(root, 'Community', 'PR4393')}:4393`,
       ['-Path', join(root, 'Community', 'PR4393'), '-Force'],
     ]);
+  });
+
+  it('removes checkout, app pool and agent worktree once the PR leaves the list', async () => {
+    h.core.settings.update({ workspace: { projectsRoot: root } });
+    const pr = prId();
+    const g = (cwd: string, ...args: string[]) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+        cwd,
+        stdio: 'pipe',
+      });
+    // Real PR checkout as Clone-Branch.ps1 makes it, its origin pointing at the PR's repo.
+    const server = join(root, 'server.git');
+    const seed = join(root, 'seed');
+    g(root, 'init', '-q', '--bare', server);
+    g(root, 'clone', '-q', server, seed);
+    g(seed, 'checkout', '-q', '-b', 'feature/rmh');
+    g(seed, 'commit', '-q', '--allow-empty', '-m', 'one');
+    g(seed, 'push', '-q', 'origin', 'feature/rmh');
+    const clone = join(root, 'Community', 'PR4393');
+    g(root, 'clone', '-q', '--branch', 'feature/rmh', server, clone);
+    writeFileSync(join(clone, '.git', 'clone-branch'), 'x');
+    // A local commit: the checkout holds work and stays.
+    g(clone, 'commit', '-q', '--allow-empty', '-m', 'local');
+    g(clone, 'remote', 'set-url', 'origin', REPO_URL);
+
+    // The todo the agent turned into this PR (the sync links them by the agent's branch).
+    const todo = h.core.items.addTodo({ title: 'T' }, 'user');
+    const tree = join(root, 'Community', 'Todo-abc');
+    g(seed, 'worktree', 'add', '-q', '-b', 'feature/todo-x', tree);
+    h.core.items.updateTodo(
+      todo.id,
+      { agentBranch: 'feature/todo-x', agentWorktree: tree },
+      'user',
+    );
+    await h.core.sync.run(
+      new StaticSource('tfs', [
+        {
+          externalId: 'tfs.example.com/boom/produktion/community/4393',
+          type: 'pr',
+          title: 'feat: added community RMH',
+          link: PR_LINK,
+          meta: { project: 'Produktion', sourceBranch: 'feature/todo-x' },
+        },
+      ]),
+    );
+    expect(h.core.items.get(todo.id)).toMatchObject({ status: 'done', meta: { prItemId: pr } });
+    // Done by becoming the PR: the worktree stays while the PR is open.
+    expect(await workspace.cleanUpLeftItem(todo.id)).toEqual([]);
+    expect(await workspace.cleanUpLeftItem(pr)).toEqual([]);
+
+    h.core.items.archiveItem(pr, 'user');
+    expect(await workspace.cleanUpLeftItem(pr)).toEqual([
+      `worktree ${tree} removed`,
+      `checkout ${clone} kept: 1 commit(s) not pushed`,
+    ]);
+    expect(existsSync(tree)).toBe(false);
+    expect(stopped).toContain(`Todo-${todo.id.slice(-6).toLowerCase()}`);
+    expect(launched).toEqual([]);
+
+    // Pushed: now checkout and app pool go (Remove-PrClone.ps1 with UAC, in a console).
+    g(clone, 'remote', 'set-url', 'origin', server);
+    g(clone, 'push', '-q', 'origin', 'feature/rmh');
+    g(clone, 'remote', 'set-url', 'origin', REPO_URL);
+    expect(await workspace.cleanUpLeftItem(pr)).toEqual([
+      `checkout ${clone} and app pool PR4393 being removed`,
+    ]);
+    expect(launched).toEqual([
+      {
+        kind: 'script',
+        title: 'PR 4393 aufräumen',
+        script: join('C:\\app\\runtime\\scripts\\pr', 'Remove-PrClone.ps1'),
+        args: ['-Path', clone, '-Force'],
+      },
+    ]);
+  });
+
+  it('cleans up once per item when it leaves the list, not while it is open', async () => {
+    const cleaned: string[] = [];
+    cleanUpLeftItems(h.core, {
+      cleanUpLeftItem: async (id: string) => {
+        cleaned.push(id);
+        return [];
+      },
+    } as unknown as PrWorkspace);
+    const t = h.core.items.addTodo({ title: 'T' }, 'user');
+    h.core.items.updateTodo(t.id, { title: 'T2' }, 'user');
+    expect(cleaned).toEqual([]);
+    h.core.items.archiveItem(t.id, 'user');
+    h.core.items.reopenItem(t.id, 'user');
+    h.core.items.archiveItem(t.id, 'user');
+    expect(cleaned).toEqual([t.id]);
   });
 
   it('completes the PR with squash merge, optionally approving first', async () => {

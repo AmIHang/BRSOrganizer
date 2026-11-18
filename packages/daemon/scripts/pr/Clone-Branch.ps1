@@ -101,57 +101,6 @@ function Invoke-Native([string]$Exe, [string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "$Exe $($Arguments -join ' ') ist mit Exit-Code $LASTEXITCODE fehlgeschlagen." }
 }
 
-function Copy-Dir([string]$From, [string]$To) {
-    # robocopy: Exit-Codes < 8 bedeuten Erfolg
-    $null = robocopy $From $To /E /MT:16 /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
-    if ($LASTEXITCODE -ge 8) { throw "robocopy $From -> $To fehlgeschlagen (Exit $LASTEXITCODE)." }
-    $global:LASTEXITCODE = 0
-}
-
-function Get-RealizedVersion([string]$RefDir) {
-    $f = Join-Path $RefDir '_bfpackageexpansion.xml'
-    if ((Test-Path $f) -and ((Get-Content $f -Raw) -match 'PackageVersion="([^"]+)"')) { return $Matches[1] }
-    return $null
-}
-
-# Referenzen der Module: Zielordner -> @{ Version; Cache; Patched }. Verweist ein Eintrag per HintPath
-# auf ein .bfpackage im Repo, ist das Modul gepatcht (gleiche Versionsnummer, anderer Inhalt). Es liegt
-# dann pro Projekt und Paketinhalt im Cache (_patched\<Projekt>\<Modul>\<Version>-<Hash>), nie im
-# kundenuebergreifenden Teil. Cache = $null: nicht cachen (Paketdatei fehlt).
-function Get-WantedReferences([string]$Target, [string[]]$Projects, [string]$CacheRoot, [string]$ProjectName) {
-    $wanted = @{}
-    foreach ($proj in $Projects) {
-        $full = Join-Path $Target $proj
-        if (-not (Test-Path $full)) { continue }
-        $base = Split-Path $full
-        foreach ($el in [regex]::Matches((Get-Content $full -Raw), '<ReferenceProjectItem\b[^>]*>')) {
-            $a = @{}
-            foreach ($m in [regex]::Matches($el.Value, '(\w+)="([^"]*)"')) { $a[$m.Groups[1].Value] = $m.Groups[2].Value }
-            if (-not $a.RealizationPath -or $a.Reference -notmatch '^[^:]+:([^:]+):') { continue }
-            $ver = $Matches[1]
-            $dir = [IO.Path]::GetFullPath((Join-Path $base $a.RealizationPath))
-            $module = Split-Path $dir -Leaf
-            $patched = [bool]($a.HintPath -like '*.bfpackage')
-            $cache = Join-Path $CacheRoot "$module\$ver"
-            if ($patched) {
-                $pkg = [IO.Path]::GetFullPath((Join-Path $base $a.HintPath))
-                $cache = $null
-                if (Test-Path $pkg) {
-                    $hash = (Get-FileHash $pkg -Algorithm SHA256).Hash.Substring(0, 12)
-                    $cache = Join-Path $CacheRoot "_patched\$ProjectName\$module\$ver-$hash"
-                }
-            }
-            # Mehrere Module koennen dieselbe Referenz verlangen: gepatcht vor offiziell, sonst hoechste Version
-            $old = $wanted[$dir]
-            $take = -not $old
-            if ($old -and $patched -ne $old.Patched) { $take = $patched }
-            elseif ($old) { try { $take = [version]$ver -gt [version]$old.Version } catch { $take = $false } }
-            if ($take) { $wanted[$dir] = @{ Version = $ver; Cache = $cache; Patched = $patched } }
-        }
-    }
-    return $wanted
-}
-
 function Invoke-PrIis([string[]]$IisArgs) {
     # Startet PrIis.ps1 mit Adminrechten (UAC-Abfrage) und zeigt dessen Ausgabe an
     $iisScript = Join-Path $scriptDir 'PrIis.ps1'
@@ -171,24 +120,6 @@ function Invoke-PrIis([string[]]$IisArgs) {
         Remove-Item $log -Force -ErrorAction SilentlyContinue
     }
     return ($proc.ExitCode -eq 0)
-}
-
-function Find-BoraDesigner {
-    # 1. Umgebungsvariable BFDESIGNER (Datei oder Ordner)
-    if ($env:BFDESIGNER) {
-        $p = $env:BFDESIGNER.Trim('"')
-        if (Test-Path $p -PathType Container) { $p = Join-Path $p 'bfdesignc.exe' }
-        if (Test-Path $p -PathType Leaf) { return $p }
-        Write-Warning "BFDESIGNER zeigt auf '$($env:BFDESIGNER)', dort gibt es kein bfdesignc.exe."
-    }
-    # 2. Registry (gleiche Logik wie getReferences.bat)
-    try {
-        $cmd = (Get-ItemProperty 'Registry::HKEY_CLASSES_ROOT\bfdesigner.bfproj\shell\Build\command' -ErrorAction Stop).'(default)'
-        if ($cmd -match '^"?(.+?bfdesignc\.exe)"?') {
-            if (Test-Path $Matches[1]) { return $Matches[1] }
-        }
-    } catch { }
-    throw 'BORA Designer (bfdesignc.exe) nicht gefunden. BFDESIGNER setzen oder den BORA Designer installieren.'
 }
 
 # Markierung in .git, an der Klone dieses Skripts erkannt werden
@@ -387,28 +318,9 @@ Write-Host "Verknuepfung: $(Join-Path $target "$prName.url")"
 # ============================================================================
 # IIS: Web-URLs mit -<Name> (z.B. -PR4373), eigener App-Pool <Name>
 # ============================================================================
-$webUrls = @()
-$webApps = @()
-foreach ($rel in @(git -C $target ls-files '*.csproj')) {
-    $file = Join-Path $target ($rel -replace '/', '\')
-    $raw = [IO.File]::ReadAllText($file)
-    if ($raw -notmatch '<UseIIS>\s*True\s*</UseIIS>') { continue }
-    $m = [regex]::Match($raw, '<IISUrl>(?<base>https?://localhost(:\d+)?)/(?<path>[^<]*?)/?</IISUrl>')
-    if (-not $m.Success -or -not $m.Groups['path'].Value) { continue }
-    $path = $m.Groups['path'].Value
-    $suffix = "-$Name"
-    $origPath = if ($path.EndsWith($suffix)) { $path.Substring(0, $path.Length - $suffix.Length) } else { $path }
-    $newPath = "$origPath$suffix"
-    if ($path -ne $newPath) {
-        # Encoding (BOM) und Zeilenenden der Datei beibehalten
-        $bytes = [IO.File]::ReadAllBytes($file)
-        $hasBom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
-        $raw = $raw.Remove($m.Index, $m.Length).Insert($m.Index, "<IISUrl>$($m.Groups['base'].Value)/$newPath/</IISUrl>")
-        [IO.File]::WriteAllText($file, $raw, (New-Object Text.UTF8Encoding $hasBom))
-    }
-    $webUrls += "$($m.Groups['base'].Value)/$newPath/"
-    $webApps += [pscustomobject]@{ AppPath = "/$newPath"; OrigPath = "/$origPath"; PhysicalPath = (Split-Path $file) }
-}
+# Anpassung der *.csproj: Set-IisUrls.ps1 (auch fuer die Worktrees von "An Claude")
+$webApps = @(& (Join-Path $scriptDir 'Set-IisUrls.ps1') -Target $target -Name $Name)
+$webUrls = @($webApps | ForEach-Object Url)
 if ($webApps) {
     Write-Step "IIS: $($webApps.Count) Web-Projekt(e) mit Suffix -$Name, App-Pool $Name"
     if ($NoIis) {
@@ -429,88 +341,9 @@ if ($webApps) {
 # BORA-Modulreferenzen
 # ============================================================================
 Write-Step 'Aktualisiere BORA-Modulreferenzen'
-$refWatch = [Diagnostics.Stopwatch]::StartNew()
-
-# Eigene Module = eingecheckte *.bfproj (realisierte Referenzen wie Modules\BM.Core sind nicht eingecheckt)
-$projects = @(git -C $target ls-files '*.bfproj' | ForEach-Object { $_ -replace '/', '\' } |
-    Where-Object { $_ -notmatch '(^|\\)Hosted\\' })
-
-# Reihenfolge wie in der CI, falls die Pipeline die Module auflistet
-$pipeline = Join-Path $target 'azure-pipeline-ci.yml'
-if ((Test-Path $pipeline) -and $projects.Count -gt 1) {
-    $ymlOrder = [regex]::Matches((Get-Content $pipeline -Raw), '[\w.\\/$()-]+\.bfproj') |
-        ForEach-Object { ($_.Value -replace '/', '\' -replace '^.*\)\\', '') }
-    $projects = @($projects | Sort-Object { $i = [array]::IndexOf(@($ymlOrder), $_); if ($i -lt 0) { 9999 } else { $i } })
-}
-
-$failed = @()
-if (-not $projects) {
-    Write-Warning 'Keine eingecheckten *.bfproj gefunden - Referenzen uebersprungen.'
-} else {
-    $bfdesignc = Find-BoraDesigner
-    Write-Host "BORA Designer: $bfdesignc"
-    Write-Host "Module: $($projects.Count)"
-
-    # Referenz-Cache: Referenzordner vorab befuellen. bfdesignc ueberspringt Referenzen mit passender
-    # Version ("up to date") und laedt nur Fehlendes bzw. andere Versionen.
-    $useCache = -not $NoRefCache
-    $wanted = @{}
-    if ($useCache) {
-        $wanted = Get-WantedReferences $target $projects $RefCache $Project
-        $hit = 0; $miss = 0
-        foreach ($dir in $wanted.Keys) {
-            $w = $wanted[$dir]
-            # Offizielle Module: passende Version im Klon genuegt (z.B. erneuter Lauf). Gepatchte nicht -
-            # die Versionsnummer verraet nicht, ob der Patch (oder ein neuerer) drin ist.
-            if (-not $w.Patched -and (Get-RealizedVersion $dir) -eq $w.Version) { $hit++; continue }
-            if ($w.Cache -and (Test-Path (Join-Path $w.Cache '_bfpackageexpansion.xml'))) {
-                if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
-                Copy-Dir $w.Cache $dir
-                $hit++
-            } else {
-                # Gepatcht und noch nicht im Cache: weg damit, sonst haelt bfdesignc ein offizielles
-                # Modul gleicher Version fuer aktuell und spielt den Patch nicht ein.
-                if ($w.Patched -and (Test-Path $dir)) { Remove-Item $dir -Recurse -Force }
-                $miss++
-            }
-        }
-        $patchedCount = @($wanted.Values | Where-Object { $_.Patched }).Count
-        Write-Host "Referenz-Cache ($RefCache): $hit aus Cache, $miss werden geladen, davon gepatcht: $patchedCount"
-    }
-
-    foreach ($proj in $projects) {
-        $full = Join-Path $target $proj
-        Write-Host "-> $proj" -ForegroundColor Yellow
-        & $bfdesignc /updatereferences $full
-        if ($LASTEXITCODE -ne 0) { $failed += $proj; Write-Warning "updatereferences fehlgeschlagen fuer $proj (Exit $LASTEXITCODE)" }
-    }
-
-    # Neu geladene Referenzen in den Cache uebernehmen (pro Modul und Version)
-    if ($useCache -and $wanted.Count) {
-        $added = 0
-        $refRoots = $wanted.Keys | ForEach-Object { Split-Path $_ } | Sort-Object -Unique
-        $realized = $refRoots | Where-Object { Test-Path $_ } | ForEach-Object { Get-ChildItem $_ -Directory } | ForEach-Object FullName
-        foreach ($dir in $realized) {
-            $ver = Get-RealizedVersion $dir
-            if (-not $ver) { continue }
-            # Eigener Cache-Ort der Referenz (gepatcht: pro Projekt); sonst (z.B. transitive) global
-            $dst = Join-Path $RefCache "$(Split-Path $dir -Leaf)\$ver"
-            if ($wanted.ContainsKey($dir)) {
-                $w = $wanted[$dir]
-                if (-not $w.Cache -or $ver -ne $w.Version) { continue }
-                $dst = $w.Cache
-            }
-            if (Test-Path (Join-Path $dst '_bfpackageexpansion.xml')) { continue }
-            $tmp = "$dst.tmp"
-            if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
-            Copy-Dir $dir $tmp
-            Rename-Item $tmp (Split-Path $dst -Leaf)   # erst nach vollstaendiger Kopie sichtbar
-            $added++
-        }
-        if ($added) { Write-Host "Referenz-Cache: $added Modul-Version(en) neu aufgenommen" }
-    }
-}
-Write-Host "Referenzen fertig nach $([int]$refWatch.Elapsed.TotalSeconds) s"
+# Cache, bfdesignc und Cache-Pflege: Update-BoraReferences.ps1 (auch fuer "An Claude")
+$refArgs = @{ Target = $target; Project = $Project; RefCache = $RefCache; NoRefCache = [bool]$NoRefCache }
+$failed = @(& (Join-Path $scriptDir 'Update-BoraReferences.ps1') @refArgs)
 
 # ============================================================================
 # Solution, NuGet

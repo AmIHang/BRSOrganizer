@@ -3,7 +3,20 @@
   import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import {
+    ignoreAllOtma,
+    loadOtma,
+    otma,
+    setOtmaEnabled,
+    unignoreAllOtma,
+  } from '../lib/otma.svelte';
   import type { DaemonStatus, SecretsStatus, Settings } from '../lib/types';
+
+  /** Needs the list: loads it first if the tab has not done so yet. */
+  async function ignoreAllTickets() {
+    if (!otma.tickets) await loadOtma();
+    ignoreAllOtma();
+  }
 
   let {
     onclose,
@@ -496,6 +509,52 @@
     </section>
 
     <section>
+      <h3>OTMA-Tickets</h3>
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={otma.enabled}
+          onchange={(e) => setOtmaEnabled(e.currentTarget.checked)}
+        />
+        Tab „OTMA“ anzeigen (lädt deine Tickets alle 10 Minuten)
+      </label>
+      <div class="inline">
+        <button onclick={ignoreAllTickets} disabled={otma.loading}>Alle ignorieren</button>
+        <button onclick={unignoreAllOtma} disabled={Object.keys(otma.ignored).length === 0}
+          >Alle wieder anzeigen</button
+        >
+        <span class="muted">{Object.keys(otma.ignored).length} ignoriert</span>
+      </div>
+      <p class="hint muted">
+        Ein ignoriertes Ticket kommt von selbst zurück, sobald sich sein Änderungsdatum ändert.
+      </p>
+      <h4>Zuordnung OTMA-Projekt → Projekt</h4>
+      {#if Object.keys(settings.workspace.otmaProjects).length}
+        <ul class="projects">
+          {#each Object.entries(settings.workspace.otmaProjects) as [from, to] (from)}
+            <li>
+              <span>{from} <span class="muted">→</span> {to}</span>
+              <button
+                type="button"
+                class="remove"
+                onclick={() => {
+                  const rest = { ...settings!.workspace.otmaProjects };
+                  delete rest[from];
+                  void patch({ workspace: { otmaProjects: rest } });
+                }}>Entfernen</button
+              >
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="hint muted">
+          Noch keine. Wählst du beim Übernehmen eines OTMA-Tickets ein Projekt, wird es hier für
+          dessen OTMA-Projekt gemerkt und künftig vorausgewählt.
+        </p>
+      {/if}
+    </section>
+
+    <section>
       <h3>
         PR-Mails (Outlook) <span class="muted">({SOURCE_TEXT[status?.sources.mail ?? ''] ?? '…'})</span>
       </h3>
@@ -622,6 +681,10 @@
     margin: 0 0 8px;
     text-transform: uppercase;
     letter-spacing: 0.03em;
+  }
+  h4 {
+    font-size: 12px;
+    margin: 12px 0 4px;
   }
   section {
     padding: 12px;

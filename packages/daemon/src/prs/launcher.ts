@@ -94,8 +94,9 @@ export function createWindowsLauncher(onError: (err: Error) => void = () => unde
           {
             env: env ? { ...process.env, ...env } : process.env,
             windowsHide: true,
-            // A hanging git (e.g. a credential prompt) must not block the hand-off forever.
-            timeout: 10 * 60_000,
+            // A hanging git (e.g. a credential prompt) must not block the hand-off forever. Generous:
+            // the hand-off also loads the BORA module references (minutes without the cache).
+            timeout: 30 * 60_000,
             maxBuffer: 4 * 1024 * 1024,
           },
           (err, stdout, stderr) =>

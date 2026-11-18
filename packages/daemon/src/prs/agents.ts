@@ -16,10 +16,20 @@ const sessionSchema = z.object({
    * "busy": working; "idle": finished its turn and waits for the user; "waiting": stuck mid-turn
    * on something only the user can answer (`waitingFor`, e.g. "permission prompt").
    */
-  status: z.string(),
+  status: z.string().optional(),
   waitingFor: z.string().optional(),
+  /** Process of a live session. Ended ones (also after a reboot) are listed without pid and status. */
+  pid: z.number().optional(),
+  /** "done" / "blocked" – also "done" for a live idle session, so not a sign of having ended. */
+  state: z.string().optional(),
 });
 export type AgentSession = z.infer<typeof sessionSchema>;
+
+/**
+ * Whether the session still runs. Not `state`: a live idle session also reports "done"
+ * (claude 2.1.327); the process id is what an ended one lacks.
+ */
+export const sessionAlive = (s: AgentSession) => s.pid !== undefined || s.status === 'busy';
 
 /** Lists claude's sessions (`claude agents --json --all`). */
 export type ListAgentSessions = () => Promise<AgentSession[]>;
@@ -118,18 +128,19 @@ export function watchAgents(
   const read = options.read ?? ((s) => lastReply(s));
   // Checks in a row a todo's session was missing: one alone may be a session still starting.
   const missing = new Map<string, number>();
-  let running = false;
-  const check = async () => {
+  // A check while one runs waits for that one instead of starting a second.
+  let running: Promise<void> | null = null;
+  const check = () => (running ??= run().finally(() => (running = null)));
+  const run = async () => {
     const todos = core.items
       .list({ type: 'todo', limit: 500 })
       .filter((t) => typeof t.meta?.agentBranch === 'string');
-    if (!todos.length || running) return;
-    running = true;
+    if (!todos.length) return;
     try {
       const sessions = await options.list();
       for (const todo of todos) {
         const name = agentSessionName(todo.id);
-        const s = sessions.find((x) => x.name === name);
+        const s = sessions.find((x) => x.name === name && sessionAlive(x));
         const ended = todo.meta?.agentEnded === true;
         if (!s) {
           // Gone without a PR (crashed, stopped elsewhere, reboot): the todo must not look busy.
@@ -159,11 +170,11 @@ export function watchAgents(
       options.log?.('could not check the agent sessions', {
         error: err instanceof Error ? err.message : String(err),
       });
-    } finally {
-      running = false;
     }
   };
   const timer = setInterval(() => void check(), options.intervalMs ?? 30_000);
   timer.unref();
+  // Right away too: after a restart the todos would otherwise look busy for a while.
+  void check();
   return { check, stop: () => clearInterval(timer) };
 }

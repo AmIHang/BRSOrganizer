@@ -102,6 +102,35 @@ export function git(cwd: string, args: string[], timeoutMs = 30_000): Promise<st
 }
 
 /**
+ * Why a PR checkout must not be deleted automatically, or null when it holds nothing of value:
+ * changed tracked files or commits not on the server. What Clone-Branch.ps1 changes itself
+ * (IIS URLs with -PR<nr> in *.csproj, .js compiled next to their .ts) does not count.
+ */
+export async function unsavedWork(clonePath: string, prId: number): Promise<string | null> {
+  let files: string[];
+  try {
+    files = (await git(clonePath, ['diff', '--name-only', 'HEAD'])).split(/\r?\n/).filter(Boolean);
+  } catch {
+    return 'git diff failed';
+  }
+  const iisMark = new RegExp(`-PR${prId}/?</IISUrl>`);
+  const changed = files.filter((f) => {
+    const full = join(clonePath, f);
+    if (f.endsWith('.js') && existsSync(full.replace(/\.js$/, '.ts'))) return false;
+    if (f.endsWith('.csproj') && existsSync(full) && iisMark.test(readFileSync(full, 'utf8')))
+      return false;
+    return true;
+  });
+  if (changed.length) return `uncommitted changes in ${changed.slice(0, 3).join(', ')}`;
+  try {
+    const ahead = Number(await git(clonePath, ['rev-list', '--count', '@{u}..HEAD']));
+    return ahead > 0 ? `${ahead} commit(s) not pushed` : null;
+  } catch {
+    return 'no upstream branch to compare with';
+  }
+}
+
+/**
  * Removes a git worktree and, if git considers it merged, its local branch. Never forced: with
  * uncommitted changes git refuses and nothing is lost; an unmerged branch stays (-d, not -D).
  */

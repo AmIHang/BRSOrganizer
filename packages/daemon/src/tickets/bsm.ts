@@ -37,7 +37,7 @@ export function bsmKey(url: string): string | null {
     return null;
   }
   if (u.origin !== BSM_ORIGIN) return null;
-  const m = /^\/indication\/([A-Za-z][A-Za-z0-9_]*\d+)\/?$/.exec(u.pathname);
+  const m = /^\/indication\/([A-Za-z][A-Za-z0-9_-]*\d+)\/?$/.exec(u.pathname);
   return m ? m[1]! : null;
 }
 
