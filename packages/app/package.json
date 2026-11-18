@@ -10,7 +10,7 @@
     "test": "vitest run",
     "sidecar": "node ../../scripts/build-sidecar.mjs",
     "tauri": "tauri",
-    "tauri:dev": "pnpm sidecar && tauri dev",
+    "tauri:dev": "pnpm sidecar && tauri dev --config src-tauri/tauri.dev.conf.json",
     "tauri:build": "pnpm sidecar && tauri build"
   },
   "dependencies": {
