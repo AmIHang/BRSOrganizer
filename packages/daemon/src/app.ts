@@ -25,7 +25,8 @@ export interface AppDeps {
   onShutdown?: () => void;
   /** PR workspace (clone/open/remove/complete); REST only, never exposed to MCP. */
   prWorkspace?: PrWorkspace;
-  /** OTMA through the user's login, for the ticket list (REST only). */
+  /** BSM and OTMA through the user's login: ticket list, titles of untitled todos (REST only). */
+  bsm?: BsmSession;
   otma?: BsmSession;
 }
 

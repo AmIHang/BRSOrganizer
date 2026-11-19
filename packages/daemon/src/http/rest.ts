@@ -7,12 +7,14 @@ import {
   type ListFilter,
 } from '@brsorganizer/core';
 import { Router, type Request } from 'express';
+import type { Logger } from 'pino';
 import { z } from 'zod';
 import { prRouter } from '../prs/routes.js';
 import type { PrWorkspace } from '../prs/service.js';
 import type { Scheduler } from '../scheduler.js';
 import type { BsmSession } from '../tickets/bsm.js';
 import { otmaMyTickets } from '../tickets/otma.js';
+import { fillTicketTitle, placeholderTitle } from '../tickets/title.js';
 import type { UpdateInfo } from '../update.js';
 import { sseHandler } from './sse.js';
 
@@ -24,7 +26,10 @@ export interface RestDeps {
   /** Graceful stop requested by the app (a hard kill would skip cleanup). */
   onShutdown?: () => void;
   prWorkspace?: PrWorkspace;
+  /** BSM and OTMA through the user's login (ticket list, titles of untitled todos). */
+  bsm?: BsmSession;
   otma?: BsmSession;
+  logger?: Pick<Logger, 'warn'>;
 }
 
 /** Secrets the UI may write (never read back). The local access token is not among them. */
@@ -90,9 +95,12 @@ export function restRouter({
   checkUpdate,
   onShutdown,
   prWorkspace,
+  bsm,
   otma,
+  logger,
 }: RestDeps): Router {
   const r = Router();
+  const log = (msg: string, extra?: Record<string, unknown>) => logger?.warn(extra ?? {}, msg);
 
   if (prWorkspace) r.use('/prs', prRouter(prWorkspace, scheduler));
 
@@ -140,7 +148,15 @@ export function restRouter({
   });
 
   r.post('/todos', (req, res) => {
-    res.status(201).json(core.items.addTodo(req.body ?? {}, 'user'));
+    // Unvalidated input: the core validates it in addTodo.
+    const body = req.body ?? {};
+    const given = body as { title?: unknown; bsmUrl?: unknown; otmaUrl?: unknown };
+    // Without a title (but with a ticket): the ticket key for now, the ticket's title once read.
+    const untitled = typeof given.title !== 'string' || !given.title.trim();
+    const placeholder = untitled ? placeholderTitle(given.bsmUrl, given.otmaUrl) : null;
+    const todo = core.items.addTodo(placeholder ? { ...body, title: placeholder } : body, 'user');
+    if (placeholder) void fillTicketTitle(core, todo, { bsm, otma }, log);
+    res.status(201).json(todo);
   });
 
   r.post('/events', (req, res) => {

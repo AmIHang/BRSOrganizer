@@ -111,7 +111,7 @@ export async function unsavedWork(clonePath: string, prId: number): Promise<stri
   try {
     files = (await git(clonePath, ['diff', '--name-only', 'HEAD'])).split(/\r?\n/).filter(Boolean);
   } catch {
-    return 'git diff failed';
+    return 'git diff fehlgeschlagen';
   }
   const iisMark = new RegExp(`-PR${prId}/?</IISUrl>`);
   const changed = files.filter((f) => {
@@ -121,12 +121,12 @@ export async function unsavedWork(clonePath: string, prId: number): Promise<stri
       return false;
     return true;
   });
-  if (changed.length) return `uncommitted changes in ${changed.slice(0, 3).join(', ')}`;
+  if (changed.length) return `nicht committete Änderungen in ${changed.slice(0, 3).join(', ')}`;
   try {
     const ahead = Number(await git(clonePath, ['rev-list', '--count', '@{u}..HEAD']));
-    return ahead > 0 ? `${ahead} commit(s) not pushed` : null;
+    return ahead > 0 ? `${ahead} Commit(s) nicht gepusht` : null;
   } catch {
-    return 'no upstream branch to compare with';
+    return 'kein Upstream-Branch zum Vergleichen';
   }
 }
 
@@ -200,6 +200,8 @@ export interface CloneSync {
   /** Commits on the server the clone does not have yet; null when unknown. */
   behind: number | null;
   remoteGone: boolean;
+  /** IIS URLs of the clone's web projects (as printed by Clone-Branch.ps1). */
+  webUrls: string[];
 }
 
 /**
@@ -208,24 +210,28 @@ export interface CloneSync {
  */
 export async function cloneSync(repo: RepoInfo, prId: number): Promise<CloneSync> {
   const clonePath = clonePathFor(repo, prId);
-  if (!isDir(join(clonePath, '.git'))) return { cloned: false, behind: null, remoteGone: false };
+  if (!isDir(join(clonePath, '.git'))) {
+    return { cloned: false, behind: null, remoteGone: false, webUrls: [] };
+  }
+  const webUrls = await findWebUrls(clonePath, prId);
+  const state = (behind: number | null, remoteGone = false) => ({ cloned: true, behind, remoteGone, webUrls });
   let branch: string;
   try {
     branch = await git(clonePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
   } catch {
-    return { cloned: true, behind: null, remoteGone: false };
+    return state(null);
   }
-  if (!branch || branch === 'HEAD') return { cloned: true, behind: null, remoteGone: false };
+  if (!branch || branch === 'HEAD') return state(null);
   try {
     await git(clonePath, ['fetch', '-q', 'origin', branch], 60_000);
   } catch {
-    return { cloned: true, behind: null, remoteGone: true };
+    return state(null, true);
   }
   try {
     const behind = Number(await git(clonePath, ['rev-list', '--count', `HEAD..origin/${branch}`]));
-    return { cloned: true, behind: Number.isFinite(behind) ? behind : null, remoteGone: false };
+    return state(Number.isFinite(behind) ? behind : null);
   } catch {
-    return { cloned: true, behind: null, remoteGone: false };
+    return state(null);
   }
 }
 

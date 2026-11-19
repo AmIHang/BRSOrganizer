@@ -25,7 +25,15 @@ export function cleanUpLeftItems(
       if (status === 'open') continue;
       handled.add(id);
       void workspace.cleanUpLeftItem(id).then(
-        (done) => done.length && log('cleaned up after item left the list', { id, done }),
+        (done) => {
+          if (!done.length) return;
+          log('cleaned up after item left the list', { id, done });
+          // Shown by the app: otherwise a kept checkout stays unnoticed (the PR left the list).
+          core.events.emit('notice', {
+            title: `Aufräumen: ${core.items.get(id).title}`,
+            body: done.join('\n'),
+          });
+        },
         (err: unknown) =>
           log('cleanup after item left the list failed', {
             id,

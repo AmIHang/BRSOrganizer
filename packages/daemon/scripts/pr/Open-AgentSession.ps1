@@ -1,15 +1,23 @@
 <#
 .SYNOPSIS
-  Opens the Claude Code session of a todo agent in this console (claude attach).
+  Opens the Claude Code session of a todo agent or a pull request in this console (claude attach).
 
 .DESCRIPTION
-  Started by BRSOrganizer when the user clicks the agent's question or answer of a todo. The
-  session keeps running in the background when this window is closed.
+  Started by BRSOrganizer when the user clicks the agent's question or answer of a todo, or the
+  Claude button of a pull request. The session keeps running in the background when this window
+  is closed; an ended one (e.g. after a restart) resumes when attached.
 
-.PARAMETER Name  Session name (Todo-<id>), as given by Start-TodoAgent.ps1.
+  With -Path and -PromptFile (a pull request without a session yet), the session is first started
+  as a background session in -Path with the task from -PromptFile, then opened the same way.
+
+.PARAMETER Name        Session name: Todo-<id> (Start-TodoAgent.ps1) or PR<number>.
+.PARAMETER Path        Folder to start a new session in (PR checkout or agent worktree).
+.PARAMETER PromptFile  Task of a new session; the session reads it, so it is kept.
 #>
 param(
-  [Parameter(Mandatory)][ValidatePattern('^Todo-[A-Za-z0-9]{1,20}$')][string]$Name
+  [Parameter(Mandatory)][ValidatePattern('^(Todo-[A-Za-z0-9]{1,20}|PR\d{1,10})$')][string]$Name,
+  [string]$Path,
+  [string]$PromptFile
 )
 $ErrorActionPreference = 'Stop'
 
@@ -23,6 +31,19 @@ if (-not $claude -and (Test-Path "$env:USERPROFILE\.local\bin\claude.exe")) {
 }
 if (-not $claude) {
   throw 'claude (Claude Code CLI) wurde nicht gefunden - bitte installieren und in den PATH aufnehmen.'
+}
+
+if ($PromptFile) {
+  Set-Location -LiteralPath $Path
+  # As in Start-TodoAgent.ps1: the task travels as a file (multi-line arguments do not survive).
+  $task = "Lies deinen Auftrag aus der Datei $PromptFile und fuehre ihn aus."
+  $ErrorActionPreference = 'Continue' # claude writes progress to stderr
+  & $claude --bg -n $Name --permission-mode auto $task
+  if ($LASTEXITCODE -ne 0) {
+    # Refused (e.g. folder not trusted yet): interactively in this window instead.
+    & $claude -n $Name $task
+    return
+  }
 }
 
 & $claude attach $Name

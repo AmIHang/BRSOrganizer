@@ -13,6 +13,8 @@ export interface CoreEventMap {
   /** IDs of items that a sync just inserted (used for "new review request" toasts). */
   'items-added-by-sync': [{ source: ExternalSource; ids: string[] }];
   'sync-finished': [SyncResult];
+  /** A message for the user, shown by the app as a notification (e.g. what a cleanup did). */
+  notice: [{ title: string; body: string }];
 }
 
 /** In-process change notifications, consumed by the daemon (SSE, toasts). */

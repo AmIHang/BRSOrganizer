@@ -1,15 +1,19 @@
 <script lang="ts">
   import type { NewItem } from '../lib/types';
+  import { findOtma, learnProject, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
 
   let {
     open,
     project = null,
+    mapping,
     oncreate,
     onclose,
   }: {
     open: boolean;
     /** From the "+" of a project: a todo filed under it (no event). */
     project?: string | null;
+    /** BSM customer / OTMA project → project: linked tickets suggest their project. */
+    mapping: ProjectMaps;
     oncreate: (item: NewItem) => Promise<void>;
     onclose: () => void;
   } = $props();
@@ -24,6 +28,7 @@
   let minutes = $state(30);
   let bsm = $state('');
   let otma = $state('');
+  let instruction = $state('');
   let busy = $state(false);
   let error = $state<string | null>(null);
 
@@ -45,6 +50,7 @@
       minutes = 30;
       bsm = '';
       otma = '';
+      instruction = '';
       error = null;
       dialog.showModal();
       queueMicrotask(() => titleInput?.focus());
@@ -58,7 +64,20 @@
     if (t === 'event' && !when) when = nextHalfHour();
   }
 
-  const canSubmit = $derived(title.trim().length > 0 && (type === 'todo' || when !== ''));
+  // Project suggested by the tickets: taken without asking when there is none yet.
+  const suggested = $derived(type === 'todo' ? suggestProject(bsm, findOtma(otma), mapping) : null);
+  const offer = $derived(suggested && suggested.project !== project ? suggested.project : null);
+  let takeOffer = $state(false);
+  $effect(() => {
+    takeOffer = !!offer && !project;
+  });
+
+  // Todos: a title or a ticket (the daemon then takes the ticket's title); events: title and start.
+  const canSubmit = $derived(
+    type === 'todo'
+      ? !!(title.trim() || bsm.trim() || otma.trim())
+      : title.trim().length > 0 && when !== '',
+  );
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -68,14 +87,18 @@
     try {
       // datetime-local has no zone: it is local time; the API gets an instant.
       if (type === 'todo') {
+        const target = offer && takeOffer ? offer : project;
         await oncreate({
           type: 'todo',
           title: title.trim(),
           dueAt: when ? new Date(when).toISOString() : null,
           bsmUrl: bsm.trim() || null,
           otmaUrl: otma.trim() || null,
-          project,
+          notes: instruction.trim() || null,
+          project: target,
         });
+        // Only a convenience: the todo exists, a failed save must not offer to create it again.
+        await learnProject(bsm, findOtma(otma), target, mapping).catch(() => {});
       } else {
         const start = new Date(when);
         await oncreate({
@@ -129,7 +152,7 @@
         type="text"
         bind:this={titleInput}
         bind:value={title}
-        placeholder={type === 'todo' ? 'Was ist zu tun?' : 'Worum geht es?'}
+        placeholder={type === 'todo' ? 'Was ist zu tun? (leer: Titel aus dem Ticket)' : 'Worum geht es?'}
         maxlength="500"
       />
     </label>
@@ -162,6 +185,23 @@
           <input type="text" bind:value={otma} placeholder="148082 oder URL" />
         </label>
       </div>
+      <label>
+        Anweisung für Claude (optional)
+        <textarea
+          bind:value={instruction}
+          rows="3"
+          maxlength="10000"
+          placeholder="Leer: Claude analysiert das Ticket und schlägt eine Umsetzung vor."
+        ></textarea>
+      </label>
+      {#if offer && suggested}
+        <label class="check">
+          <input type="checkbox" bind:checked={takeOffer} />
+          {project
+            ? `${suggested.via} gehört zu „${offer}“ – Projekt auf „${offer}“ ändern?`
+            : `Projekt „${offer}“ übernehmen (${suggested.via})`}
+        </label>
+      {/if}
     {/if}
 
     {#if error}<p class="error">{error}</p>{/if}
@@ -211,10 +251,20 @@
     font-size: 12px;
     color: var(--muted);
   }
+  label.check {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
   label input,
-  label select {
+  label select,
+  label textarea {
     font-size: 14px;
     color: var(--fg);
+  }
+  textarea {
+    resize: vertical;
+    font-family: inherit;
   }
   select {
     border: 1px solid var(--border);

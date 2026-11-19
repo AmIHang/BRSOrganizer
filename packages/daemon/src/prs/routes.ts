@@ -66,6 +66,11 @@ export function prRouter(workspace: PrWorkspace, scheduler: Scheduler): Router {
     res.status(202).json(workspace.cloneOrUpdate(itemId(req)));
   });
 
+  // Claude button: open, resume or start the PR's Claude session in a console.
+  r.post('/:id/claude', async (req, res) => {
+    res.status(202).json(await workspace.openPrSession(itemId(req)));
+  });
+
   r.post('/:id/remove-local', async (req, res) => {
     res.status(202).json(await workspace.removeLocal(itemId(req)));
   });

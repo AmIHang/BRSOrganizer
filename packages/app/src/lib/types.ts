@@ -46,6 +46,8 @@ export interface CloneSync {
   /** Commits on the server not yet in the local clone. */
   behind: number | null;
   remoteGone: boolean;
+  /** IIS URLs of the clone's web projects (older daemons: missing). */
+  webUrls?: string[];
 }
 
 /** What the "new" dialog creates. */
@@ -56,6 +58,8 @@ export type NewItem =
       dueAt: string | null;
       bsmUrl: string | null;
       otmaUrl: string | null;
+      /** Instruction for Claude ("An Claude"); stored as the todo's notes. */
+      notes: string | null;
       /** Project the new todo is filed under (from the "+" of a project). */
       project?: string | null;
     }
@@ -73,10 +77,13 @@ export interface Settings {
     hiddenProjects: string[];
     /** OTMA project → customer folder (learned when taking a ticket over as a todo). */
     otmaProjects: Record<string, string>;
+    /** BSM customer ID ("STBBRS" of "STBBRSg0034") → customer folder (learned like otmaProjects). */
+    bsmProjects: Record<string, string>;
   };
   mail: { enabled: boolean; outlookFolder: string; lookBackDays: number };
   /** Folded list parts ("section:<key>", "project:<name>"), kept in the daemon's DB. */
-  ui: { collapsed: string[] };
+  /** onHold: ids of PRs/todos the user put on hold (greyed out, compact, last). */
+  ui: { collapsed: string[]; onHold: string[] };
 }
 
 export interface SourceStatus {
@@ -178,4 +185,5 @@ export interface CompleteResult {
 export type StreamEvent =
   | { type: 'items-changed'; data: { reason: string; actor: Actor; ids: string[] } }
   | { type: 'items-added'; data: { source: SyncSourceId; items: Item[] } }
-  | { type: 'sync-finished'; data: { source: string; ok: boolean; error: string | null } };
+  | { type: 'sync-finished'; data: { source: string; ok: boolean; error: string | null } }
+  | { type: 'notice'; data: { title: string; body: string } };

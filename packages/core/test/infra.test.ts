@@ -83,9 +83,9 @@ describe('settings', () => {
         github: { enabled: true, includeAuthored: true, includeAssigned: true },
         calendar: { enabled: true, provider: 'ics', lookAheadDays: 14 },
         tfs: { enabled: true, collectionUrl: '', includeAuthored: true },
-        workspace: { projectsRoot: '', projects: [], hiddenProjects: [], otmaProjects: {} },
+        workspace: { projectsRoot: '', projects: [], hiddenProjects: [], otmaProjects: {}, bsmProjects: {} },
         mail: { enabled: false, outlookFolder: 'Posteingang/PR', lookBackDays: 90 },
-        ui: { collapsed: [] },
+        ui: { collapsed: [], onHold: [] },
       });
       core.settings.update({
         workspace: { otmaProjects: { 'STB BRS [STBBRS]': 'Steiermarkbahn' } },

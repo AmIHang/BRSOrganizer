@@ -19,7 +19,13 @@ import {
 import { readBsmTicket, type BsmSession, type ReadTicketResult } from '../tickets/bsm.js';
 import { HttpError } from '../http/errors.js';
 import { readOtmaTicket } from '../tickets/otma.js';
-import { agentSessionName, claudeStopCli, type StopAgentSession } from './agents.js';
+import {
+  agentSessionName,
+  claudeAgentsCli,
+  claudeStopCli,
+  type ListAgentSessions,
+  type StopAgentSession,
+} from './agents.js';
 import { closeVisualStudio, type CloseIde } from './ide.js';
 import type { Launcher } from './launcher.js';
 import {
@@ -108,6 +114,8 @@ export interface PrWorkspaceDeps {
   otma?: BsmSession;
   /** Test hook; default `claude stop <session>`. */
   stopAgent?: StopAgentSession;
+  /** Test hook; default `claude agents --json --all`. */
+  listAgents?: ListAgentSessions;
   /**
    * Where each hand-off's task (auftrag.md, ticket images) goes; the agent reads it again when
    * resumed, so not %TEMP% (Storage Sense). Default: the temp folder (tests).
@@ -176,7 +184,7 @@ function ticketSection(
 
 /**
  * Task for the claude CLI agent; the script appends worktree and target branch. The sources
- * come in order of precedence: the developer's own description, the OTMA ticket (internal
+ * come in order of precedence: the developer's instruction, the OTMA ticket (internal
  * communication), the BSM ticket (the customer's report).
  */
 export function agentPrompt(
@@ -192,7 +200,8 @@ export function agentPrompt(
   const scope = key ? `(${key})` : '';
   const notes = todo.notes?.trim() || null;
   return [
-    `# Auftrag: ${todo.title}`,
+    // No todo title: it is only a label in the list; the instruction (notes) says what to do.
+    '# Auftrag',
     '',
     `Projekt: ${project}`,
     todo.bsmUrl ? `BSM-Ticket: ${todo.bsmUrl}` : 'BSM-Ticket: keines',
@@ -211,12 +220,12 @@ export function agentPrompt(
     'Die Quellen unten stehen in der Reihenfolge ihrer Priorität. Widersprechen sie sich, gilt ' +
       'die höher priorisierte:',
     '',
-    '1. Beschreibung des Entwicklers: Infos direkt vom Entwickler, der dir die Aufgabe gibt.',
+    '1. Anweisung des Entwicklers: was der Entwickler, der dir die Aufgabe gibt, von dir will.',
     '2. OTMA-Ticket: interne Kommunikation (Analyse, Entscheidungen, Absprachen im Team).',
     '3. BSM-Ticket: das Ticket des Kunden (seine Sicht und Meldung des Problems).',
     ...(notes
-      ? ['', '### 1. Beschreibung des Entwicklers', '', notes]
-      : ['', '### 1. Beschreibung des Entwicklers', '', '(keine)']),
+      ? ['', '### 1. Anweisung des Entwicklers', '', notes]
+      : ['', '### 1. Anweisung des Entwicklers', '', '(keine)']),
     ...ticketSection(
       '### 2. OTMA-Ticket (intern)',
       'OTMA',
@@ -230,18 +239,48 @@ export function agentPrompt(
   ].join('\n');
 }
 
+/** Context of a new Claude session on a pull request; then it waits for the developer. */
+export function prSessionPrompt(pr: Item, folder: string, hasAccount: boolean): string {
+  const meta = pr.meta ?? {};
+  const branch = (k: string) => (typeof meta[k] === 'string' ? (meta[k] as string) : '?');
+  return [
+    `# Pull Request: ${pr.title}`,
+    '',
+    `PR: ${pr.link ?? '?'}`,
+    `Branch: ${branch('sourceBranch')} → ${branch('targetBranch')}`,
+    `Ordner: ${folder}`,
+    pr.bsmUrl ? `BSM-Ticket: ${pr.bsmUrl}` : 'BSM-Ticket: keines',
+    pr.otmaUrl ? `OTMA-Ticket: ${pr.otmaUrl}` : 'OTMA-Ticket: keines',
+    ...(hasAccount
+      ? [
+          '',
+          `Anmeldung an BSM und OTMA (gleicher Account): Benutzer in der Umgebungsvariable ` +
+            `${TICKET_USER_ENV}, Passwort in ${TICKET_PASSWORD_ENV}. Verwende sie nur über ` +
+            'die Variablen; gib das Passwort nie aus, schreib es in keine Datei und committe es nie.',
+        ]
+      : []),
+    '',
+    '## Vorgehen',
+    '',
+    'Du arbeitest mit dem Entwickler an diesem Pull Request. Verschaff dir einen Überblick über ' +
+      'seine Änderungen (Branch gegenüber dem Ziel-Branch), fasse sie kurz zusammen und warte ' +
+      'dann auf seine Anweisungen. Committe und pushe nur auf Anweisung, und nur auf den ' +
+      'Branch des Pull Requests.',
+  ].join('\n');
+}
+
 /** Every analysis ends with an effort estimate (in PT, as the planned effort in OTMA). */
 const ESTIMATE =
   'Aufwandschätzung (Pflicht, auch bei Unsicherheit): Spanne in Personentagen (PT) für ' +
   'Umsetzung inkl. Test, aufgeteilt nach den wesentlichen Arbeitsschritten, mit den Annahmen ' +
   'und Risiken, die die Spanne bestimmen.';
 
-/** Without a description of the developer: only analyse, change nothing, answer with it. */
+/** Without an instruction of the developer: analyse the ticket, propose a solution, change nothing. */
 const ANALYSIS_STEPS = [
   '## Vorgehen: nur Analyse',
   '',
-  'Es gibt keine Beschreibung des Entwicklers. Analysiere die Aufgabe deshalb nur, setze nichts ' +
-    'um.',
+  'Es gibt keine Anweisung des Entwicklers. Analysiere deshalb das Ticket und schlage eine ' +
+    'Umsetzung vor, setze aber nichts um.',
   '',
   '1. Verschaff dir aus den Informationen oben ein Bild der Aufgabe, beachte dabei die ' +
     'Priorität der Quellen.',
@@ -249,18 +288,18 @@ const ANALYSIS_STEPS = [
     'einem Fehler die vermutliche Ursache.',
   '3. Ändere keine Dateien, committe nichts, pushe nichts und erstelle keinen Pull Request.',
   '4. Antworte zum Schluss mit der Analyse: kurze Zusammenfassung der Aufgabe, betroffene ' +
-    'Stellen, Ursache bzw. Lösungsvorschlag, offene Fragen und eine ' +
+    'Stellen, Ursache, ein konkreter Umsetzungsvorschlag, offene Fragen und eine ' +
     ESTIMATE +
     ' Diese Antwort sieht der Entwickler in BRSOrganizer.',
 ];
 
-/** Steps of an implementation (the developer described what to do). */
+/** Steps of an implementation (the developer gave an instruction). */
 function implementSteps(todo: Item, project: string, key: string | undefined, scope: string) {
   const suffix = todo.id.slice(-6).toLowerCase();
   return [
     '## Vorgehen',
     '',
-    'Verlangt die Beschreibung des Entwicklers nur eine Analyse (oder eine Schätzung), setz ' +
+    'Verlangt die Anweisung des Entwicklers nur eine Analyse (oder eine Schätzung), setz ' +
       'nichts um: Analysiere wie beschrieben, ändere keine Dateien, committe und pushe nichts, ' +
       'erstelle keinen Pull Request, und antworte mit der Analyse samt ' +
       ESTIMATE +
@@ -273,7 +312,7 @@ function implementSteps(todo: Item, project: string, key: string | undefined, sc
       `deiner Änderung um: \`git branch -m feature/<kurzer-englischer-name>-${suffix}\` ` +
       `(Kleinbuchstaben und Bindestriche; die Endung \`-${suffix}\` muss bleiben, an ihr ` +
       'erkennt BRSOrganizer den Pull Request). Den Namen leitest du aus deiner Änderung ab, ' +
-      'nicht aus dem Titel des Auftrags.',
+      'nicht aus der Anweisung.',
     '4. Committe die Änderungen' +
       (key ? ` (Ticket-Schlüssel ${key} als Scope, z. B. fix(${key}): …)` : '') +
       ' und pushe den Branch.',
@@ -284,7 +323,7 @@ function implementSteps(todo: Item, project: string, key: string | undefined, sc
       '<typ> ist feat, fix oder chore, je nach Art der Änderung' +
       (key ? `, z. B. \`fix${scope}: Show predefined mail recipients\`` : '') +
       '. Titel und Beschreibung des Pull Requests leitest du selbst aus deiner Änderung ab, ' +
-      'nicht aus dem Titel oder der Beschreibung des Auftrags; frag nicht danach.',
+      'nicht aus der Anweisung; frag nicht danach.',
     '6. Ist die Claude-Desktop-App installiert, leg diese Konversation dort als Chat an ' +
       '(z. B. `claude --desktop --resume <Session-ID>`) und nenne den Chat ' +
       `\`(PR<Nummer>)${key ? ` #${key}` : ''} - <kurze Beschreibung>\` (Nummer des Pull ` +
@@ -550,6 +589,54 @@ export class PrWorkspace {
     return { session };
   }
 
+  /**
+   * The Claude button of an open PR: opens its session in a console, resuming an ended one. The
+   * session of the todo the PR came from goes on with the PR; without any, a new one starts in
+   * the agent's worktree or the PR checkout, with the PR as context.
+   */
+  async openPrSession(itemId: string): Promise<{ session: string; started: boolean }> {
+    const { item, ref } = this.pullRequest(itemId);
+    if (item.status !== 'open') throw new ForbiddenOperationError(`PR ${ref.id} is not open`);
+    const todo = this.deps.core.items
+      .list({ type: 'todo', status: 'all', limit: 1000 })
+      .find((t) => t.meta?.prItemId === itemId);
+    const names = [...(todo ? [agentSessionName(todo.id)] : []), `PR${ref.id}`];
+    // claude missing or failing: a new session start reports that in its console.
+    const sessions = await (this.deps.listAgents ?? claudeAgentsCli())().catch(() => []);
+    const existing = names.find((n) => sessions.some((s) => s.name === n));
+    const script = this.script('Open-AgentSession.ps1');
+    const title = `Claude – PR ${ref.id}`;
+    if (existing) {
+      this.deps.launcher.runScript(title, script, ['-Name', existing], this.accountEnv());
+      return { session: existing, started: false };
+    }
+
+    let path = typeof todo?.meta?.agentWorktree === 'string' ? todo.meta.agentWorktree : null;
+    if (!path || !existsSync(path)) {
+      const { repo } = this.requireLocal(itemId);
+      const local = await localCheckout(repo, ref.id);
+      if (!local.cloned) {
+        throw new ForbiddenOperationError(
+          `PR ${ref.id} ist noch nicht geklont – zuerst „Klonen + Build“.`,
+        );
+      }
+      path = local.clonePath;
+    }
+    const session = `PR${ref.id}`;
+    const taskDir = join(this.deps.tasksDir ?? tmpdir(), `brsorganizer-pr-${ref.id}`);
+    mkdirSync(taskDir, { recursive: true });
+    const promptFile = join(taskDir, 'auftrag.md');
+    // BOM: Windows PowerShell 5.1 reads the file as ANSI otherwise.
+    writeFileSync(promptFile, '﻿' + prSessionPrompt(item, path, !!this.accountEnv()), 'utf8');
+    this.deps.launcher.runScript(
+      title,
+      script,
+      ['-Name', session, '-Path', path, '-PromptFile', promptFile],
+      this.accountEnv(),
+    );
+    return { session, started: true };
+  }
+
   /** BSM/OTMA account for the agent: only through the console's environment, never in files. */
   private accountEnv(): Record<string, string> | undefined {
     const user = this.deps.core.secrets.get('ticket-user');
@@ -577,7 +664,7 @@ export class PrWorkspace {
     if (typeof existing === 'string' && existsSync(existing)) {
       throw new ForbiddenOperationError(
         `Der Worktree ${existing} einer früheren Übergabe besteht noch – Agent fortsetzen ` +
-          '(„Agent beendet“ anklicken) oder Worktree entfernen.',
+          '(„Claude pausiert“ anklicken) oder Worktree entfernen.',
       );
     }
     const root = this.deps.core.settings.get().workspace.projectsRoot;
@@ -752,9 +839,9 @@ export class PrWorkspace {
           () => undefined,
         );
         const r = await this.removeAgentWorktree(todo.id);
-        done.push(`worktree ${r.worktree} removed`);
+        done.push(`Worktree ${r.worktree} entfernt.`);
       } catch (err) {
-        done.push(`worktree kept: ${err instanceof Error ? err.message : String(err)}`);
+        done.push(`Worktree bleibt: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
 
@@ -780,7 +867,9 @@ export class PrWorkspace {
     if (!checkout.cloned || !checkout.managed) return done;
     const keep = await unsavedWork(checkout.clonePath, ref.id);
     if (keep) {
-      done.push(`checkout ${checkout.clonePath} kept: ${keep}`);
+      done.push(
+        `Klon ${checkout.clonePath} und App-Pool PR${ref.id} bleiben: ${keep}. Prüfen, dann selbst löschen (Remove-PrClone.ps1).`,
+      );
       return done;
     }
     this.deps.launcher.runScript(`PR ${ref.id} aufräumen`, this.script('Remove-PrClone.ps1'), [
@@ -788,7 +877,9 @@ export class PrWorkspace {
       checkout.clonePath,
       '-Force',
     ]);
-    done.push(`checkout ${checkout.clonePath} and app pool PR${ref.id} being removed`);
+    done.push(
+      `Klon ${checkout.clonePath} und App-Pool PR${ref.id} werden gelöscht (UAC bestätigen).`,
+    );
     return done;
   }
 

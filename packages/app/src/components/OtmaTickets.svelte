@@ -7,6 +7,7 @@
     otma,
     setOtmaVisible,
     unignoreOtma,
+    type ProjectMaps,
   } from '../lib/otma.svelte';
   import type { Item, OtmaTicket } from '../lib/types';
   import OtmaTodoDialog from './OtmaTodoDialog.svelte';
@@ -20,7 +21,7 @@
     /** Open items: a ticket that already has a todo shows it instead of "→ Todo". */
     items: Item[];
     projects: string[];
-    mapping: Record<string, string>;
+    mapping: ProjectMaps;
     onchanged: () => void;
   } = $props();
 

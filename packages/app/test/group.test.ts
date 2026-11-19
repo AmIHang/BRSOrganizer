@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseSseBlock } from '../src/lib/api';
-import { groupItems, projectsOf, upcomingEvents } from '../src/lib/group';
+import { groupItems, projectsOf, unsavedPrProjects, upcomingEvents } from '../src/lib/group';
 import type { Item } from '../src/lib/types';
 
 const NOW = new Date(2026, 10, 12, 10, 0, 0); // Thu 12 Nov 2026, 10:00 local
@@ -50,6 +50,25 @@ describe('todos in projects', () => {
       'acme',
       'STB',
     ]);
+  });
+
+  it('puts items on hold last within their customer group', () => {
+    const held = item({ type: 'pr', meta: { project: 'STB', reasons: ['review-requested'] } });
+    const other = item({ type: 'pr', meta: { project: 'STB' } });
+    const todo = item({ meta: { project: 'STB' } });
+    const reviews = groupItems([held, other, todo], NOW, new Set([held.id])).find(
+      (s) => s.key === 'reviews',
+    )!;
+    expect(reviews.groups![0]!.items.at(-1)).toBe(held);
+    // Without the hold the review request comes first.
+    expect(groupItems([held, other, todo], NOW).find((s) => s.key === 'reviews')!.items[0]).toBe(
+      held,
+    );
+  });
+
+  it('lists only PR projects that are neither stored nor removed', () => {
+    const prs = ['STB', 'ABC', 'XYZ'].map((p) => item({ type: 'pr', meta: { project: p } }));
+    expect(unsavedPrProjects(prs, { projects: ['ABC'], hiddenProjects: ['XYZ'] })).toEqual(['STB']);
   });
 });
 
@@ -102,7 +121,7 @@ describe('groupItems', () => {
     ]);
   });
 
-  it('groups pull requests by customer, most urgent customer first', () => {
+  it('groups pull requests by customer, customers alphabetically and "Sonstige" last', () => {
     const items = [
       item({ type: 'pr', title: 'stb draft', meta: { project: 'STB', repo: 'STB', draft: true } }),
       item({
@@ -120,12 +139,12 @@ describe('groupItems', () => {
     ];
     const [reviews] = groupItems(items, NOW);
     // PR order: review request, then active ones newest first (unknown, gh, brs), then drafts.
-    // Each customer group sits where its first PR stands.
+    // Within a group that order stays; the groups themselves go alphabetically.
     expect(reviews!.groups!.map((g) => [g.customer, g.items.map((i) => i.title)])).toEqual([
-      ['STB', ['stb review', 'stb draft']],
-      ['Sonstige', ['unknown']],
       ['acme', ['gh']],
       ['BRSProduktion', ['brs active']],
+      ['STB', ['stb review', 'stb draft']],
+      ['Sonstige', ['unknown']],
     ]);
     // Grouping only rearranges: all PRs are still there.
     expect(reviews!.groups!.flatMap((g) => g.items)).toHaveLength(5);

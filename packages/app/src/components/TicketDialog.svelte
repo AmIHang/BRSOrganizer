@@ -2,8 +2,13 @@
   import { untrack } from 'svelte';
   import { api } from '../lib/api';
   import type { Item } from '../lib/types';
+  import { findOtma, learnProject, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
 
-  let { item, onclose }: { item: Item; onclose: () => void } = $props();
+  let {
+    item,
+    mapping,
+    onclose,
+  }: { item: Item; mapping: ProjectMaps; onclose: () => void } = $props();
 
   let dialog = $state<HTMLDialogElement | null>(null);
   // Editable copies of the stored links, taken once when the dialog opens; saved on submit.
@@ -16,6 +21,15 @@
     if (dialog && !dialog.open) dialog.showModal();
   });
 
+  // Project suggested by the tickets: taken without asking when the todo has none yet.
+  const current = $derived(typeof item.meta?.project === 'string' ? item.meta.project : null);
+  const suggested = $derived(suggestProject(bsm, findOtma(otma), mapping));
+  const offer = $derived(suggested && suggested.project !== current ? suggested.project : null);
+  let takeOffer = $state(false);
+  $effect(() => {
+    takeOffer = !!offer && !current;
+  });
+
   async function save(event: SubmitEvent) {
     event.preventDefault();
     busy = true;
@@ -25,6 +39,9 @@
         bsmUrl: bsm.trim() || null,
         otmaUrl: otma.trim() || null,
       });
+      const target = offer && takeOffer ? offer : current;
+      if (target !== current) await api.updateTodo(item.id, { project: target });
+      await learnProject(bsm, findOtma(otma), target, mapping).catch(() => {});
       onclose();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -46,6 +63,14 @@
       OTMA-Ticket
       <input type="text" bind:value={otma} placeholder="148082 oder URL" />
     </label>
+    {#if offer && suggested}
+      <label class="check">
+        <input type="checkbox" bind:checked={takeOffer} />
+        {current
+          ? `${suggested.via} gehört zu „${offer}“ – Projekt von „${current}“ auf „${offer}“ ändern?`
+          : `Projekt „${offer}“ übernehmen (${suggested.via})`}
+      </label>
+    {/if}
     <p class="hint muted">Leer lassen entfernt das Ticket.</p>
     {#if error}<p class="error">{error}</p>{/if}
     <div class="buttons">
@@ -89,6 +114,11 @@
     gap: 4px;
     font-size: 12px;
     color: var(--muted);
+  }
+  label.check {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
   }
   label input {
     font-size: 14px;

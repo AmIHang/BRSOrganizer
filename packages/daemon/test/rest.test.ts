@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Item } from '@brsorganizer/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { pr, StaticSource } from '../../core/test/helpers.js';
+import type { BsmHttp } from '../src/tickets/bsm.js';
 import { auth, raw, startHarness, type Harness } from './harness.js';
 
 describe('REST API', () => {
@@ -61,6 +64,37 @@ describe('REST API', () => {
     const r = await call('PATCH', `/todos/${p!.id}`, { title: 'x' });
     expect(r.status).toBe(409);
     expect(r.json()).toMatchObject({ error: 'forbidden' });
+  });
+
+  it('takes the title of an untitled todo from its ticket, keeping one the user set meanwhile', async () => {
+    await h.close();
+    const fixture = JSON.parse(
+      readFileSync(join(import.meta.dirname, 'fixtures', 'bsm-indication.json'), 'utf8'),
+    ) as unknown;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    h = await startHarness({
+      bsm: async (fn) => {
+        await gate;
+        return fn({ runWorkflow: async () => fixture } as unknown as BsmHttp);
+      },
+    });
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+
+    // Placeholder (the ticket key) at once, the ticket's title once read.
+    const a = (await call('POST', '/todos', { title: ' ', bsmUrl: 'BRS_PWg0155' })).json<Item>();
+    expect(a.title).toBe('BRS_PWg0155');
+    const b = (await call('POST', '/todos', { bsmUrl: 'BRS_PWg0155' })).json<Item>();
+    h.core.items.updateTodo(b.id, { title: 'Eigener Titel' }, 'user');
+    release();
+    await settle();
+    expect(h.core.items.get(a.id).title).toBe('IH-Berechnung | Termine werden nicht zusammengelegt');
+    expect(h.core.items.get(b.id).title).toBe('Eigener Titel');
+
+    // Without a BSM session the OTMA key stays; without title and tickets: rejected.
+    const c = (await call('POST', '/todos', { otmaUrl: '#178333' })).json<Item>();
+    expect(c.title).toBe('OTMA 178333');
+    expect((await call('POST', '/todos', {})).status).toBe(400);
   });
 
   it('rejects malformed JSON with 400', async () => {

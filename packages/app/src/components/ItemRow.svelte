@@ -9,6 +9,7 @@
   import ReplyDialog from './ReplyDialog.svelte';
   import RowMenu from './RowMenu.svelte';
   import TicketDialog from './TicketDialog.svelte';
+  import type { ProjectMaps } from '../lib/otma.svelte';
   import { ticketLabel } from '../lib/tickets';
   import { handOffs, startHandOff } from '../lib/handoff.svelte';
 
@@ -20,6 +21,9 @@
     onchanged,
     sync,
     projects = [],
+    otmaMapping = { otmaProjects: {}, bsmProjects: {} },
+    held = false,
+    ontogglehold,
   }: {
     item: Item;
     now: Date;
@@ -31,6 +35,11 @@
     onchanged?: () => void;
     /** Projects a todo can be moved into (same as the PR groups). */
     projects?: string[];
+    /** BSM customer / OTMA project → project, for linking tickets. */
+    otmaMapping?: ProjectMaps;
+    /** On hold: greyed out and compact (sorted last by the list). */
+    held?: boolean;
+    ontogglehold?: () => void;
   } = $props();
 
   const REASON_LABELS: Record<string, string> = {
@@ -115,6 +124,21 @@
   const handingOff = $derived(handOff?.running === true);
   const shownNotice = $derived(handOff ?? notice);
 
+  /** "http://localhost/BM.Web-PR4373/" → "/BM.Web-PR4373/" (host is always the local IIS). */
+  function webPath(url: string): string {
+    try {
+      return new URL(url).pathname;
+    } catch {
+      return url;
+    }
+  }
+
+  /** IIS web apps of the clone; with several, a pick list opens instead of every tab at once. */
+  const webUrls = $derived(sync?.webUrls ?? []);
+  const webEntries = $derived<MenuEntry[]>(
+    webUrls.map((url) => ({ label: webPath(url), title: url, onclick: () => void openUrl(url) })),
+  );
+
   async function openSolution() {
     try {
       await api.pr.open(item.id, 'solution');
@@ -156,6 +180,9 @@
     ...(item.type === 'todo' && typeof item.meta?.agentWorktree === 'string' && !agentWorking
       ? [{ label: 'Worktree entfernen', onclick: () => void removeWorktree() }]
       : []),
+    ...((item.type === 'pr' || item.type === 'todo') && item.status === 'open' && ontogglehold
+      ? [{ label: held ? 'On hold aufheben' : 'On hold', onclick: ontogglehold }]
+      : []),
     { label: 'Archivieren', onclick: () => onarchive(item) },
   ]);
   /** Open todos with something to work on (ticket or description) can go to a Claude agent. */
@@ -181,6 +208,22 @@
   async function openSession() {
     try {
       await api.pr.attachAgent(item.id);
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), true);
+    }
+  }
+
+  async function openPrSession() {
+    if (starting) return;
+    starting = true;
+    setTimeout(() => (starting = false), 5000);
+    try {
+      const r = await api.pr.claudeSession(item.id);
+      flash(
+        r.started
+          ? `Neue Claude-Sitzung ${r.session} startet im Terminal.`
+          : `Claude-Sitzung ${r.session} wird im Terminal geöffnet.`,
+      );
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e), true);
     }
@@ -214,11 +257,16 @@
   let movingProject = $state(false);
 </script>
 
-<li class="row" class:done={item.status !== 'open'}>
-  {#if agentWorking}
-    <!-- Handed to Claude: done when its PR shows up (or after "An Claude abbrechen"). -->
+<li class="row" class:done={item.status !== 'open'} class:held>
+  {#if handedOff}
+    <!-- Handed to Claude: done when its PR shows up (or after "An Claude abbrechen"); grey while paused. -->
     <div class="lead">
-      <span class="kind agent" title="An Claude übergeben" aria-label="An Claude übergeben">✦</span>
+      <span
+        class="kind agent"
+        class:paused={agentEnded}
+        title={agentEnded ? 'An Claude übergeben – Claude pausiert' : 'An Claude übergeben'}
+        aria-label={agentEnded ? 'An Claude übergeben, Claude pausiert' : 'An Claude übergeben'}>✦</span
+      >
     </div>
   {:else if item.type === 'todo'}
     <input
@@ -232,6 +280,21 @@
       <span class="kind" title={item.type === 'pr' ? 'Pull Request' : 'Termin'}>
         {item.type === 'pr' ? '⇄' : '◷'}
       </span>
+      <!-- Web app: under the PR icon (not on hold: the row stays one line high). -->
+      {#if webUrls.length && !held}
+        <RowMenu
+          entries={webEntries}
+          title={webUrls.length === 1 ? `Web-App öffnen: ${webUrls[0]}` : `Web-App wählen (${webUrls.length})`}
+          align="left"
+          dot
+        />
+      {/if}
+    </div>
+  {/if}
+
+  <div class="body">
+    <!-- Clone/update dot before the title, as its own column: wrapped title lines stay aligned with the text. -->
+    <div class="title" class:with-dot={!!(manageable && sync)}>
       {#if manageable && sync}
         {#if !sync.cloned}
           <button
@@ -260,18 +323,18 @@
           ></button>
         {/if}
       {/if}
-    </div>
-  {/if}
-
-  <div class="body">
-    <div class="title">
-      {#if item.link}
-        <button class="link" onclick={open} title={item.link}>{item.title}</button>
-      {:else}
-        {item.title}
-      {/if}
+      <span class="title-text">
+        {#if item.link}
+          <button class="link" onclick={open} title={item.link}>{item.title}</button>
+        {:else}
+          {item.title}
+        {/if}
+      </span>
     </div>
     <div class="meta">
+      {#if held}
+        <button class="chip hold" title="On hold – klicken zum Aufheben" onclick={ontogglehold}>On hold</button>
+      {/if}
       {#if when}
         <span class:overdue>{formatWhen(when, now, allDay)}</span>
       {/if}
@@ -303,6 +366,14 @@
       {/if}
       {#if location}<span>{location}</span>{/if}
       {#if byAssistant}<span class="chip">von {item.createdBy}</span>{/if}
+      {#if manageable && item.status === 'open'}
+        <button
+          class="chip action claude"
+          disabled={starting}
+          title="Claude-Sitzung zu diesem PR im Terminal öffnen bzw. fortsetzen; gibt es keine (auch nicht vom Todo, aus dem der PR entstand), startet eine neue im PR-Ordner"
+          onclick={() => void openPrSession()}>Claude</button
+        >
+      {/if}
       {#if canHandOff}
         <button
           class="chip action claude"
@@ -323,8 +394,8 @@
              (e.g. after a restart). Attaching resumes it; the daemon then sees it running again. -->
         <button
           class="chip status ended"
-          title="Die Sitzung des Agenten ist beendet (z. B. nach einem Neustart), ohne Pull Request. Klick setzt sie im Terminal fort ({agentSession})."
-          onclick={() => void openSession()}>Agent beendet – fortsetzen</button
+          title="Die Sitzung des Agenten läuft nicht mehr (z. B. nach einem Neustart), ohne Pull Request. Klick setzt sie im Terminal fort ({agentSession})."
+          onclick={() => void openSession()}>Claude pausiert</button
         >
       {:else if agentReply}
         <span class="chip status claude" title="Der Agent hat seine Runde beendet und wartet auf dich"
@@ -343,7 +414,7 @@
         >
       {/if}
     </div>
-    {#if item.notes && item.type === 'todo'}
+    {#if item.notes && item.type === 'todo' && !held}
       <div class="notes">{item.notes}</div>
     {/if}
     {#if shownNotice}
@@ -360,6 +431,7 @@
 {#if editingTickets}
   <TicketDialog
     {item}
+    mapping={otmaMapping}
     onclose={() => {
       editingTickets = false;
       onchanged?.();
@@ -418,6 +490,34 @@
   .row:hover {
     background: var(--bg-soft);
   }
+  /* On hold: compact, greyed out, title on one line. */
+  .row.held {
+    padding-block: 3px;
+    opacity: 0.55;
+  }
+  .row.held:hover {
+    opacity: 0.85;
+  }
+  .held .title-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .held .title:not(.with-dot) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* On hold: only the hold chip, the PR number and the tickets; the rest would just take room. */
+  .held .meta > :not(.hold, .pr-ref, .ticket) {
+    display: none;
+  }
+  .chip.hold {
+    border: none;
+    font: inherit;
+    color: var(--muted);
+    cursor: pointer;
+  }
   .chip.ticket,
   .chip.action {
     border: none;
@@ -460,6 +560,9 @@
   }
   .kind.agent {
     color: var(--chip-blue-fg);
+  }
+  .kind.agent.paused {
+    color: var(--muted);
   }
   .chip.action:hover:not(:disabled) {
     filter: brightness(1.1);
@@ -554,6 +657,19 @@
   }
   .title {
     overflow-wrap: anywhere;
+  }
+  .title.with-dot {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  /* Centered on the first title line (12px dot). */
+  .title.with-dot > .dot {
+    flex-shrink: 0;
+    margin-top: calc((1lh - 12px) / 2);
+  }
+  .title-text {
+    min-width: 0;
   }
   .link {
     all: unset;

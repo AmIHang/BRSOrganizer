@@ -12,6 +12,7 @@ import {
   startArguments,
   type Launcher,
 } from '../src/prs/launcher.js';
+import type { AgentSession } from '../src/prs/agents.js';
 import { agentPrompt, PrWorkspace, type PrDetails } from '../src/prs/service.js';
 import { cleanUpLeftItems } from '../src/prs/cleanup.js';
 import {
@@ -91,6 +92,8 @@ describe('cloneSync with real git', () => {
     sh(dir, 'clone', '-q', server, work);
     sh(work, 'checkout', '-q', '-b', 'feature/x');
     writeFileSync(join(work, 'a.txt'), '1');
+    // Web project as Set-IisUrls.ps1 leaves it in the clone: IIS URL with -PR<nr>
+    writeFileSync(join(work, 'Web.csproj'), '<UseIIS>True</UseIIS><IISUrl>http://localhost/BM.Web-PR7/</IISUrl>');
     sh(work, 'add', '.');
     sh(work, 'commit', '-q', '-m', 'one');
     sh(work, 'push', '-q', 'origin', 'feature/x');
@@ -106,7 +109,12 @@ describe('cloneSync with real git', () => {
       remoteUrl: server,
     };
 
-    expect(await cloneSync(repo, 7)).toEqual({ cloned: true, behind: 0, remoteGone: false });
+    expect(await cloneSync(repo, 7)).toEqual({
+      cloned: true,
+      behind: 0,
+      remoteGone: false,
+      webUrls: ['http://localhost/BM.Web-PR7/'],
+    });
 
     writeFileSync(join(work, 'b.txt'), '2');
     sh(work, 'add', '.');
@@ -115,12 +123,12 @@ describe('cloneSync with real git', () => {
     sh(work, 'add', '.');
     sh(work, 'commit', '-q', '-m', 'three');
     sh(work, 'push', '-q', 'origin', 'feature/x');
-    expect(await cloneSync(repo, 7)).toEqual({ cloned: true, behind: 2, remoteGone: false });
+    expect(await cloneSync(repo, 7)).toMatchObject({ cloned: true, behind: 2, remoteGone: false });
 
     sh(work, 'push', '-q', 'origin', '--delete', 'feature/x');
     expect(await cloneSync(repo, 7)).toMatchObject({ cloned: true, remoteGone: true });
 
-    expect(await cloneSync(repo, 8)).toEqual({ cloned: false, behind: null, remoteGone: false });
+    expect(await cloneSync(repo, 8)).toEqual({ cloned: false, behind: null, remoteGone: false, webUrls: [] });
   });
 
   it('tells whether a PR checkout holds work that must not be deleted', async () => {
@@ -144,9 +152,9 @@ describe('cloneSync with real git', () => {
     expect(await unsavedWork(clone, 7)).toBeNull();
     // A real change does.
     writeFileSync(join(clone, 'a.txt'), 'changed');
-    expect(await unsavedWork(clone, 7)).toMatch(/uncommitted changes in a\.txt/);
+    expect(await unsavedWork(clone, 7)).toMatch(/nicht committete Änderungen in a\.txt/);
     sh(clone, 'commit', '-q', '-am', 'local');
-    expect(await unsavedWork(clone, 7)).toBe('1 commit(s) not pushed');
+    expect(await unsavedWork(clone, 7)).toBe('1 Commit(s) nicht gepusht');
     sh(clone, 'push', '-q', 'origin', 'feature/x');
     expect(await unsavedWork(clone, 7)).toBeNull();
   });
@@ -203,15 +211,19 @@ describe('agent prompt', () => {
     );
     expect(title({})).toContain('`<typ>: <kurze Beschreibung auf Englisch>`');
     expect(title({})).toContain('feat, fix oder chore');
-    expect(title({})).toContain('nicht aus dem Titel oder der Beschreibung des Auftrags');
+    expect(title({})).toContain('nicht aus der Anweisung');
   });
 
-  it('asks only for an analysis when the developer gave no description', () => {
+  it('asks only for an analysis with a proposal when the developer gave no instruction', () => {
     const core = makeCore();
     const analysis = agentPrompt(
-      core.items.addTodo({ title: 'X', otmaUrl: '178317' }, 'user'),
+      core.items.addTodo({ title: 'Titel nur fürs Listing', otmaUrl: '178317' }, 'user'),
       'P',
     );
+    // The todo title is not part of the task, only the instruction (notes) is.
+    expect(analysis).not.toContain('Titel nur fürs Listing');
+    expect(analysis).toContain('### 1. Anweisung des Entwicklers\n\n(keine)');
+    expect(analysis).toContain('Analysiere deshalb das Ticket und schlage eine Umsetzung vor');
     expect(analysis).toContain('## Vorgehen: nur Analyse');
     expect(analysis).toContain('erstelle keinen Pull Request');
     expect(analysis).not.toContain('Erstelle einen Pull Request');
@@ -262,6 +274,7 @@ describe('PR workspace via REST', () => {
   let stopped: string[];
   let prStatus: string;
   let workspace: PrWorkspace;
+  let agentSessions: AgentSession[];
 
   const pr = () => ({
     pullRequestId: 4393,
@@ -289,6 +302,7 @@ describe('PR workspace via REST', () => {
     hidden = { code: 0, stdout: 'backgrounded · 1a2b3c4d\nAGENT-MODE: background\n', stderr: '' };
     prStatus = 'active';
     stopped = [];
+    agentSessions = [];
     bsmHttp = {
       runWorkflow: async () => {
         throw new BsmLoginRequiredError();
@@ -329,6 +343,7 @@ describe('PR workspace via REST', () => {
           sleep: async () => undefined,
           bsm: (fn) => fn(bsmHttp),
           otma: (fn) => fn(otmaHttp),
+          listAgents: async () => agentSessions,
           stopAgent: async (name) => {
             stopped.push(name);
           },
@@ -474,7 +489,7 @@ describe('PR workspace via REST', () => {
     expect(prompt).not.toContain('<<<BSM-TICKET');
     // All sources, in order of precedence: own description, OTMA (internal), BSM (customer).
     const order = [
-      '### 1. Beschreibung des Entwicklers\n\nsiehe Ticket',
+      '### 1. Anweisung des Entwicklers\n\nsiehe Ticket',
       '### 2. OTMA-Ticket (intern)\n\nLink: https://otma.boomsoftware.com/ap/148082',
       '### 3. BSM-Ticket (Kunde)\n\nLink: https://bsm.boomsoftware.com/indication/BRS_PWg0127',
       '## Vorgehen',
@@ -664,7 +679,7 @@ describe('PR workspace via REST', () => {
       const prompt = readFileSync(promptFile, 'utf8');
       expect(prompt.charCodeAt(0)).toBe(0xfeff);
       expect(prompt).toContain('### 3. BSM-Ticket (Kunde)');
-      expect(prompt).toContain('### 1. Beschreibung des Entwicklers\n\n(keine)');
+      expect(prompt).toContain('### 1. Anweisung des Entwicklers\n\n(keine)');
       expect(prompt).not.toContain('OTMA-Ticket (intern)'); // no OTMA ticket on this todo
       expect(prompt).toContain('<<<BSM-TICKET\n### BSM-Ticket BRS_PWg0155: IH-Berechnung');
       expect(prompt).toContain('Gilt die Entscheidung aus 2024 noch?');
@@ -747,8 +762,8 @@ describe('PR workspace via REST', () => {
 
     h.core.items.archiveItem(pr, 'user');
     expect(await workspace.cleanUpLeftItem(pr)).toEqual([
-      `worktree ${tree} removed`,
-      `checkout ${clone} kept: 1 commit(s) not pushed`,
+      `Worktree ${tree} entfernt.`,
+      `Klon ${clone} und App-Pool PR4393 bleiben: 1 Commit(s) nicht gepusht. Prüfen, dann selbst löschen (Remove-PrClone.ps1).`,
     ]);
     expect(existsSync(tree)).toBe(false);
     expect(stopped).toContain(`Todo-${todo.id.slice(-6).toLowerCase()}`);
@@ -759,7 +774,7 @@ describe('PR workspace via REST', () => {
     g(clone, 'push', '-q', 'origin', 'feature/rmh');
     g(clone, 'remote', 'set-url', 'origin', REPO_URL);
     expect(await workspace.cleanUpLeftItem(pr)).toEqual([
-      `checkout ${clone} and app pool PR4393 being removed`,
+      `Klon ${clone} und App-Pool PR4393 werden gelöscht (UAC bestätigen).`,
     ]);
     expect(launched).toEqual([
       {
@@ -771,12 +786,59 @@ describe('PR workspace via REST', () => {
     ]);
   });
 
+  it('opens, resumes or starts the Claude session of a PR', async () => {
+    h.core.settings.update({ workspace: { projectsRoot: root } });
+    const pr = prId();
+    const claude = () => call('POST', '/claude');
+    const clone = join(root, 'Community', 'PR4393');
+
+    // No session and nothing local to work in: clone first.
+    const notCloned = await claude();
+    expect(notCloned.status).toBe(409);
+    expect(notCloned.json<{ message: string }>().message).toMatch(/noch nicht geklont/);
+
+    // New session in the PR checkout, with the PR as its task.
+    makeRepo(clone, REPO_URL, true);
+    const started = await claude();
+    expect(started.json()).toEqual({ session: 'PR4393', started: true });
+    const args = launched.at(-1)!.args!;
+    expect(args.slice(0, 4)).toEqual(['-Name', 'PR4393', '-Path', clone]);
+    expect(readFileSync(args[5]!, 'utf8')).toContain('# Pull Request: feat: added community RMH');
+
+    // It exists now (also when ended, e.g. after a restart): opened, which resumes it.
+    agentSessions = [{ name: 'PR4393', sessionId: 's-000009', cwd: clone }];
+    expect((await claude()).json()).toEqual({ session: 'PR4393', started: false });
+    expect(launched.at(-1)!.args).toEqual(['-Name', 'PR4393']);
+
+    // A PR that came from a handed-off todo continues the todo's session.
+    const todo = h.core.items.addTodo({ title: 'T' }, 'user');
+    h.core.items.updateTodo(todo.id, { agentBranch: 'feature/todo-x' }, 'user');
+    await h.core.sync.run(
+      new StaticSource('tfs', [
+        {
+          externalId: 'tfs.example.com/boom/produktion/community/4393',
+          type: 'pr',
+          title: 'feat: added community RMH',
+          link: PR_LINK,
+          meta: { project: 'Produktion', sourceBranch: 'feature/todo-x' },
+        },
+      ]),
+    );
+    const name = `Todo-${todo.id.slice(-6).toLowerCase()}`;
+    agentSessions.push({ name, sessionId: 's-000010', cwd: clone });
+    expect((await call('POST', '/claude')).json()).toEqual({ session: name, started: false });
+    expect(launched.at(-1)!.args).toEqual(['-Name', name]);
+    expect(pr).toBe(prId());
+  });
+
   it('cleans up once per item when it leaves the list, not while it is open', async () => {
     const cleaned: string[] = [];
+    const notices: Array<{ title: string; body: string }> = [];
+    h.core.events.on('notice', (n) => notices.push(n));
     cleanUpLeftItems(h.core, {
       cleanUpLeftItem: async (id: string) => {
         cleaned.push(id);
-        return [];
+        return ['Klon X und App-Pool PR1 bleiben: nicht committete Änderungen in a.cs.'];
       },
     } as unknown as PrWorkspace);
     const t = h.core.items.addTodo({ title: 'T' }, 'user');
@@ -786,6 +848,14 @@ describe('PR workspace via REST', () => {
     h.core.items.reopenItem(t.id, 'user');
     h.core.items.archiveItem(t.id, 'user');
     expect(cleaned).toEqual([t.id]);
+    // What it did, or why it kept something, reaches the user (the item left the list).
+    await new Promise((r) => setImmediate(r));
+    expect(notices).toEqual([
+      {
+        title: 'Aufräumen: T2',
+        body: 'Klon X und App-Pool PR1 bleiben: nicht committete Änderungen in a.cs.',
+      },
+    ]);
   });
 
   it('completes the PR with squash merge, optionally approving first', async () => {
@@ -831,7 +901,7 @@ describe('PR workspace via REST', () => {
     });
     makeRepo(join(root, 'Community', 'PR4393'), REPO_URL, true);
     const r = await raw(h.port, { path: '/api/prs/clone-sync?refresh=1', headers: auth });
-    expect(r.json()).toEqual({ [prId()]: { cloned: true, behind: null, remoteGone: false } });
+    expect(r.json()).toEqual({ [prId()]: { cloned: true, behind: null, remoteGone: false, webUrls: [] } });
   });
 
   it('rejects non-PR items', async () => {

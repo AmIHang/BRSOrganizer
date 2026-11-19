@@ -29,8 +29,8 @@ export function customerOf(item: Item): string {
 }
 
 /**
- * Groups already sorted PRs by customer. A group is placed where its most urgent PR stands, so
- * customers with active review requests come before those with only drafts.
+ * Groups already sorted PRs by customer (order within a group is kept). Customers are sorted
+ * alphabetically; "Sonstige" (no customer known) comes last.
  */
 export function groupByCustomer(sorted: Item[]): CustomerGroup[] {
   const groups = new Map<string, Item[]>();
@@ -40,7 +40,12 @@ export function groupByCustomer(sorted: Item[]): CustomerGroup[] {
     list.push(item);
     groups.set(customer, list);
   }
-  return [...groups].map(([customer, items]) => ({ customer, items }));
+  const rank = (c: string) => Number(c === 'Sonstige');
+  return [...groups]
+    .map(([customer, items]) => ({ customer, items }))
+    .sort(
+      (a, b) => rank(a.customer) - rank(b.customer) || a.customer.localeCompare(b.customer, 'de'),
+    );
 }
 
 /**
@@ -55,6 +60,15 @@ export function projectsOf(
   return [...new Set([...items.filter((i) => i.type === 'pr').map(customerOf), ...manage.projects])]
     .filter((p) => !hidden.has(p))
     .sort((a, b) => a.localeCompare(b, 'de'));
+}
+
+/** PR projects not yet in the managed list (and not removed), to be kept once their PRs are gone. */
+export function unsavedPrProjects(
+  items: Item[],
+  manage: { projects: string[]; hiddenProjects: string[] },
+): string[] {
+  const known = new Set([...manage.projects, ...manage.hiddenProjects]);
+  return projectsOf(items).filter((p) => !known.has(p));
 }
 
 const TITLES: Record<SectionKey, string> = {
@@ -86,8 +100,15 @@ function endOfDay(d: Date): number {
 const prReasons = (item: Item): string[] =>
   Array.isArray(item.meta?.reasons) ? (item.meta.reasons as string[]) : [];
 
-/** Groups open items by urgency. Review requests rank above own/assigned PRs. */
-export function groupItems(items: Item[], now: Date): Section[] {
+/**
+ * Groups open items by urgency. Review requests rank above own/assigned PRs. Items in `onHold`
+ * always come last within their section and customer group.
+ */
+export function groupItems(
+  items: Item[],
+  now: Date,
+  onHold: ReadonlySet<string> = new Set(),
+): Section[] {
   const t = now.getTime();
   const buckets = new Map<SectionKey, Item[]>(ORDER.map((k) => [k, []]));
 
@@ -131,7 +152,9 @@ export function groupItems(items: Item[], now: Date): Section[] {
     b.createdAt.localeCompare(a.createdAt);
 
   return ORDER.map((key): Section => {
-    const sorted = [...buckets.get(key)!].sort(key === 'reviews' ? reviewFirst : byWhen);
+    const held = (i: Item) => Number(onHold.has(i.id));
+    const order = key === 'reviews' ? reviewFirst : byWhen;
+    const sorted = [...buckets.get(key)!].sort((a, b) => held(a) - held(b) || order(a, b));
     return {
       key,
       title: TITLES[key],

@@ -148,6 +148,7 @@ const { app, close: closeApp } = createApp({
   checkUpdate: updateChecker(VERSION),
   onShutdown: () => void shutdown('api'),
   prWorkspace,
+  bsm: tickets.bsm,
   otma: tickets.otma,
 });
 

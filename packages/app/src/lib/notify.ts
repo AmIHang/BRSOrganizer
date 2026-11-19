@@ -33,6 +33,9 @@ function remember(keys: string[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
 }
 
+/** A message from the daemon (e.g. what the cleanup of a finished PR did). */
+export const announceNotice = (title: string, body: string) => toast(title, body);
+
 async function toast(title: string, body: string): Promise<void> {
   if (await allowed()) sendNotification({ title, body });
 }
@@ -89,7 +92,7 @@ export async function announceAgentUpdates(items: Item[]): Promise<void> {
     if (m.agentEnded === true) {
       toasts.push({
         key: `agent-ended:${t.id}`,
-        title: 'Claude-Agent beendet',
+        title: 'Claude pausiert',
         body: `${t.title} – ohne Pull Request`,
       });
     }

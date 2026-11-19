@@ -28,6 +28,8 @@
   let project = $state(
     current || (handoff && untrack(() => projects.length) === 1 ? untrack(() => projects[0]!) : ''),
   );
+  /** Hand-off: the instruction for Claude (the todo's notes); empty = analyse the ticket only. */
+  let instruction = $state(untrack(() => item.notes ?? ''));
   let busy = $state(false);
   let error = $state<string | null>(null);
   let search = $state('');
@@ -51,6 +53,8 @@
     error = null;
     try {
       if (project !== current) await api.updateTodo(item.id, { project: project || null });
+      const notes = instruction.trim() || null;
+      if (handoff && notes !== (item.notes ?? null)) await api.updateTodo(item.id, { notes });
       onclose();
       if (onhandoff && project) onhandoff(project);
     } catch (e) {
@@ -88,6 +92,17 @@
         {/each}
       </select>
     </label>
+    {#if handoff}
+      <label>
+        Anweisung (optional)
+        <textarea
+          bind:value={instruction}
+          rows="4"
+          maxlength="10000"
+          placeholder="Was soll Claude tun? Leer: Claude analysiert das Ticket und schlägt eine Umsetzung vor."
+        ></textarea>
+      </label>
+    {/if}
     {#if search.trim() && filtered.length === 0}
       <p class="hint">Kein Projekt passt zu „{search.trim()}“ – neue Projekte in den Einstellungen anlegen.</p>
     {/if}
@@ -143,9 +158,14 @@
     color: var(--muted);
   }
   label select,
-  label input {
+  label input,
+  label textarea {
     font-size: 14px;
     color: var(--fg);
+  }
+  textarea {
+    resize: vertical;
+    font-family: inherit;
   }
   .error {
     margin: 0;

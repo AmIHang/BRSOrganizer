@@ -1,7 +1,22 @@
 <script lang="ts">
   import type { MenuEntry } from '../lib/types';
 
-  let { entries }: { entries: MenuEntry[] } = $props();
+  let {
+    entries,
+    label = '…',
+    title = 'Aktionen',
+    align = 'right',
+    dot = false,
+  }: {
+    entries: MenuEntry[];
+    /** Trigger text and tooltip. */
+    label?: string;
+    title?: string;
+    /** Side of the trigger the popup lines up with (left: for triggers at the start of a row). */
+    align?: 'left' | 'right';
+    /** Light-blue dot like the clone dots (no label, `title` names it); a single entry runs on click, no popup. */
+    dot?: boolean;
+  } = $props();
 
   let open = $state(false);
   let root = $state<HTMLDivElement | null>(null);
@@ -28,17 +43,17 @@
   }
 </script>
 
-<div class="menu" bind:this={root}>
+<div class="menu" class:dot bind:this={root}>
   <button
     class="trigger"
-    title="Aktionen"
-    aria-label="Aktionen"
-    aria-haspopup="menu"
+    {title}
+    aria-label={title}
+    aria-haspopup={dot && entries.length === 1 ? undefined : 'menu'}
     aria-expanded={open}
-    onclick={() => (open = !open)}>…</button
+    onclick={() => (dot && entries.length === 1 ? choose(entries[0]!) : (open = !open))}>{dot ? '' : label}</button
   >
   {#if open}
-    <div class="popup" role="menu">
+    <div class="popup" class:left={align === 'left'} role="menu">
       {#each entries as entry (entry.label)}
         <button
           role="menuitem"
@@ -83,6 +98,25 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+  /* Same size and hover as the clone dots in ItemRow; light blue = web app. */
+  .dot .trigger {
+    display: block;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border-radius: 50%;
+    background: #54aeff;
+    transition: transform 0.12s;
+  }
+  .dot .trigger:hover,
+  .dot .trigger[aria-expanded='true'] {
+    background: #54aeff;
+    transform: scale(1.3);
+  }
+  .popup.left {
+    right: auto;
+    left: 0;
   }
   .popup button {
     border: none;

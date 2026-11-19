@@ -4,12 +4,18 @@
   import { enable, isEnabled } from '@tauri-apps/plugin-autostart';
   import { onMount } from 'svelte';
   import ItemRow from './components/ItemRow.svelte';
+  import CustomerFilter from './components/CustomerFilter.svelte';
   import NewItemDialog from './components/NewItemDialog.svelte';
   import OtmaTickets from './components/OtmaTickets.svelte';
   import Settings from './components/Settings.svelte';
   import { api, subscribe } from './lib/api';
-  import { groupItems, projectsOf } from './lib/group';
-  import { announceAgentUpdates, announceNewItems, remindUpcoming } from './lib/notify';
+  import { groupItems, projectsOf, unsavedPrProjects } from './lib/group';
+  import {
+    announceAgentUpdates,
+    announceNewItems,
+    announceNotice,
+    remindUpcoming,
+  } from './lib/notify';
   import { loadOtma, otma } from './lib/otma.svelte';
   import { savedAlwaysOnTop, setAlwaysOnTop } from './lib/pin';
   import type {
@@ -42,6 +48,7 @@
         dueAt: input.dueAt,
         bsmUrl: input.bsmUrl,
         otmaUrl: input.otmaUrl,
+        notes: input.notes,
       });
       if (input.project) await api.updateTodo(todo.id, { project: input.project });
     }
@@ -62,8 +69,30 @@
   /** Settings that shape the list: projects folder and managed projects. */
   let workspace = $state<AppSettings['workspace'] | null>(null);
   const projectsRoot = $derived(workspace?.projectsRoot ?? null);
-  const sections = $derived(groupItems(items, now));
+  /** PRs and todos on hold (stored in the daemon like the folded parts). */
+  let onHold = $state<string[]>([]);
+  const sections = $derived(groupItems(items, now, new Set(onHold)));
   const projects = $derived(projectsOf(items, workspace ?? undefined));
+  /** Learned ticket -> project mappings for the todo and ticket dialogs. */
+  const projectMaps = $derived({
+    otmaProjects: workspace?.otmaProjects ?? {},
+    bsmProjects: workspace?.bsmProjects ?? {},
+  });
+  // Projects of pull requests stay after the PRs are gone: store them with the ones added by hand.
+  let savingProjects = false;
+  $effect(() => {
+    if (!workspace || savingProjects) return;
+    const fresh = unsavedPrProjects(items, workspace);
+    if (fresh.length === 0) return;
+    savingProjects = true;
+    api
+      .updateSettings({ workspace: { projects: [...workspace.projects, ...fresh] } })
+      .then((s) => (workspace = s.workspace))
+      .catch((e: unknown) => {
+        error = `Projekte nicht gespeichert: ${e instanceof Error ? e.message : String(e)}`;
+      })
+      .finally(() => (savingProjects = false));
+  });
   const needsSetup = $derived(
     sources !== null &&
       sources.github !== 'ready' &&
@@ -102,6 +131,7 @@
       const settings = await api.settings();
       workspace = settings.workspace;
       collapsed = settings.ui.collapsed;
+      onHold = settings.ui.onHold ?? [];
     } catch {
       // shown via refresh()
     }
@@ -113,12 +143,27 @@
     update = await api.update().catch(() => null);
   }
 
-  /** Folded sections ("section:<key>") and projects ("project:<name>"), stored in the daemon. */
+  /**
+   * Folded sections ("section:<key>"), projects ("project:<name>") and customers hidden by the
+   * filter of "Aufgaben" ("hidden:<name>"), stored in the daemon.
+   */
   let collapsed = $state<string[]>([]);
+  const hiddenCustomers = $derived(
+    collapsed.filter((k) => k.startsWith('hidden:')).map((k) => k.slice('hidden:'.length)),
+  );
+  function toggleHold(id: string) {
+    onHold = onHold.includes(id) ? onHold.filter((i) => i !== id) : [...onHold, id];
+    api.updateSettings({ ui: { onHold } }).catch((e: unknown) => {
+      error = `On hold nicht gespeichert: ${e instanceof Error ? e.message : String(e)}`;
+    });
+  }
+
   function toggle(key: string) {
-    collapsed = collapsed.includes(key)
-      ? collapsed.filter((k) => k !== key)
-      : [...collapsed, key];
+    saveView(collapsed.includes(key) ? collapsed.filter((k) => k !== key) : [...collapsed, key]);
+  }
+
+  function saveView(next: string[]) {
+    collapsed = next;
     api.updateSettings({ ui: { collapsed } }).catch((e: unknown) => {
       error = `Ansicht nicht gespeichert: ${e instanceof Error ? e.message : String(e)}`;
     });
@@ -170,6 +215,7 @@
       (event) => {
         if (event.type === 'items-changed') void refresh();
         if (event.type === 'items-added') void announceNewItems(event.data.items);
+        if (event.type === 'notice') void announceNotice(event.data.title, event.data.body);
         if (event.type === 'sync-finished') {
           void refreshStatus();
           void refreshCloneSync();
@@ -270,7 +316,7 @@
       bind:this={otmaList}
       {items}
       {projects}
-      mapping={workspace?.otmaProjects ?? {}}
+      mapping={projectMaps}
       onchanged={() => {
         void refresh();
         void refreshStatus();
@@ -289,8 +335,12 @@
   <NewItemDialog
     open={creating}
     project={creatingProject}
+    mapping={projectMaps}
     oncreate={createItem}
-    onclose={() => (creating = false)}
+    onclose={() => {
+      creating = false;
+      void refreshStatus(); // a linked OTMA ticket may have taught a project mapping
+    }}
   />
 
   {#if error}
@@ -323,11 +373,26 @@
       <h2 class:alert={section.key === 'overdue' || section.key === 'now'}>
         <button class="fold" aria-expanded={sectionOpen} onclick={() => toggle(`section:${section.key}`)}>
           <span class="chevron" class:closed={!sectionOpen} aria-hidden="true">▾</span>
-          {section.title} <span class="count">{section.items.length}</span>
+          {section.title}
+          <span class="count"
+            >{section.groups
+              ? section.groups
+                  .filter((g) => !hiddenCustomers.includes(g.customer))
+                  .reduce((n, g) => n + g.items.length, 0)
+              : section.items.length}</span
+          >
         </button>
+        {#if section.groups}
+          <CustomerFilter
+            customers={section.groups.map((g) => g.customer)}
+            hidden={hiddenCustomers}
+            ontoggle={(c) => toggle(`hidden:${c}`)}
+            onshowall={() => saveView(collapsed.filter((k) => !k.startsWith('hidden:')))}
+          />
+        {/if}
       </h2>
       {#if sectionOpen && section.groups}
-        {#each section.groups as group (group.customer)}
+        {#each section.groups.filter((g) => !hiddenCustomers.includes(g.customer)) as group (group.customer)}
           {@const groupOpen = !collapsed.includes(`project:${group.customer}`)}
           <h3 class="customer">
             <button class="fold" aria-expanded={groupOpen} onclick={() => toggle(`project:${group.customer}`)}>
@@ -366,10 +431,14 @@
         onarchive={(i) => act(() => api.archive(i.id))}
         onchanged={() => {
           void refresh();
+          void refreshStatus(); // a linked OTMA ticket may have taught a project mapping
           void refreshCloneSync(true);
         }}
         sync={cloneSync[item.id]}
         {projects}
+        otmaMapping={projectMaps}
+        held={onHold.includes(item.id)}
+        ontogglehold={() => toggleHold(item.id)}
       />
     {/each}
   </ul>
@@ -465,7 +534,7 @@
   h3.customer {
     font-size: 12px;
     font-weight: 600;
-    color: var(--accent);
+    color: #8957e5;
     margin: 0;
     padding: 8px 12px 2px;
     border-top: 1px solid var(--border);
@@ -481,12 +550,12 @@
     border-radius: 6px;
     font-size: 16px;
     line-height: 1;
-    color: var(--accent);
+    color: #8957e5;
     background: transparent;
     border: 1px solid transparent;
   }
   .add-todo:hover {
-    border-color: var(--accent);
+    border-color: #8957e5;
   }
   .actions {
     display: flex;
@@ -507,10 +576,12 @@
     font-size: 16px;
   }
   section h2 {
+    display: flex;
+    align-items: center;
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--muted);
+    color: #8957e5;
     margin: 0;
     padding: 12px 12px 4px;
   }

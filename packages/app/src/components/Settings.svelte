@@ -528,30 +528,36 @@
       <p class="hint muted">
         Ein ignoriertes Ticket kommt von selbst zurück, sobald sich sein Änderungsdatum ändert.
       </p>
-      <h4>Zuordnung OTMA-Projekt → Projekt</h4>
-      {#if Object.keys(settings.workspace.otmaProjects).length}
-        <ul class="projects">
-          {#each Object.entries(settings.workspace.otmaProjects) as [from, to] (from)}
-            <li>
-              <span>{from} <span class="muted">→</span> {to}</span>
-              <button
-                type="button"
-                class="remove"
-                onclick={() => {
-                  const rest = { ...settings!.workspace.otmaProjects };
-                  delete rest[from];
-                  void patch({ workspace: { otmaProjects: rest } });
-                }}>Entfernen</button
-              >
-            </li>
-          {/each}
-        </ul>
-      {:else}
-        <p class="hint muted">
-          Noch keine. Wählst du beim Übernehmen eines OTMA-Tickets ein Projekt, wird es hier für
-          dessen OTMA-Projekt gemerkt und künftig vorausgewählt.
-        </p>
-      {/if}
+      {#each [{ key: 'bsmProjects', title: 'BSM-Kunde' }, { key: 'otmaProjects', title: 'OTMA-Projekt' }] as const as map (map.key)}
+        <h4>Zuordnung {map.title} → Projekt</h4>
+        {#if Object.keys(settings.workspace[map.key]).length}
+          <ul class="projects">
+            {#each Object.entries(settings.workspace[map.key]) as [from, to] (from)}
+              <li>
+                <span>{from} <span class="muted">→</span> {to}</span>
+                <button
+                  type="button"
+                  class="remove"
+                  onclick={() => {
+                    const rest = { ...settings!.workspace[map.key] };
+                    delete rest[from];
+                    void patch({ workspace: { [map.key]: rest } });
+                  }}>Entfernen</button
+                >
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="hint muted">
+            Noch keine. Hat ein Todo mit verknüpftem Ticket ein Projekt, wird es hier für den
+            {map.title} gemerkt und künftig vorgeschlagen.
+          </p>
+        {/if}
+      {/each}
+      <p class="hint muted">
+        BSM-Kunde ist alles vor dem letzten Kleinbuchstaben der Ticketnummer (STBBRSg0034 → STBBRS);
+        er hat Vorrang vor dem OTMA-Projekt.
+      </p>
     </section>
 
     <section>

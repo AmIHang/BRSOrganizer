@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { startHandOff } from '../lib/handoff.svelte';
-  import { otmaToTodo } from '../lib/otma.svelte';
+  import { otmaToTodo, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
   import type { OtmaTicket } from '../lib/types';
 
   let {
@@ -14,15 +14,16 @@
     ticket: OtmaTicket;
     /** Customer folders (as in the todo list). */
     projects: string[];
-    /** OTMA project → customer folder. */
-    mapping: Record<string, string>;
+    /** BSM customer / OTMA project → customer folder. */
+    mapping: ProjectMaps;
     onclose: () => void;
     oncreated: () => void;
   } = $props();
 
   let dialog = $state<HTMLDialogElement | null>(null);
-  // Preselected from the mapping; a mapped folder that is gone stays selectable.
-  const mapped = untrack(() => mapping[ticket.project] ?? '');
+  // Preselected from the mappings; a mapped folder that is gone stays selectable.
+  const suggested = untrack(() => suggestProject('', ticket, mapping));
+  const mapped = suggested?.project ?? '';
   const options = $derived(mapped && !projects.includes(mapped) ? [mapped, ...projects] : projects);
   let project = $state(mapped);
   let search = $state('');
@@ -66,10 +67,10 @@
   >
     <h2>Als Todo übernehmen</h2>
     <p class="title">{ticket.title}</p>
-    {#if ticket.project}
+    {#if ticket.project || ticket.bsm}
       <p class="hint">
-        OTMA-Projekt: {ticket.project}{mapped ? ` → ${mapped}` : ''}. Die Auswahl wird für weitere
-        Tickets dieses Projekts gemerkt.
+        {suggested ? `${suggested.via} → ${suggested.project}. ` : ''}Die Auswahl wird für weitere
+        Tickets dieses Kunden (BSM) bzw. OTMA-Projekts gemerkt.
       </p>
     {/if}
     <label>

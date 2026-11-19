@@ -89,6 +89,7 @@ export const api = {
     request<{ items: Item[] }>('GET', `/api/items?status=${status}&limit=1000`).then(
       (r) => r.items,
     ),
+  /** Without a title (empty) the daemon takes the title of the BSM ticket, else the OTMA ticket. */
   addTodo: (input: {
     title: string;
     dueAt?: string | null;
@@ -142,6 +143,9 @@ export const api = {
         `/api/prs/todos/${id}/agent/worktree/remove`,
       ),
     /** Opens the agent's session in a console window (claude attach). */
+    /** Claude button of a PR: opens (resumes) its session, or the one of the todo it came from, else starts one. */
+    claudeSession: (id: string) =>
+      request<{ session: string; started: boolean }>('POST', `/api/prs/${id}/claude`),
     attachAgent: (id: string) =>
       request<{ session: string }>('POST', `/api/prs/todos/${id}/agent/attach`),
     /** Stops the agent; the todo becomes a plain open todo again. */

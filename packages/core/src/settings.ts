@@ -55,6 +55,11 @@ export const settingsSchema = z.object({
         .record(z.string().trim().min(1).max(300), projectName)
         .refine((m) => Object.keys(m).length <= 500, 'too many OTMA projects')
         .default({}),
+      /** BSM ticket prefix ("STBBRS" of "STBBRSg0034") → customer folder; a customer's tickets share it. */
+      bsmProjects: z
+        .record(z.string().trim().min(1).max(100), projectName)
+        .refine((m) => Object.keys(m).length <= 500, 'too many BSM prefixes')
+        .default({}),
     })
     .prefault({}),
   /** Fallback when TFS is not configured: PRs from notification mails in an Outlook folder. */
@@ -72,6 +77,8 @@ export const settingsSchema = z.object({
     .object({
       /** Folded parts of the list, e.g. "section:reviews" or "project:Community". */
       collapsed: z.array(z.string().trim().min(1).max(200)).max(500).default([]),
+      /** Items (PRs, todos) the user put on hold: shown greyed out, compact and last. */
+      onHold: z.array(z.string().trim().min(1).max(200)).max(1000).default([]),
     })
     .prefault({}),
 });
@@ -112,6 +119,7 @@ export const settingsPatchSchema = z.strictObject({
       projects: z.array(z.string()),
       hiddenProjects: z.array(z.string()),
       otmaProjects: z.record(z.string(), z.string()),
+      bsmProjects: z.record(z.string(), z.string()),
     })
     .partial()
     .optional(),
@@ -120,7 +128,7 @@ export const settingsPatchSchema = z.strictObject({
     .partial()
     .optional(),
   ui: z
-    .strictObject({ collapsed: z.array(z.string()) })
+    .strictObject({ collapsed: z.array(z.string()), onHold: z.array(z.string()) })
     .partial()
     .optional(),
 });

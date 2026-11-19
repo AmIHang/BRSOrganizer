@@ -5,7 +5,8 @@ const HEARTBEAT_MS = 25_000;
 
 /**
  * Server-sent events for the app: list refreshes and toasts.
- * Events: `items-changed`, `items-added` (full items, for notifications), `sync-finished`.
+ * Events: `items-changed`, `items-added` (full items, for notifications), `sync-finished`,
+ * `notice` (a message for the user).
  */
 export function sseHandler(core: Core, heartbeatMs = HEARTBEAT_MS): RequestHandler {
   return (req, res) => {
@@ -33,10 +34,12 @@ export function sseHandler(core: Core, heartbeatMs = HEARTBEAT_MS): RequestHandl
       send('items-added', { source: e.source, items });
     };
     const onSync = (e: CoreEventMap['sync-finished'][0]) => send('sync-finished', e);
+    const onNotice = (e: CoreEventMap['notice'][0]) => send('notice', e);
 
     core.events.on('items-changed', onChanged);
     core.events.on('items-added-by-sync', onAdded);
     core.events.on('sync-finished', onSync);
+    core.events.on('notice', onNotice);
     const heartbeat = setInterval(() => res.write(': ping\n\n'), heartbeatMs);
 
     req.on('close', () => {
@@ -44,6 +47,7 @@ export function sseHandler(core: Core, heartbeatMs = HEARTBEAT_MS): RequestHandl
       core.events.off('items-changed', onChanged);
       core.events.off('items-added-by-sync', onAdded);
       core.events.off('sync-finished', onSync);
+      core.events.off('notice', onNotice);
     });
   };
 }
