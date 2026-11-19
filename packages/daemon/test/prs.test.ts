@@ -93,7 +93,10 @@ describe('cloneSync with real git', () => {
     sh(work, 'checkout', '-q', '-b', 'feature/x');
     writeFileSync(join(work, 'a.txt'), '1');
     // Web project as Set-IisUrls.ps1 leaves it in the clone: IIS URL with -PR<nr>
-    writeFileSync(join(work, 'Web.csproj'), '<UseIIS>True</UseIIS><IISUrl>http://localhost/BM.Web-PR7/</IISUrl>');
+    writeFileSync(
+      join(work, 'Web.csproj'),
+      '<UseIIS>True</UseIIS><IISUrl>http://localhost/BM.Web-PR7/</IISUrl>',
+    );
     sh(work, 'add', '.');
     sh(work, 'commit', '-q', '-m', 'one');
     sh(work, 'push', '-q', 'origin', 'feature/x');
@@ -128,7 +131,12 @@ describe('cloneSync with real git', () => {
     sh(work, 'push', '-q', 'origin', '--delete', 'feature/x');
     expect(await cloneSync(repo, 7)).toMatchObject({ cloned: true, remoteGone: true });
 
-    expect(await cloneSync(repo, 8)).toEqual({ cloned: false, behind: null, remoteGone: false, webUrls: [] });
+    expect(await cloneSync(repo, 8)).toEqual({
+      cloned: false,
+      behind: null,
+      remoteGone: false,
+      webUrls: [],
+    });
   });
 
   it('tells whether a PR checkout holds work that must not be deleted', async () => {
@@ -574,11 +582,18 @@ describe('PR workspace via REST', () => {
     const repo = join(root, 'Kunde', 'Repo');
     mkdirSync(repo, { recursive: true });
     git(repo, 'init', '-q', '-b', 'main');
-    git(repo, 'commit', '-q', '--allow-empty', '-m', 'init');
+    const csproj = '<Project><UseIIS>True</UseIIS><IISUrl>http://localhost/Web/</IISUrl></Project>';
+    writeFileSync(join(repo, 'Web.csproj'), csproj);
+    writeFileSync(join(repo, 'a.txt'), '1');
+    git(repo, 'add', '.');
+    git(repo, 'commit', '-q', '-m', 'init');
     const todo = h.core.items.addTodo({ title: 'Wt' }, 'user');
     const suffix = todo.id.slice(-6).toLowerCase();
     const worktree = join(root, 'Kunde', `Todo-${suffix}`);
     git(repo, 'worktree', 'add', '-q', '-b', `feature/todo-${suffix}`, worktree);
+    // As Start-TodoAgent.ps1 leaves it: IIS URL with -Todo-<id>, staged.
+    writeFileSync(join(worktree, 'Web.csproj'), csproj.replace('/Web/', `/Web-Todo-${suffix}/`));
+    git(worktree, 'add', 'Web.csproj');
     const post = (path: string) => raw(h.port, { method: 'POST', path, headers: auth });
     const remove = () => post(`/api/prs/todos/${todo.id}/agent/worktree/remove`);
 
@@ -619,6 +634,13 @@ describe('PR workspace via REST', () => {
     expect(existsSync(join(worktree, 'notes.txt'))).toBe(true);
 
     rmSync(join(worktree, 'notes.txt'));
+    // A real change to a tracked file: refused as well.
+    writeFileSync(join(worktree, 'a.txt'), '2');
+    expect((await remove()).status).toBe(409);
+    expect(existsSync(worktree)).toBe(true);
+
+    // Only the script's own IIS URL change left: removed (forced) anyway.
+    writeFileSync(join(worktree, 'a.txt'), '1');
     const r = await remove();
     expect(r.json()).toEqual({ worktree, branch: `feature/todo-${suffix}`, branchDeleted: true });
     expect(existsSync(worktree)).toBe(false);
@@ -906,7 +928,9 @@ describe('PR workspace via REST', () => {
     });
     makeRepo(join(root, 'Community', 'PR4393'), REPO_URL, true);
     const r = await raw(h.port, { path: '/api/prs/clone-sync?refresh=1', headers: auth });
-    expect(r.json()).toEqual({ [prId()]: { cloned: true, behind: null, remoteGone: false, webUrls: [] } });
+    expect(r.json()).toEqual({
+      [prId()]: { cloned: true, behind: null, remoteGone: false, webUrls: [] },
+    });
   });
 
   it('rejects non-PR items', async () => {

@@ -123,20 +123,21 @@ const tickets = edgeTicketSessions({
     return user && password ? { user, password } : null;
   },
 });
+// Answers of background agents (claude --bg) go on their todos.
+const agents = watchAgents(core, {
+  list: claudeAgentsCli(),
+  log: (msg, extra) => logger.warn(extra ?? {}, msg),
+});
 const prWorkspace = new PrWorkspace({
   core,
   launcher: createWindowsLauncher((err) => logger.error({ err }, 'could not start script window')),
   scriptsDir,
   ...tickets,
   tasksDir: join(dataDir(), 'agent-tasks'),
+  onAgentOpened: () => agents.soon(),
 });
 linkTickets(core, tickets, (msg, extra) => logger.warn(extra ?? {}, msg));
 cleanUpLeftItems(core, prWorkspace, (msg, extra) => logger.info(extra ?? {}, msg));
-// Answers of background agents (claude --bg) go on their todos.
-watchAgents(core, {
-  list: claudeAgentsCli(),
-  log: (msg, extra) => logger.warn(extra ?? {}, msg),
-});
 const { app, close: closeApp } = createApp({
   core,
   scheduler,

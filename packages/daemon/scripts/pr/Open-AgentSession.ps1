@@ -46,4 +46,18 @@ if ($PromptFile) {
   }
 }
 
-& $claude attach $Name
+# claude attach takes a name only for a running session; an ended one (e.g. after a restart) needs
+# its id. So look the id up: the running session of that name, else the one started last.
+$ErrorActionPreference = 'Continue'
+$target = $Name
+try {
+  # Into a variable first: PowerShell 5.1 passes ConvertFrom-Json's array on as one object.
+  $all = (& $claude agents --json --all 2>$null | Out-String) | ConvertFrom-Json
+  $sessions = @($all | Where-Object { $_.name -eq $Name -and $_.id })
+  $session = @($sessions | Where-Object { $_.pid }) + @($sessions | Sort-Object { [double]$_.startedAt } -Descending) |
+    Select-Object -First 1
+  if ($session) { $target = [string]$session.id }
+} catch {
+  Write-Warning "Sitzungsliste nicht lesbar, oeffne per Name: $($_.Exception.Message)"
+}
+& $claude attach $target

@@ -122,9 +122,11 @@ export function watchAgents(
     list: ListAgentSessions;
     read?: (s: AgentSession) => string | null;
     intervalMs?: number;
+    /** Delays of the quick checks after `soon()` (tests). */
+    soonMs?: number[];
     log?: (msg: string, extra?: Record<string, unknown>) => void;
   },
-): { check(): Promise<void>; stop(): void } {
+): { check(): Promise<void>; soon(): void; stop(): void } {
   const read = options.read ?? ((s) => lastReply(s));
   // Checks in a row a todo's session was missing: one alone may be a session still starting.
   const missing = new Map<string, number>();
@@ -176,5 +178,12 @@ export function watchAgents(
   timer.unref();
   // Right away too: after a restart the todos would otherwise look busy for a while.
   void check();
-  return { check, stop: () => clearInterval(timer) };
+  // After the user resumed a session: a few quick checks while it comes up, instead of waiting up
+  // to a whole interval until "Claude pausiert" turns back into "Claude arbeitet".
+  const soon = () => {
+    for (const ms of options.soonMs ?? [3_000, 10_000, 20_000]) {
+      setTimeout(() => void check(), ms).unref();
+    }
+  };
+  return { check, soon, stop: () => clearInterval(timer) };
 }

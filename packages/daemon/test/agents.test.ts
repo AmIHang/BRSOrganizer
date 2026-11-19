@@ -139,4 +139,29 @@ describe('background agents', () => {
       watch.stop();
     }
   });
+
+  it('checks again soon after a session was opened, not only every interval', async () => {
+    const core = makeCore();
+    const todo = core.items.addTodo({ title: 'A', notes: 'x' }, 'user');
+    core.items.updateTodo(todo.id, { agentBranch: 'feature/a', agentEnded: true }, 'user');
+    const name = agentSessionName(todo.id);
+    let sessions: AgentSession[] = [];
+    const watch = watchAgents(core, {
+      list: async () => sessions,
+      read: () => null,
+      intervalMs: 60_000,
+      soonMs: [5],
+    });
+    try {
+      await watch.check();
+      // Resumed in a console: running again, picked up by the quick check, not after a minute.
+      sessions = [{ name, sessionId: 's-000002', cwd: 'C:\\a', status: 'busy', pid: 9 }];
+      watch.soon();
+      await new Promise((r) => setTimeout(r, 50));
+      await watch.check(); // waits for the quick check if it still runs
+      expect(core.items.get(todo.id).meta?.agentEnded).toBeUndefined();
+    } finally {
+      watch.stop();
+    }
+  });
 });

@@ -353,8 +353,9 @@ und entfernt den IIS-App-Pool.
 Verlässt ein Eintrag die Liste (PR abgeschlossen oder aufgegeben, Todo erledigt, etwas archiviert), räumt
 BRSOrganizer seine lokalen Reste auf: den PR-Klon samt IIS-App-Pool und den Worktree eines Claude-Agenten.
 **Nichts mit Arbeit darin wird gelöscht:** Ein Klon mit nicht committeten oder nicht gepushten Änderungen
-bleibt, ebenso ein Worktree, den git nicht entfernen will. Was passiert ist oder warum etwas bleibt, meldet
-eine Windows-Benachrichtigung („Aufräumen: …“).
+bleibt, ebenso ein Worktree mit eigenen Änderungen oder neuen Dateien. Die Änderungen der Skripte selbst
+(IIS-URLs mit `-PR<Nr>` bzw. `-Todo-<id>`, kompilierte `.js` neben `.ts`) zählen dabei nicht. Was passiert ist
+oder warum etwas bleibt, meldet eine Windows-Benachrichtigung („Aufräumen: …“).
 
 ### Claude-Sitzung zu einem PR
 
@@ -432,8 +433,10 @@ Liste verlässt, dann wird er [aufgeräumt](#automatisch-aufräumen).
 ### Abbrechen und aufräumen
 
 - **„…“ → An Claude abbrechen:** stoppt die Sitzung; das Todo wird wieder ein normales Todo.
-- **„…“ → Worktree entfernen:** räumt den Worktree weg. Nie erzwungen: Mit ungesicherten Änderungen lehnt git
-  ab; der Branch wird nur gelöscht, wenn er gemergt ist.
+- **„…“ → Worktree entfernen:** räumt den Worktree weg. Hat er nur die Änderungen des Skripts (IIS-URLs mit
+  `-Todo-<id>`), wird er trotzdem entfernt. Mit anderen nicht committeten Änderungen oder neuen Dateien lehnt
+  git ab, es geht nichts verloren. Der Branch wird nur gelöscht, wenn er gemergt ist; Commits bleiben also
+  immer.
 - Solange der Worktree einer früheren Übergabe besteht, gibt es kein neues „An Claude“: erst fortsetzen
   („Claude pausiert“ anklicken) oder den Worktree entfernen.
 

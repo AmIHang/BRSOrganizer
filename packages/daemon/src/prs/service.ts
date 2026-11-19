@@ -121,6 +121,8 @@ export interface PrWorkspaceDeps {
    * resumed, so not %TEMP% (Storage Sense). Default: the temp folder (tests).
    */
   tasksDir?: string;
+  /** A todo's agent session was opened (and resumed, if it had ended): check its state soon. */
+  onAgentOpened?: () => void;
 }
 
 const strip = (ref: string) => ref.replace(/^refs\/heads\//, '');
@@ -586,6 +588,7 @@ export class PrWorkspace {
       ['-Name', session],
       this.accountEnv(),
     );
+    this.deps.onAgentOpened?.();
     return { session };
   }
 

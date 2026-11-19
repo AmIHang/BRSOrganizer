@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 /**
  * Local PR checkouts as created by Clone-Branch.ps1:
@@ -107,20 +107,12 @@ export function git(cwd: string, args: string[], timeoutMs = 30_000): Promise<st
  * (IIS URLs with -PR<nr> in *.csproj, .js compiled next to their .ts) does not count.
  */
 export async function unsavedWork(clonePath: string, prId: number): Promise<string | null> {
-  let files: string[];
+  let changed: string[];
   try {
-    files = (await git(clonePath, ['diff', '--name-only', 'HEAD'])).split(/\r?\n/).filter(Boolean);
+    changed = await ownChanges(clonePath, `PR${prId}`);
   } catch {
     return 'git diff fehlgeschlagen';
   }
-  const iisMark = new RegExp(`-PR${prId}/?</IISUrl>`);
-  const changed = files.filter((f) => {
-    const full = join(clonePath, f);
-    if (f.endsWith('.js') && existsSync(full.replace(/\.js$/, '.ts'))) return false;
-    if (f.endsWith('.csproj') && existsSync(full) && iisMark.test(readFileSync(full, 'utf8')))
-      return false;
-    return true;
-  });
   if (changed.length) return `nicht committete Änderungen in ${changed.slice(0, 3).join(', ')}`;
   try {
     const ahead = Number(await git(clonePath, ['rev-list', '--count', '@{u}..HEAD']));
@@ -131,8 +123,26 @@ export async function unsavedWork(clonePath: string, prId: number): Promise<stri
 }
 
 /**
- * Removes a git worktree and, if git considers it merged, its local branch. Never forced: with
- * uncommitted changes git refuses and nothing is lost; an unmerged branch stays (-d, not -D).
+ * Changed tracked files (staged or not) that are not just the scripts' own edits: IIS URLs with
+ * `-<name>` in *.csproj (Clone-Branch.ps1 / Start-TodoAgent.ps1) and .js compiled next to a .ts.
+ */
+async function ownChanges(path: string, name: string): Promise<string[]> {
+  const files = (await git(path, ['diff', '--name-only', 'HEAD'])).split(/\r?\n/).filter(Boolean);
+  const iisMark = new RegExp(`-${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?</IISUrl>`);
+  return files.filter((f) => {
+    const full = join(path, f);
+    if (f.endsWith('.js') && existsSync(full.replace(/\.js$/, '.ts'))) return false;
+    if (f.endsWith('.csproj') && existsSync(full) && iisMark.test(readFileSync(full, 'utf8')))
+      return false;
+    return true;
+  });
+}
+
+/**
+ * Removes a git worktree and, if git considers it merged, its local branch; an unmerged branch
+ * stays (-d, not -D), so commits are never lost. Forced only when the only changes are the
+ * scripts' own (IIS URLs with -<folder name>, compiled .js) and there are no new files; with
+ * any other uncommitted change git refuses and nothing is lost.
  */
 export async function removeWorktree(
   path: string,
@@ -141,7 +151,9 @@ export async function removeWorktree(
   const repo = dirname(common);
   const head = await git(path, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => null);
   const branch = head && head !== 'HEAD' ? head : null;
-  await git(repo, ['worktree', 'remove', path]);
+  const untracked = (await git(path, ['ls-files', '--others', '--exclude-standard'])).trim();
+  const onlyOwn = !untracked && (await ownChanges(path, basename(path))).length === 0;
+  await git(repo, ['worktree', 'remove', ...(onlyOwn ? ['--force'] : []), path]);
   const branchDeleted = branch
     ? await git(repo, ['branch', '-d', branch]).then(
         () => true,
@@ -214,7 +226,12 @@ export async function cloneSync(repo: RepoInfo, prId: number): Promise<CloneSync
     return { cloned: false, behind: null, remoteGone: false, webUrls: [] };
   }
   const webUrls = await findWebUrls(clonePath, prId);
-  const state = (behind: number | null, remoteGone = false) => ({ cloned: true, behind, remoteGone, webUrls });
+  const state = (behind: number | null, remoteGone = false) => ({
+    cloned: true,
+    behind,
+    remoteGone,
+    webUrls,
+  });
   let branch: string;
   try {
     branch = await git(clonePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
