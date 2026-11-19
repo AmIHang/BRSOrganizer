@@ -642,6 +642,8 @@ describe('PR workspace via REST', () => {
       expect(failed.json()).toMatchObject({
         message: 'Agent-Start fehlgeschlagen: git fetch fehlgeschlagen',
       });
+      // A failed start does not look handed off (no "Claude pausiert" for a session never started).
+      expect(h.core.items.get(todo.id).meta?.agentBranch).toBeUndefined();
 
       hidden = {
         code: 0,
@@ -649,6 +651,9 @@ describe('PR workspace via REST', () => {
         stderr: '',
       };
       expect((await handOff()).json()).toMatchObject({ mode: 'window' });
+      expect(h.core.items.get(todo.id).meta?.agentBranch).toBe(
+        `feature/todo-${todo.id.slice(-6).toLowerCase()}`,
+      );
     } finally {
       for (const l of launched) rmSync(dirname(l.args![11]!), { recursive: true, force: true });
     }

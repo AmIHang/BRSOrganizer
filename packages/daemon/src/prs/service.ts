@@ -726,20 +726,8 @@ export class PrWorkspace {
     const promptFile = join(taskDir, 'auftrag.md');
     // BOM: Windows PowerShell 5.1 (Add-Content in the script) would read it as ANSI otherwise.
     writeFileSync(promptFile, '﻿' + agentPrompt(todo, project, contents, !!account), 'utf8');
-    // Lets the sync turn the todo into the pull request once it shows up.
-    this.deps.core.items.updateTodo(
-      itemId,
-      {
-        agentBranch: branch,
-        agentWorktree: join(repo.customerDir, name),
-        agentReply: null,
-        agentWaiting: null,
-        agentEnded: null,
-      },
-      'user',
-    );
-    // Hidden and awaited: takes seconds (fetch, worktree, claude --bg returns at once), and
-    // errors reach the app instead of a console window.
+    // Hidden and awaited: can take minutes (fetch, worktree checkout, BORA references; claude --bg
+    // returns at once), and errors reach the app instead of a console window.
     const run = await this.deps.launcher.runHidden(
       this.script('Start-TodoAgent.ps1'),
       [
@@ -762,6 +750,20 @@ export class PrWorkspace {
       const reason = /^FEHLER: (.+)$/m.exec(run.stdout)?.[1]?.trim() || `Exit-Code ${run.code}`;
       throw new HttpError(502, 'agent', `Agent-Start fehlgeschlagen: ${reason}`);
     }
+    // Only now, with the session started: the agent watcher would take a session still being set
+    // up for one that ended ("Claude pausiert"), and a failed start must not look handed off.
+    // Also lets the sync turn the todo into the pull request once it shows up.
+    this.deps.core.items.updateTodo(
+      itemId,
+      {
+        agentBranch: branch,
+        agentWorktree: join(repo.customerDir, name),
+        agentReply: null,
+        agentWaiting: null,
+        agentEnded: null,
+      },
+      'user',
+    );
     return {
       worktree: join(repo.customerDir, name),
       branch,
