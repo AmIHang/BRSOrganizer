@@ -1,6 +1,6 @@
 [package]
 name = "brsorganizer"
-version = "0.4.1"
+version = "0.4.2"
 description = "Wo werde ich gerade gebraucht? Todos, PRs und Termine in einer Liste."
 edition = "2021"
 publish = false
