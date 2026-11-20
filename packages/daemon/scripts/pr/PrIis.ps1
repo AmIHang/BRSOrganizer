@@ -19,6 +19,54 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Beendet Prozesse, die Dateien unter $Dir offen halten (z.B. Copilot/ServiceHub mit .vs\...\CodeChunks.db).
+# Ermittelt ueber den Restart Manager, wie es auch der Explorer bei "Datei wird verwendet" tut.
+function Stop-LockingProcess([string]$Dir) {
+    if (-not ('PrIisRm' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System; using System.Collections.Generic; using System.Runtime.InteropServices; using System.Text;
+public static class PrIisRm {
+    [StructLayout(LayoutKind.Sequential)] struct RM_UNIQUE_PROCESS { public int dwProcessId; public System.Runtime.InteropServices.ComTypes.FILETIME ProcessStartTime; }
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct RM_PROCESS_INFO {
+        public RM_UNIQUE_PROCESS Process;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string strAppName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string strServiceShortName;
+        public int ApplicationType; public uint AppStatus; public uint TSSessionId;
+        [MarshalAs(UnmanagedType.Bool)] public bool bRestartable;
+    }
+    [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)] static extern int RmStartSession(out uint h, int flags, StringBuilder key);
+    [DllImport("rstrtmgr.dll")] static extern int RmEndSession(uint h);
+    [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)] static extern int RmRegisterResources(uint h, uint nFiles, string[] files, uint nApps, RM_UNIQUE_PROCESS[] apps, uint nSvcs, string[] svcs);
+    [DllImport("rstrtmgr.dll")] static extern int RmGetList(uint h, out uint needed, ref uint n, [In, Out] RM_PROCESS_INFO[] info, ref uint reasons);
+    public static int[] Lockers(string[] files) {
+        uint h; var ids = new List<int>();
+        if (RmStartSession(out h, 0, new StringBuilder(64)) != 0) return ids.ToArray();
+        try {
+            if (RmRegisterResources(h, (uint)files.Length, files, 0, null, 0, null) != 0) return ids.ToArray();
+            uint needed, n = 0, reasons = 0;
+            if (RmGetList(h, out needed, ref n, null, ref reasons) != 234 || needed == 0) return ids.ToArray(); // 234 = ERROR_MORE_DATA
+            var info = new RM_PROCESS_INFO[needed]; n = needed;
+            if (RmGetList(h, out needed, ref n, info, ref reasons) != 0) return ids.ToArray();
+            for (int i = 0; i < n; i++) ids.Add(info[i].Process.dwProcessId);
+        } finally { RmEndSession(h); }
+        return ids.ToArray();
+    }
+}
+'@
+    }
+    # Nur die Dateien, die rd uebrig gelassen hat - das sind die gesperrten
+    $files = @(try { [IO.Directory]::EnumerateFiles("\\?\$Dir", '*', 'AllDirectories') | Select-Object -First 2000 } catch { })
+    if (-not $files) { return }
+    foreach ($id in [PrIisRm]::Lockers([string[]]$files)) {
+        $p = Get-Process -Id $id -ErrorAction SilentlyContinue
+        # Explorer nicht beenden (Shell); er sperrt praktisch nie Dateien dauerhaft
+        if (-not $p -or $id -eq $PID -or $p.ProcessName -eq 'explorer') { continue }
+        Write-Host "Beende $($p.ProcessName) (PID $id) - sperrt Dateien in $Dir"
+        Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+    }
+}
+
 if ($LogFile) { Start-Transcript -Path $LogFile -Force | Out-Null }
 $exit = 0
 try {
@@ -112,7 +160,7 @@ try {
             for ($i = 1; $i -le 6 -and (Test-Path $DeletePath); $i++) {
                 # \\?\ umgeht das 260-Zeichen-Limit beim Loeschen
                 cmd /c "rd /s /q `"\\?\$DeletePath`"" 2>$null
-                if (Test-Path $DeletePath) { Start-Sleep -Seconds 2 }
+                if (Test-Path $DeletePath) { Stop-LockingProcess $DeletePath; Start-Sleep -Seconds 2 }
             }
             if (Test-Path $DeletePath) {
                 throw "Ordner $DeletePath konnte nicht vollstaendig geloescht werden - vermutlich noch durch Visual Studio, den Explorer oder ein Terminal gesperrt. Diese schliessen und erneut ausfuehren."

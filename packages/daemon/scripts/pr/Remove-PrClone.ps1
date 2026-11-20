@@ -38,7 +38,7 @@ Write-Host "  App-Pool : $pool (inkl. aller Web-Apps darin)"
 Write-Host ''
 Write-Host 'ACHTUNG: Der Ordner ist vermutlich durch den IIS gesperrt. Dafuer wird der App-Pool gestoppt' -ForegroundColor Yellow
 Write-Host '         und geloescht und sein Worker-Prozess (w3wp.exe) beendet - Adminrechte noetig (UAC).' -ForegroundColor Yellow
-Write-Host '         Visual Studio, Explorer-Fenster und Terminals in diesem Ordner vorher schliessen.' -ForegroundColor Yellow
+Write-Host '         Prozesse, die danach noch Dateien im Ordner sperren (z.B. Visual Studio), werden beendet.' -ForegroundColor Yellow
 Write-Host ''
 if (-not $Force) {
     $answer = Read-Host 'Wirklich loeschen? [j/N]'
