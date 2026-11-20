@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import { api } from '../lib/api';
   import type { Item } from '../lib/types';
-  import { findOtma, learnProject, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
+  import { findOtma, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
 
   let {
     item,
@@ -41,7 +41,6 @@
       });
       const target = offer && takeOffer ? offer : current;
       if (target !== current) await api.updateTodo(item.id, { project: target });
-      await learnProject(bsm, findOtma(otma), target, mapping).catch(() => {});
       onclose();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);

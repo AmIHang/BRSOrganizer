@@ -250,17 +250,10 @@ describe('agent prompt', () => {
     );
   });
 
-  it('names the desktop chat (PR<n>) #<BSM key or OTMA number> - <description>', () => {
+  it('does not ask the agent to export its chat to the desktop app (never works)', () => {
     const core = makeCore();
-    const chat = (input: { bsmUrl?: string; otmaUrl?: string }) =>
-      agentPrompt(core.items.addTodo({ title: 'T', notes: 'n', ...input }, 'user'), 'P')
-        .split('\n')
-        .find((l) => l.includes('Claude-Desktop-App'));
-    expect(chat({ bsmUrl: 'STBBRSg0030', otmaUrl: '178317' })).toContain(
-      '`(PR<Nummer>) #STBBRSg0030 - <kurze Beschreibung>`',
-    );
-    expect(chat({ otmaUrl: '178317' })).toContain('`(PR<Nummer>) #178317 - <kurze Beschreibung>`');
-    expect(chat({})).toContain('`(PR<Nummer>) - <kurze Beschreibung>`');
+    const prompt = agentPrompt(core.items.addTodo({ title: 'T', notes: 'n' }, 'user'), 'P');
+    expect(prompt).not.toMatch(/desktop/i);
   });
 });
 

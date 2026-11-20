@@ -114,7 +114,8 @@ export function lastReply(session: AgentSession, home = homedir()): string | nul
 /**
  * Watches the background sessions of todos handed to an agent: when one finished its turn
  * (waits for the user, e.g. with a question or a result without a PR), its last answer goes on
- * the todo (`meta.agentReply`), for the app to show.
+ * the todo (`meta.agentReply`), for the app to show. Also notices pushes of agent sessions
+ * (todo or PR) and reports them through `onPrChanged`.
  */
 export function watchAgents(
   core: Core,
@@ -125,9 +126,30 @@ export function watchAgents(
     /** Delays of the quick checks after `soon()` (tests). */
     soonMs?: number[];
     log?: (msg: string, extra?: Record<string, unknown>) => void;
+    /**
+     * A session finished its turn with a new answer, ended, or pushed. Its PR is likely new or
+     * changed: syncing now updates it (or turns the todo into it) without waiting for the
+     * next scheduled sync.
+     */
+    onPrChanged?: () => void;
+    /** Commit of the upstream branch checked out in `cwd`, null without one (tests). */
+    upstream?: (cwd: string) => Promise<string | null>;
   },
 ): { check(): Promise<void>; soon(): void; stop(): void } {
   const read = options.read ?? ((s) => lastReply(s));
+  const upstream =
+    options.upstream ??
+    ((cwd) =>
+      new Promise<string | null>((resolve) =>
+        execFile(
+          'git',
+          ['-C', cwd, 'rev-parse', '@{u}'],
+          { windowsHide: true, timeout: 10_000 },
+          (err, stdout) => resolve(err ? null : String(stdout).trim() || null),
+        ),
+      ));
+  // Upstream commit per agent session: a push moves it (git updates origin/<branch> locally).
+  const pushedAt = new Map<string, string | null>();
   // Checks in a row a todo's session was missing: one alone may be a session still starting.
   const missing = new Map<string, number>();
   // A check while one runs waits for that one instead of starting a second.
@@ -137,9 +159,18 @@ export function watchAgents(
     const todos = core.items
       .list({ type: 'todo', limit: 500 })
       .filter((t) => typeof t.meta?.agentBranch === 'string');
-    if (!todos.length) return;
+    // Without agent todos or open PRs there is nothing a session could change.
+    if (!todos.length && !core.items.list({ type: 'pr', limit: 1 }).length) return;
+    let prChanged = false;
     try {
       const sessions = await options.list();
+      for (const s of sessions) {
+        if (!s.name || !/^(Todo-[0-9a-z]{6}|PR\d+)$/i.test(s.name) || !sessionAlive(s)) continue;
+        const sha = await upstream(s.cwd);
+        // First sight is no push; a new upstream (first push with -u) or a moved one is.
+        if (pushedAt.has(s.name) && pushedAt.get(s.name) !== sha && sha !== null) prChanged = true;
+        pushedAt.set(s.name, sha);
+      }
       for (const todo of todos) {
         const name = agentSessionName(todo.id);
         const s = sessions.find((x) => x.name === name && sessionAlive(x));
@@ -150,6 +181,7 @@ export function watchAgents(
           missing.set(todo.id, n);
           if (n >= 2 && !ended) {
             core.items.updateTodo(todo.id, { agentEnded: true, agentWaiting: null }, 'claude');
+            prChanged = true;
           }
           continue;
         }
@@ -166,6 +198,7 @@ export function watchAgents(
         const reply = read(s);
         if (reply && reply !== todo.meta?.agentReply) {
           core.items.updateTodo(todo.id, { agentReply: reply }, 'claude');
+          prChanged = true;
         }
       }
     } catch (err) {
@@ -173,6 +206,7 @@ export function watchAgents(
         error: err instanceof Error ? err.message : String(err),
       });
     }
+    if (prChanged) options.onPrChanged?.();
   };
   const timer = setInterval(() => void check(), options.intervalMs ?? 30_000);
   timer.unref();

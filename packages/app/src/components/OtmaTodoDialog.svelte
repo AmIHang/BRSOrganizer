@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { startHandOff } from '../lib/handoff.svelte';
+  import { agentModeCreated, startHandOff } from '../lib/handoff.svelte';
   import { otmaToTodo, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
   import type { OtmaTicket } from '../lib/types';
 
@@ -46,10 +46,11 @@
     busy = true;
     error = null;
     try {
-      const item = await otmaToTodo(ticket, project, mapping);
+      const item = await otmaToTodo(ticket, project);
       oncreated();
       onclose();
       if (handOff) void startHandOff(item);
+      else agentModeCreated(item);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -70,7 +71,7 @@
     {#if ticket.project || ticket.bsm}
       <p class="hint">
         {suggested ? `${suggested.via} → ${suggested.project}. ` : ''}Die Auswahl wird für weitere
-        Tickets dieses Kunden (BSM) bzw. OTMA-Projekts gemerkt.
+        Tickets dieses BSM-Kunden gemerkt.
       </p>
     {/if}
     <label>

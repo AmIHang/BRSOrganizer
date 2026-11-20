@@ -1,6 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { api } from '../lib/api';
+  import { agentModeProjectSet } from '../lib/handoff.svelte';
+  import { findOtma, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
   import type { Item } from '../lib/types';
 
   let {
@@ -8,9 +10,12 @@
     projects,
     onclose,
     onhandoff,
+    mapping = { otmaProjects: {}, bsmProjects: {} },
   }: {
     item: Item;
     projects: string[];
+    /** BSM customer / OTMA project → project: preselects one and learns the choice. */
+    mapping?: ProjectMaps;
     onclose: () => void;
     /**
      * Hand-off mode ("An Claude"): a project is required; after saving it the dialog closes and
@@ -21,13 +26,18 @@
 
   let dialog = $state<HTMLDialogElement | null>(null);
   const current = untrack(() => (typeof item.meta?.project === 'string' ? item.meta.project : ''));
-  // Keep the current project selectable even when it has no open pull request right now.
-  const options = $derived(current && !projects.includes(current) ? [current, ...projects] : projects);
+  const bsm = untrack(() => item.bsmUrl ?? '');
+  const otmaTicket = untrack(() => findOtma(item.otmaUrl ?? ''));
+  const suggested = untrack(() => suggestProject(bsm, otmaTicket, mapping));
   const handoff = untrack(() => !!onhandoff);
-  // Hand-off: preselect the current project, or the only one there is.
-  let project = $state(
-    current || (handoff && untrack(() => projects.length) === 1 ? untrack(() => projects[0]!) : ''),
-  );
+  // Preselect the current project, else the one the tickets map to, else (hand-off) the only one.
+  const initial =
+    current ||
+    suggested?.project ||
+    (handoff && untrack(() => projects.length) === 1 ? untrack(() => projects[0]!) : '');
+  // Keep the current or mapped project selectable even when it has no open pull request right now.
+  const options = $derived(initial && !projects.includes(initial) ? [initial, ...projects] : projects);
+  let project = $state(initial);
   /** Hand-off: the instruction for Claude (the todo's notes); empty = analyse the ticket only. */
   let instruction = $state(untrack(() => item.notes ?? ''));
   let busy = $state(false);
@@ -52,7 +62,11 @@
     busy = true;
     error = null;
     try {
-      if (project !== current) await api.updateTodo(item.id, { project: project || null });
+      if (project !== current) {
+        const updated = await api.updateTodo(item.id, { project: project || null });
+        // The hand-off mode starts the hand-off itself below.
+        if (!handoff) agentModeProjectSet(updated);
+      }
       const notes = instruction.trim() || null;
       if (handoff && notes !== (item.notes ?? null)) await api.updateTodo(item.id, { notes });
       onclose();
@@ -69,6 +83,9 @@
   <form onsubmit={save}>
     <h2>{handoff ? 'An Claude übergeben' : 'In Projekt verschieben'}</h2>
     <p class="title">{item.title}</p>
+    {#if suggested && !current}
+      <p class="hint">Vorgeschlagen über {suggested.via}.</p>
+    {/if}
     {#if handoff}
       <p class="hint">
         Claude arbeitet in einem neuen Worktree des Projekt-Repos und erstellt den Pull Request. Das

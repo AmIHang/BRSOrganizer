@@ -13,6 +13,56 @@ export interface HandOffState {
  */
 export const handOffs = $state<Record<string, HandOffState>>({});
 
+const AGENT_MODE_KEY = 'brsorganizer.agent-mode';
+
+function loadAgentMode(): { on: boolean; pending: string[] } {
+  try {
+    const raw = localStorage.getItem(AGENT_MODE_KEY);
+    if (raw) return JSON.parse(raw) as { on: boolean; pending: string[] };
+  } catch {
+    // storage unavailable or garbled: start switched off
+  }
+  return { on: false, pending: [] };
+}
+
+/**
+ * Agent mode (switch in the header): new todos go to Claude on their own, right away with a
+ * project, else as soon as they get one (`pending`). Kept per installation like the pin.
+ */
+export const agentMode = $state(loadAgentMode());
+
+function saveAgentMode() {
+  try {
+    localStorage.setItem(AGENT_MODE_KEY, JSON.stringify(agentMode));
+  } catch {
+    // not remembered
+  }
+}
+
+export function setAgentMode(on: boolean): void {
+  agentMode.on = on;
+  if (!on) agentMode.pending = [];
+  saveAgentMode();
+}
+
+/** A todo was just created. */
+export function agentModeCreated(item: Item): void {
+  if (!agentMode.on || item.type !== 'todo') return;
+  if (typeof item.meta?.project === 'string') void startHandOff(item);
+  else {
+    agentMode.pending = [...agentMode.pending, item.id];
+    saveAgentMode();
+  }
+}
+
+/** A todo got a project: hands it off if it was created in agent mode without one. */
+export function agentModeProjectSet(item: Item): void {
+  if (!agentMode.pending.includes(item.id)) return;
+  agentMode.pending = agentMode.pending.filter((id) => id !== item.id);
+  saveAgentMode();
+  if (agentMode.on && typeof item.meta?.project === 'string') void startHandOff(item);
+}
+
 export async function startHandOff(item: Item): Promise<void> {
   if (handOffs[item.id]?.running) return;
   handOffs[item.id] = {

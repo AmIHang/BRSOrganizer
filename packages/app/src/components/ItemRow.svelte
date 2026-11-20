@@ -379,7 +379,11 @@
           class="chip action claude"
           disabled={handingOff}
           title="Todo an einen Claude-Agenten übergeben (eigener Branch, läuft im Hintergrund); BSM- und OTMA-Ticket werden vorher gelesen"
-          onclick={() => (pickingHandOffProject = true)}
+          onclick={() =>
+            // With a project already set there is nothing to ask: hand off right away.
+            typeof item.meta?.project === 'string'
+              ? void startHandOff(item)
+              : (pickingHandOffProject = true)}
           >{handingOff ? 'An Claude …' : 'An Claude'}</button
         >
       {/if}
@@ -443,6 +447,7 @@
   <ProjectDialog
     {item}
     {projects}
+    mapping={otmaMapping}
     onclose={() => {
       movingProject = false;
       onchanged?.();
@@ -462,6 +467,7 @@
   <ProjectDialog
     {item}
     {projects}
+    mapping={otmaMapping}
     onclose={() => {
       pickingHandOffProject = false;
       onchanged?.();

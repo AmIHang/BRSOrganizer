@@ -22,6 +22,7 @@ import { createWindowsLauncher } from './prs/launcher.js';
 import { PrWorkspace } from './prs/service.js';
 import { edgeTicketSessions } from './tickets/edge.js';
 import { linkTickets } from './tickets/link.js';
+import { mapProjects } from './tickets/project.js';
 import { cleanUpLeftItems } from './prs/cleanup.js';
 import { claudeAgentsCli, watchAgents } from './prs/agents.js';
 import { createScheduler } from './scheduler.js';
@@ -123,10 +124,17 @@ const tickets = edgeTicketSessions({
     return user && password ? { user, password } : null;
   },
 });
-// Answers of background agents (claude --bg) go on their todos.
+// Answers of background agents (claude --bg) go on their todos; their pushes update the PRs.
 const agents = watchAgents(core, {
   list: claudeAgentsCli(),
   log: (msg, extra) => logger.warn(extra ?? {}, msg),
+  onPrChanged: () => {
+    // The app re-reads the clone states after the sync; they must not come from the cache.
+    prWorkspace.invalidateCloneSync();
+    if (!args['no-sync']) {
+      scheduler.runNow().catch((err: unknown) => logger.error({ err }, 'agent sync crashed'));
+    }
+  },
 });
 const prWorkspace = new PrWorkspace({
   core,
@@ -137,6 +145,7 @@ const prWorkspace = new PrWorkspace({
   onAgentOpened: () => agents.soon(),
 });
 linkTickets(core, tickets, (msg, extra) => logger.warn(extra ?? {}, msg));
+mapProjects(core);
 cleanUpLeftItems(core, prWorkspace, (msg, extra) => logger.info(extra ?? {}, msg));
 const { app, close: closeApp } = createApp({
   core,

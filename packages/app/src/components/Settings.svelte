@@ -528,7 +528,7 @@
       <p class="hint muted">
         Ein ignoriertes Ticket kommt von selbst zurück, sobald sich sein Änderungsdatum ändert.
       </p>
-      {#each [{ key: 'bsmProjects', title: 'BSM-Kunde' }, { key: 'otmaProjects', title: 'OTMA-Projekt' }] as const as map (map.key)}
+      {#each [{ key: 'bsmProjects', title: 'BSM-Kunde' }] as const as map (map.key)}
         <h4>Zuordnung {map.title} → Projekt</h4>
         {#if Object.keys(settings.workspace[map.key]).length}
           <ul class="projects">
@@ -549,14 +549,14 @@
           </ul>
         {:else}
           <p class="hint muted">
-            Noch keine. Hat ein Todo mit verknüpftem Ticket ein Projekt, wird es hier für den
-            {map.title} gemerkt und künftig vorgeschlagen.
+            Noch keine. Hat ein Todo oder PR mit BSM-Ticket ein Projekt, wird es hier für den
+            {map.title} gemerkt und bei neuen Tickets dieses Kunden übernommen.
           </p>
         {/if}
       {/each}
       <p class="hint muted">
-        BSM-Kunde ist alles vor dem letzten Kleinbuchstaben der Ticketnummer (STBBRSg0034 → STBBRS);
-        er hat Vorrang vor dem OTMA-Projekt.
+        BSM-Kunde ist alles vor dem letzten Kleinbuchstaben der Ticketnummer (STBBRSg0034 → STBBRS).
+        OTMA-Tickets zählen über das BSM-Ticket, auf das sie verweisen.
       </p>
     </section>
 

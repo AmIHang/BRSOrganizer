@@ -20,57 +20,25 @@ export function findOtma(input: string): OtmaTicket | undefined {
   return key ? otma.tickets?.find((t) => t.key === key) : undefined;
 }
 
-/** BSM customer ID (typed, or linked on the OTMA ticket) and OTMA project of a todo's tickets. */
-function keysOf(bsm: string, t: OtmaTicket | undefined) {
-  return { prefix: bsmPrefix(bsm) ?? bsmPrefix(t?.bsm ?? ''), otmaProject: t?.project || null };
-}
-
-/** Project for linked tickets: by BSM customer ID first, then by OTMA project. */
+/**
+ * Project the BSM customer of the tickets maps to (typed BSM ticket, or the one the OTMA ticket
+ * links). The daemon learns the mapping whenever a todo or PR with a BSM ticket has a project,
+ * and applies it itself to todos without one; the dialogs only preselect it.
+ */
 export function suggestProject(
   bsm: string,
   t: OtmaTicket | undefined,
   maps: ProjectMaps,
 ): { project: string; via: string } | null {
-  const { prefix, otmaProject } = keysOf(bsm, t);
-  const byBsm = prefix ? maps.bsmProjects[prefix] : undefined;
-  if (byBsm) return { project: byBsm, via: `BSM-Kunde „${prefix}“` };
-  const byOtma = otmaProject ? maps.otmaProjects[otmaProject] : undefined;
-  if (byOtma) return { project: byOtma, via: `OTMA-Projekt „${otmaProject}“` };
-  return null;
+  const prefix = bsmPrefix(bsm) ?? bsmPrefix(t?.bsm ?? '');
+  const project = prefix ? maps.bsmProjects[prefix] : undefined;
+  return project ? { project, via: `BSM-Kunde „${prefix}“` } : null;
 }
 
-/**
- * Remembers `project` for the tickets' BSM customer ID and OTMA project. Existing mappings are
- * only replaced with `replace` (the user picked the project for exactly this ticket).
- */
-export async function learnProject(
-  bsm: string,
-  t: OtmaTicket | undefined,
-  project: string | null,
-  maps: ProjectMaps,
-  replace = false,
-) {
-  if (!project) return;
-  const { prefix, otmaProject } = keysOf(bsm, t);
-  const patch: Partial<ProjectMaps> = {};
-  const learn = (map: Record<string, string>, key: string | null) =>
-    key && map[key] !== project && (replace || !map[key]) ? { ...map, [key]: project } : undefined;
-  const bsmProjects = learn(maps.bsmProjects, prefix);
-  const otmaProjects = learn(maps.otmaProjects, otmaProject);
-  if (bsmProjects) patch.bsmProjects = bsmProjects;
-  if (otmaProjects) patch.otmaProjects = otmaProjects;
-  if (bsmProjects || otmaProjects) await api.updateSettings({ workspace: patch });
-}
-
-/**
- * Takes an OTMA ticket over as a todo in `project` (customer folder, '' = none). Its BSM customer
- * and OTMA project are mapped to that folder, so the next ticket of the same customer preselects it.
- */
-export async function otmaToTodo(t: OtmaTicket, project: string, maps: ProjectMaps): Promise<Item> {
+/** Takes an OTMA ticket over as a todo in `project` (customer folder, '' = none). */
+export async function otmaToTodo(t: OtmaTicket, project: string): Promise<Item> {
   const todo = await api.addTodo({ title: t.title, otmaUrl: t.url, bsmUrl: t.bsm || null });
-  const item = project ? await api.updateTodo(todo.id, { project }) : todo;
-  await learnProject('', t, project, maps, true);
-  return item;
+  return project ? await api.updateTodo(todo.id, { project }) : todo;
 }
 
 /** Ticket numbers the user has seen in the OTMA tab (kept per installation). */

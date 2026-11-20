@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { NewItem } from '../lib/types';
-  import { findOtma, learnProject, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
+  import { findOtma, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
 
   let {
     open,
@@ -97,8 +97,6 @@
           notes: instruction.trim() || null,
           project: target,
         });
-        // Only a convenience: the todo exists, a failed save must not offer to create it again.
-        await learnProject(bsm, findOtma(otma), target, mapping).catch(() => {});
       } else {
         const start = new Date(when);
         await oncreate({

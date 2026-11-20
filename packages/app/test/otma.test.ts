@@ -35,10 +35,10 @@ vi.mock('../src/lib/api', () => ({
 describe('OTMA ticket as todo', () => {
   beforeEach(() => void (calls.length = 0));
 
-  it('creates the todo with both tickets in the project and remembers the OTMA project', async () => {
+  it('creates the todo with both tickets in the project (the daemon learns the mapping)', async () => {
     const { otmaToTodo } = await import('../src/lib/otma.svelte');
     const t = { ...ticket('178333'), bsm: 'STBBRSg0034', project: 'STB BRS [STBBRS]' };
-    await otmaToTodo(t, 'Steiermarkbahn', { otmaProjects: { Other: 'X' }, bsmProjects: {} });
+    await otmaToTodo(t, 'Steiermarkbahn');
     expect(calls).toEqual([
       [
         'addTodo',
@@ -49,26 +49,13 @@ describe('OTMA ticket as todo', () => {
         },
       ],
       ['updateTodo', { id: 'todo-1', project: 'Steiermarkbahn' }],
-      [
-        'updateSettings',
-        {
-          workspace: {
-            bsmProjects: { STBBRS: 'Steiermarkbahn' },
-            otmaProjects: { Other: 'X', 'STB BRS [STBBRS]': 'Steiermarkbahn' },
-          },
-        },
-      ],
     ]);
   });
 
-  it('keeps the mapping when it already fits, and needs no project', async () => {
+  it('needs no project', async () => {
     const { otmaToTodo } = await import('../src/lib/otma.svelte');
     const t = { ...ticket('1'), project: 'P' };
-    const maps = { otmaProjects: { P: 'Kunde' }, bsmProjects: {} };
-    await otmaToTodo(t, 'Kunde', maps);
-    expect(calls.map(([name]) => name)).toEqual(['addTodo', 'updateTodo']);
-    calls.length = 0;
-    await otmaToTodo(t, '', maps);
+    await otmaToTodo(t, '');
     expect(calls).toEqual([
       ['addTodo', { title: '#T1', otmaUrl: 'https://otma.boomsoftware.com/ap/1', bsmUrl: null }],
     ]);
@@ -151,7 +138,7 @@ describe('OTMA new tickets', () => {
     expect(bsmPrefix('')).toBeNull();
   });
 
-  it('suggests a project by BSM customer first, then OTMA project, and learns unmapped ones', async () => {
+  it('suggests a project by the BSM customer only (typed or linked on the OTMA ticket)', async () => {
     const mod = await import('../src/lib/otma.svelte');
     answer = [{ ...ticket('7'), project: 'P', bsm: 'STBg1' }, { ...ticket('8'), project: 'Q' }];
     await mod.loadOtma();
@@ -159,25 +146,10 @@ describe('OTMA new tickets', () => {
     const t7 = mod.findOtma('#7');
     const t8 = mod.findOtma('https://otma.boomsoftware.com/ap/8/');
     expect(mod.suggestProject('', t7, maps)).toEqual({ project: 'Bahn', via: 'BSM-Kunde „STB“' });
-    expect(mod.suggestProject('XYg9', t7, maps)).toEqual({ project: 'Kunde', via: 'OTMA-Projekt „P“' });
+    expect(mod.suggestProject('XYg9', t7, maps)).toBeNull(); // OTMA project alone: no mapping
     expect(mod.suggestProject('STBg5', undefined, maps)?.project).toBe('Bahn');
     expect(mod.suggestProject('', t8, maps)).toBeNull();
     expect(mod.findOtma('9')).toBeUndefined();
-
-    calls.length = 0;
-    await mod.learnProject('', t7, 'Anders', maps); // both mapped already: kept
-    await mod.learnProject('NEUg1', t8, 'Neu', maps);
-    expect(calls).toEqual([
-      [
-        'updateSettings',
-        {
-          workspace: {
-            bsmProjects: { STB: 'Bahn', NEU: 'Neu' },
-            otmaProjects: { P: 'Kunde', Q: 'Neu' },
-          },
-        },
-      ],
-    ]);
   });
 
   it('remembers whether the tab is shown', async () => {

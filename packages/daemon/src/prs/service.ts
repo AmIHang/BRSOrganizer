@@ -326,11 +326,6 @@ function implementSteps(todo: Item, project: string, key: string | undefined, sc
       (key ? `, z. B. \`fix${scope}: Show predefined mail recipients\`` : '') +
       '. Titel und Beschreibung des Pull Requests leitest du selbst aus deiner Änderung ab, ' +
       'nicht aus der Anweisung; frag nicht danach.',
-    '6. Ist die Claude-Desktop-App installiert, leg diese Konversation dort als Chat an ' +
-      '(z. B. `claude --desktop --resume <Session-ID>`) und nenne den Chat ' +
-      `\`(PR<Nummer>)${key ? ` #${key}` : ''} - <kurze Beschreibung>\` (Nummer des Pull ` +
-      'Requests, Beschreibung wie im PR-Titel); dieser Name gilt statt anderer Vorgaben zum ' +
-      'Chat-Namen. Ohne Desktop-App entfällt dieser Schritt.',
   ];
 }
 

@@ -16,6 +16,7 @@
     announceNotice,
     remindUpcoming,
   } from './lib/notify';
+  import { agentMode, agentModeCreated, setAgentMode } from './lib/handoff.svelte';
   import { loadOtma, otma } from './lib/otma.svelte';
   import { savedAlwaysOnTop, setAlwaysOnTop } from './lib/pin';
   import type {
@@ -50,7 +51,7 @@
         otmaUrl: input.otmaUrl,
         notes: input.notes,
       });
-      if (input.project) await api.updateTodo(todo.id, { project: input.project });
+      agentModeCreated(input.project ? await api.updateTodo(todo.id, { project: input.project }) : todo);
     }
     else await api.addEvent({ title: input.title, startsAt: input.startsAt, endsAt: input.endsAt });
     await refresh();
@@ -213,7 +214,10 @@
 
     const unsubscribe = subscribe(
       (event) => {
-        if (event.type === 'items-changed') void refresh();
+        if (event.type === 'items-changed') {
+          void refresh();
+          void refreshStatus(); // the daemon may have learned a BSM customer → project mapping
+        }
         if (event.type === 'items-added') void announceNewItems(event.data.items);
         if (event.type === 'notice') void announceNotice(event.data.title, event.data.body);
         if (event.type === 'sync-finished') {
@@ -278,6 +282,15 @@
       {/if}
     </nav>
     <div class="actions">
+      <button
+        class="agent-mode"
+        class:active={agentMode.on}
+        title={agentMode.on
+          ? 'Agent-Modus an: neue Todos gehen automatisch an Claude, sobald sie ein Projekt haben'
+          : 'Agent-Modus: neue Todos automatisch an Claude übergeben'}
+        aria-pressed={agentMode.on}
+        onclick={() => setAgentMode(!agentMode.on)}>Agent</button
+      >
       <button
         class="icon pin"
         class:active={pinned}
@@ -574,6 +587,21 @@
   }
   .actions .icon {
     font-size: 16px;
+  }
+  .agent-mode {
+    align-self: center;
+    margin-right: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: transparent;
+  }
+  .agent-mode.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
   }
   section h2 {
     display: flex;

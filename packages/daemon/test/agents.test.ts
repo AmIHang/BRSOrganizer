@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { makeCore } from '../../core/test/helpers.js';
+import { makeCore, StaticSource } from '../../core/test/helpers.js';
 import { agentSessionName, lastReply, watchAgents, type AgentSession } from '../src/prs/agents.js';
 
 describe('background agents', () => {
@@ -160,6 +160,73 @@ describe('background agents', () => {
       await new Promise((r) => setTimeout(r, 50));
       await watch.check(); // waits for the quick check if it still runs
       expect(core.items.get(todo.id).meta?.agentEnded).toBeUndefined();
+    } finally {
+      watch.stop();
+    }
+  });
+
+  it('reports a finished turn once, so the PR can be synced right away', async () => {
+    const core = makeCore();
+    const todo = core.items.addTodo({ title: 'A', notes: 'x' }, 'user');
+    core.items.updateTodo(todo.id, { agentBranch: 'feature/a' }, 'user');
+    const name = agentSessionName(todo.id);
+    let sessions: AgentSession[] = [
+      { name, sessionId: 's-000001', cwd: 'C:\\a', status: 'busy', pid: 7 },
+    ];
+    let ended = 0;
+    const watch = watchAgents(core, {
+      list: async () => sessions,
+      read: () => 'PR erstellt',
+      intervalMs: 60_000,
+      onPrChanged: () => ended++,
+      upstream: async () => null,
+    });
+    try {
+      await watch.check();
+      expect(ended).toBe(0); // still working
+      sessions = [{ ...sessions[0]!, status: 'idle' }];
+      await watch.check();
+      expect(ended).toBe(1);
+      await watch.check(); // same answer: no new sync
+      expect(ended).toBe(1);
+      sessions = []; // ended (second missing check)
+      await watch.check();
+      await watch.check();
+      expect(ended).toBe(2);
+    } finally {
+      watch.stop();
+    }
+  });
+
+  it('reports a push of a PR session, also without agent todos', async () => {
+    const core = makeCore();
+    await core.sync.run(
+      new StaticSource('tfs', [{ externalId: 'pr-1', type: 'pr', title: 'PR', link: null }]),
+    );
+    const sessions: AgentSession[] = [
+      { name: 'PR1', sessionId: 's-000001', cwd: 'C:\\pr1', status: 'busy', pid: 7 },
+      { name: 'eigene', sessionId: 's-000002', cwd: 'C:\\other', status: 'busy', pid: 8 },
+    ];
+    const heads: Record<string, string | null> = { 'C:\\pr1': 'aaa', 'C:\\other': 'x1' };
+    let changed = 0;
+    const watch = watchAgents(core, {
+      list: async () => sessions,
+      read: () => null,
+      intervalMs: 60_000,
+      onPrChanged: () => changed++,
+      upstream: async (cwd) => heads[cwd] ?? null,
+    });
+    try {
+      await watch.check();
+      expect(changed).toBe(0); // first sight is no push
+      heads['C:\\other'] = 'x2'; // not an agent session of the organizer
+      await watch.check();
+      expect(changed).toBe(0);
+      heads['C:\\pr1'] = 'bbb'; // pushed
+      await watch.check();
+      expect(changed).toBe(1);
+      await watch.check();
+      expect(changed).toBe(1);
     } finally {
       watch.stop();
     }
