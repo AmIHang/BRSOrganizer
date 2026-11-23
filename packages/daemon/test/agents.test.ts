@@ -1,9 +1,15 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { makeCore, StaticSource } from '../../core/test/helpers.js';
-import { agentSessionName, lastReply, watchAgents, type AgentSession } from '../src/prs/agents.js';
+import {
+  agentSessionName,
+  lastReply,
+  lastSessionIn,
+  watchAgents,
+  type AgentSession,
+} from '../src/prs/agents.js';
 
 describe('background agents', () => {
   let home: string | undefined;
@@ -135,6 +141,76 @@ describe('background agents', () => {
       sessions[0] = { name, sessionId: 's-000001', cwd: 'C:\\a', status: 'idle', pid: 7 };
       await watch.check();
       expect(core.items.get(todo.id).meta?.agentEnded).toBeUndefined();
+    } finally {
+      watch.stop();
+    }
+  });
+
+  it('keeps the last answer of a session that ended, so "Claude pausiert" shows where it stopped', async () => {
+    const core = makeCore();
+    const todo = core.items.addTodo({ title: 'A', notes: 'x' }, 'user');
+    core.items.updateTodo(todo.id, { agentBranch: 'feature/a' }, 'user');
+    const name = agentSessionName(todo.id);
+    // Ended (window closed, restart): listed without pid; the newest run counts.
+    const sessions = [
+      { name, sessionId: 's-old', cwd: 'C:\\a', startedAt: 1 },
+      { name, sessionId: 's-new', cwd: 'C:\\a', startedAt: 2 },
+    ] as AgentSession[];
+    const reads: string[] = [];
+    const watch = watchAgents(core, {
+      list: async () => sessions,
+      read: (s) => {
+        reads.push(s.sessionId);
+        return `Stand von ${s.sessionId}`;
+      },
+      intervalMs: 60_000,
+      upstream: async () => null,
+    });
+    try {
+      await watch.check();
+      await watch.check();
+      expect(core.items.get(todo.id).meta).toMatchObject({
+        agentEnded: true,
+        agentReply: 'Stand von s-new',
+      });
+      await watch.check();
+      expect(reads).toEqual(['s-new']); // read once, not every interval
+    } finally {
+      watch.stop();
+    }
+  });
+
+  it('finds the last session of a folder by its newest transcript', () => {
+    home = mkdtempSync(join(tmpdir(), 'brsorganizer-home-'));
+    const cwd = 'C:\\projects\\CFL\\Todo-cwga8n';
+    expect(lastSessionIn(cwd, home)).toBeNull();
+    const dir = join(home, '.claude', 'projects', 'C--projects-CFL-Todo-cwga8n');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'aaaaaaaa-old.jsonl'), '');
+    writeFileSync(join(dir, 'bbbbbbbb-new.jsonl'), '');
+    const past = new Date(Date.now() - 60_000);
+    utimesSync(join(dir, 'aaaaaaaa-old.jsonl'), past, past);
+    expect(lastSessionIn(`${cwd}\\`, home)).toEqual({ sessionId: 'bbbbbbbb-new', cwd: `${cwd}\\` });
+  });
+
+  it('reads the last answer from the worktree when the ended session is no longer listed', async () => {
+    const core = makeCore();
+    const todo = core.items.addTodo({ title: 'A', notes: 'x' }, 'user');
+    core.items.updateTodo(todo.id, { agentBranch: 'feature/a', agentWorktree: 'C:\\w' }, 'user');
+    const watch = watchAgents(core, {
+      list: async () => [], // interactive session that ended: not listed any more
+      lastSessionIn: (cwd) => ({ sessionId: 's-000077', cwd }),
+      read: (s) => `Stand aus ${s.cwd} (${s.sessionId})`,
+      intervalMs: 60_000,
+      upstream: async () => null,
+    });
+    try {
+      await watch.check();
+      await watch.check();
+      expect(core.items.get(todo.id).meta).toMatchObject({
+        agentEnded: true,
+        agentReply: 'Stand aus C:\\w (s-000077)',
+      });
     } finally {
       watch.stop();
     }

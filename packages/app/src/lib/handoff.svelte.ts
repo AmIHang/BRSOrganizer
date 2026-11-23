@@ -15,14 +15,24 @@ export const handOffs = $state<Record<string, HandOffState>>({});
 
 const AGENT_MODE_KEY = 'brsorganizer.agent-mode';
 
-function loadAgentMode(): { on: boolean; pending: string[] } {
+/** analysis: analyse the tickets and propose a solution; implement: also implement it and open a PR. */
+export type AgentWork = 'analysis' | 'implement';
+
+interface AgentModeState {
+  on: boolean;
+  work: AgentWork;
+  pending: string[];
+}
+
+function loadAgentMode(): AgentModeState {
+  const state: AgentModeState = { on: false, work: 'analysis', pending: [] };
   try {
     const raw = localStorage.getItem(AGENT_MODE_KEY);
-    if (raw) return JSON.parse(raw) as { on: boolean; pending: string[] };
+    if (raw) Object.assign(state, JSON.parse(raw) as Partial<AgentModeState>);
   } catch {
     // storage unavailable or garbled: start switched off
   }
-  return { on: false, pending: [] };
+  return state;
 }
 
 /**
@@ -39,6 +49,11 @@ function saveAgentMode() {
   }
 }
 
+export function setAgentWork(work: AgentWork): void {
+  agentMode.work = work;
+  saveAgentMode();
+}
+
 export function setAgentMode(on: boolean): void {
   agentMode.on = on;
   if (!on) agentMode.pending = [];
@@ -48,7 +63,7 @@ export function setAgentMode(on: boolean): void {
 /** A todo was just created. */
 export function agentModeCreated(item: Item): void {
   if (!agentMode.on || item.type !== 'todo') return;
-  if (typeof item.meta?.project === 'string') void startHandOff(item);
+  if (typeof item.meta?.project === 'string') void startHandOff(item, agentMode.work);
   else {
     agentMode.pending = [...agentMode.pending, item.id];
     saveAgentMode();
@@ -60,10 +75,11 @@ export function agentModeProjectSet(item: Item): void {
   if (!agentMode.pending.includes(item.id)) return;
   agentMode.pending = agentMode.pending.filter((id) => id !== item.id);
   saveAgentMode();
-  if (agentMode.on && typeof item.meta?.project === 'string') void startHandOff(item);
+  if (agentMode.on && typeof item.meta?.project === 'string') void startHandOff(item, agentMode.work);
 }
 
-export async function startHandOff(item: Item): Promise<void> {
+/** `work` from the agent mode; without it the todo's instruction decides (manual "An Claude"). */
+export async function startHandOff(item: Item, work?: AgentWork): Promise<void> {
   if (handOffs[item.id]?.running) return;
   handOffs[item.id] = {
     running: true,
@@ -72,7 +88,7 @@ export async function startHandOff(item: Item): Promise<void> {
   };
   let done: HandOffState;
   try {
-    const r = await api.pr.handOffTodo(item.id);
+    const r = await api.pr.handOffTodo(item.id, work);
     const where =
       r.mode === 'background'
         ? `im Hintergrund (${r.branch}) – ansehen mit „claude attach ${r.session}“`

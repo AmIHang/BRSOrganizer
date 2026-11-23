@@ -2,7 +2,7 @@ import { ValidationError } from '@brsorganizer/core';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import type { Scheduler } from '../scheduler.js';
-import type { PrWorkspace } from './service.js';
+import { AGENT_WORK, type PrWorkspace } from './service.js';
 
 const itemId = (req: Request) => String(req.params.id);
 
@@ -32,8 +32,10 @@ export function prRouter(workspace: PrWorkspace, scheduler: Scheduler): Router {
 
   // A todo (not a PR) filed under a project: worktree + claude CLI agent that opens a PR.
   // Reads the BSM ticket first (may open Edge for the BSM login), so this can take a while.
+  // `work`: analysis only, or implement and open a PR; without it the todo's instruction decides.
   r.post('/todos/:id/agent', async (req, res) => {
-    res.status(202).json(await workspace.handOffTodo(itemId(req)));
+    const { work } = body(z.object({ work: z.enum(AGENT_WORK).optional() }), req.body);
+    res.status(202).json(await workspace.handOffTodo(itemId(req), work));
   });
 
   // BORA module cache of the clone script (before /:id): size, and clearing it.
@@ -49,8 +51,8 @@ export function prRouter(workspace: PrWorkspace, scheduler: Scheduler): Router {
     res.json(await workspace.removeAgentWorktree(itemId(req)));
   });
 
-  r.post('/todos/:id/agent/attach', (req, res) => {
-    res.status(202).json(workspace.attachAgent(itemId(req)));
+  r.post('/todos/:id/agent/attach', async (req, res) => {
+    res.status(202).json(await workspace.attachAgent(itemId(req)));
   });
 
   // Stops the agent of a handed-off todo; the todo becomes a plain todo again.

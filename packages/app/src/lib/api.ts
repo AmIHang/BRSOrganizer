@@ -127,7 +127,8 @@ export const api = {
     details: (id: string, fetch = false) =>
       request<PrDetails>('GET', `/api/prs/${id}${fetch ? '?fetch=1' : ''}`),
     cloneOrUpdate: (id: string) => request<{ clonePath: string }>('POST', `/api/prs/${id}/clone`),
-    handOffTodo: (id: string) =>
+    /** `work`: analysis only, or implement with a PR; without it the todo's instruction decides. */
+    handOffTodo: (id: string, work?: 'analysis' | 'implement') =>
       request<{
         worktree: string;
         branch: string;
@@ -135,7 +136,7 @@ export const api = {
         /** background: claude --bg, `claude attach <session>`; window: its own console. */
         mode: 'background' | 'window';
         session: string;
-      }>('POST', `/api/prs/todos/${id}/agent`),
+      }>('POST', `/api/prs/todos/${id}/agent`, work ? { work } : undefined),
     /** Removes the agent's worktree (git refuses with uncommitted changes). */
     removeAgentWorktree: (id: string) =>
       request<{ worktree: string; branch: string | null; branchDeleted: boolean }>(

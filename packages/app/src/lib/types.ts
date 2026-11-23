@@ -79,6 +79,8 @@ export interface Settings {
     otmaProjects: Record<string, string>;
     /** BSM customer ID ("STBBRS" of "STBBRSg0034") → customer folder (learned like otmaProjects). */
     bsmProjects: Record<string, string>;
+    /** Projects outside the projects folder (TFVC): name → local folder; agents shelve there. */
+    projectFolders: Record<string, string>;
   };
   mail: { enabled: boolean; outlookFolder: string; lookBackDays: number };
   /** Folded list parts ("section:<key>", "project:<name>"), kept in the daemon's DB. */

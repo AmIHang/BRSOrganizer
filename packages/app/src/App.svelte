@@ -16,7 +16,14 @@
     announceNotice,
     remindUpcoming,
   } from './lib/notify';
-  import { agentMode, agentModeCreated, setAgentMode } from './lib/handoff.svelte';
+  import {
+    agentMode,
+    agentModeCreated,
+    agentModeProjectSet,
+    setAgentMode,
+    setAgentWork,
+    type AgentWork,
+  } from './lib/handoff.svelte';
   import { loadOtma, otma } from './lib/otma.svelte';
   import { savedAlwaysOnTop, setAlwaysOnTop } from './lib/pin';
   import type {
@@ -56,6 +63,30 @@
     else await api.addEvent({ title: input.title, startsAt: input.startsAt, endsAt: input.endsAt });
     await refresh();
   }
+
+  const WORK_LABEL: Record<AgentWork, string> = { analysis: 'Analyse', implement: 'Umsetzung' };
+  const WORKS: Array<{ work: AgentWork; title: string }> = [
+    { work: 'analysis', title: 'Tickets analysieren und eine Umsetzung vorschlagen' },
+    { work: 'implement', title: 'Analysieren, umsetzen und einen Pull Request erstellen' },
+  ];
+  /** Right-click menu of the agent button: what the agent does. */
+  let workMenu = $state(false);
+  let agentRoot = $state<HTMLDivElement | null>(null);
+  $effect(() => {
+    if (!workMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (agentRoot && !agentRoot.contains(e.target as Node)) workMenu = false;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') workMenu = false;
+    };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  });
 
   async function togglePinned() {
     const next = !pinned;
@@ -107,6 +138,10 @@
       items = await api.listItems();
       error = null;
       void announceAgentUpdates(items);
+      // Agent mode: a waiting todo may have got its project elsewhere (BSM mapping, MCP).
+      for (const item of items) {
+        if (typeof item.meta?.project === 'string') agentModeProjectSet(item);
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -282,15 +317,37 @@
       {/if}
     </nav>
     <div class="actions">
-      <button
-        class="agent-mode"
-        class:active={agentMode.on}
-        title={agentMode.on
-          ? 'Agent-Modus an: neue Todos gehen automatisch an Claude, sobald sie ein Projekt haben'
-          : 'Agent-Modus: neue Todos automatisch an Claude übergeben'}
-        aria-pressed={agentMode.on}
-        onclick={() => setAgentMode(!agentMode.on)}>Agent</button
-      >
+      <div class="agent" bind:this={agentRoot}>
+        <button
+          class="agent-mode"
+          class:active={agentMode.on}
+          title="{agentMode.on
+            ? 'Agent-Modus an: neue Todos gehen automatisch an Claude, sobald sie ein Projekt haben'
+            : 'Agent-Modus: neue Todos automatisch an Claude übergeben'} – Rechtsklick: Analyse oder Umsetzung"
+          aria-pressed={agentMode.on}
+          aria-haspopup="menu"
+          onclick={() => setAgentMode(!agentMode.on)}
+          oncontextmenu={(e) => {
+            e.preventDefault();
+            workMenu = !workMenu;
+          }}>Agent ({WORK_LABEL[agentMode.work]})</button
+        >
+        {#if workMenu}
+          <div class="popup" role="menu">
+            {#each WORKS as w (w.work)}
+              <button
+                role="menuitemradio"
+                aria-checked={agentMode.work === w.work}
+                title={w.title}
+                onclick={() => {
+                  setAgentWork(w.work);
+                  workMenu = false;
+                }}>{agentMode.work === w.work ? '✓ ' : ''}{WORK_LABEL[w.work]}</button
+              >
+            {/each}
+          </div>
+        {/if}
+      </div>
       <button
         class="icon pin"
         class:active={pinned}
@@ -597,6 +654,35 @@
     border: 1px solid var(--border);
     color: var(--muted);
     background: transparent;
+  }
+  .agent {
+    position: relative;
+    align-self: center;
+    display: flex;
+  }
+  .agent .popup {
+    position: absolute;
+    right: 4px;
+    top: calc(100% + 4px);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  }
+  .agent .popup button {
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 6px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  .agent .popup button:hover {
+    background: var(--chip);
   }
   .agent-mode.active {
     border-color: var(--accent);

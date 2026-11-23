@@ -99,6 +99,8 @@
     run(() => api.updateSettings(p), 'Gespeichert');
 
   let newProject = $state('');
+  /** Optional: a TFVC project outside the projects folder (local folder of its working copy). */
+  let newFolder = $state('');
   const projectList = $derived(
     settings
       ? [...new Set([...prProjects, ...settings.workspace.projects])]
@@ -110,6 +112,7 @@
   async function addProject(event: SubmitEvent) {
     event.preventDefault();
     const name = newProject.trim();
+    const folder = newFolder.trim().replace(/^"|"$/g, '');
     if (!name || !settings) return;
     const ws = settings.workspace;
     await run(
@@ -122,11 +125,13 @@
               prProjects.includes(name) || ws.projects.includes(name)
                 ? ws.projects
                 : [...ws.projects, name],
+            ...(folder && { projectFolders: { ...ws.projectFolders, [name]: folder } }),
           },
         }),
       `Projekt „${name}“ hinzugefügt`,
     );
     newProject = '';
+    newFolder = '';
   }
 
   async function removeProject(name: string) {
@@ -137,6 +142,9 @@
         api.updateSettings({
           workspace: {
             projects: ws.projects.filter((p) => p !== name),
+            projectFolders: Object.fromEntries(
+              Object.entries(ws.projectFolders).filter(([p]) => p !== name),
+            ),
             // Projects of pull requests would come back with the next sync: hide them.
             hiddenProjects: prProjects.includes(name)
               ? [...ws.hiddenProjects, name]
@@ -460,6 +468,9 @@
             <li>
               <span>{p}</span>
               {#if prProjects.includes(p)}<span class="muted">aus Pull Requests</span>{/if}
+              {#if settings.workspace.projectFolders[p]}<span class="muted" title="TFVC: Agenten legen ein Shelveset an"
+                  >TFVC · {settings.workspace.projectFolders[p]}</span
+                >{/if}
               <button type="button" class="remove" onclick={() => void removeProject(p)}
                 >Entfernen</button
               >
@@ -471,11 +482,20 @@
       {/if}
       <form class="inline" onsubmit={addProject}>
         <input type="text" placeholder="Projekt (Kundenordner), z. B. Community" bind:value={newProject} />
+        <input
+          type="text"
+          placeholder="Ordner (optional, TFVC), z. B. C:\TFS\Kunde\Main"
+          title="Nur für TFVC-Projekte außerhalb des Projektordners: lokaler, in TFS gemappter Ordner"
+          bind:value={newFolder}
+        />
         <button type="submit" disabled={!newProject.trim()}>Hinzufügen</button>
       </form>
       <p class="hint muted">
         Projekte, denen Todos zugeordnet und an Claude übergeben werden. Der Name entspricht dem
         Kundenordner im Projektordner. Entfernte Projekte aus Pull Requests werden ausgeblendet.
+        Projekte, die woanders liegen und TFVC nutzen: mit Ordner anlegen (der lokale, gemappte
+        Ordner). „An Claude“ legt dann einen eigenen TFVC-Workspace daneben an, und der Agent
+        erstellt statt eines Pull Requests ein Shelveset.
       </p>
     </section>
 

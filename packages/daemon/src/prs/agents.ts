@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Core } from '@brsorganizer/core';
@@ -22,6 +22,10 @@ const sessionSchema = z.object({
   pid: z.number().optional(),
   /** "done" / "blocked" – also "done" for a live idle session, so not a sign of having ended. */
   state: z.string().optional(),
+  /** "bg" for background sessions; "interactive" runs in a console of its own (no attach). */
+  kind: z.string().optional(),
+  /** Start time (ms); the newest of several sessions with one name is the one that ran last. */
+  startedAt: z.number().optional(),
 });
 export type AgentSession = z.infer<typeof sessionSchema>;
 
@@ -30,6 +34,16 @@ export type AgentSession = z.infer<typeof sessionSchema>;
  * (claude 2.1.327); the process id is what an ended one lacks.
  */
 export const sessionAlive = (s: AgentSession) => s.pid !== undefined || s.status === 'busy';
+
+/**
+ * A running session in a console window of its own (e.g. the hand-off fell back to a window
+ * because the folder was not trusted): `claude attach` cannot open it, only its window can.
+ */
+export const runsInOwnWindow = (s: AgentSession) => sessionAlive(s) && s.kind === 'interactive';
+
+export const OWN_WINDOW_MESSAGE =
+  'Die Claude-Sitzung läuft in einem eigenen Konsolenfenster (Hintergrund war nicht möglich, ' +
+  'z. B. weil der Ordner noch nicht vertraut ist) – bitte dort weiterarbeiten.';
 
 /** Lists claude's sessions (`claude agents --json --all`). */
 export type ListAgentSessions = () => Promise<AgentSession[]>;
@@ -82,15 +96,26 @@ export function claudeAgentsCli(): ListAgentSessions {
     );
 }
 
+const transcriptDir = (cwd: string, home: string) =>
+  join(home, '.claude', 'projects', cwd.replace(/[\\/]+$/, '').replace(/[^A-Za-z0-9]/g, '-'));
+
+/**
+ * The session that ran last in `cwd`, from its newest transcript: an interactive session that
+ * ended is no longer listed by `claude agents`, its transcript stays.
+ */
+export function lastSessionIn(cwd: string, home = homedir()): AgentSession | null {
+  const dir = transcriptDir(cwd, home);
+  if (!existsSync(dir)) return null;
+  const newest = readdirSync(dir)
+    .filter((f) => f.endsWith('.jsonl'))
+    .map((f) => ({ f, at: statSync(join(dir, f)).mtimeMs }))
+    .sort((a, b) => b.at - a.at)[0];
+  return newest ? { sessionId: newest.f.slice(0, -'.jsonl'.length), cwd } : null;
+}
+
 /** The session's last answer: text of the last assistant message in its transcript. */
 export function lastReply(session: AgentSession, home = homedir()): string | null {
-  const file = join(
-    home,
-    '.claude',
-    'projects',
-    session.cwd.replace(/[^A-Za-z0-9]/g, '-'),
-    `${session.sessionId}.jsonl`,
-  );
+  const file = join(transcriptDir(session.cwd, home), `${session.sessionId}.jsonl`);
   if (!existsSync(file)) return null;
   let reply: string | null = null;
   for (const line of readFileSync(file, 'utf8').split('\n')) {
@@ -132,11 +157,14 @@ export function watchAgents(
      * next scheduled sync.
      */
     onPrChanged?: () => void;
+    /** Newest session (transcript) in a folder, for one no longer listed (tests). */
+    lastSessionIn?: (cwd: string) => AgentSession | null;
     /** Commit of the upstream branch checked out in `cwd`, null without one (tests). */
     upstream?: (cwd: string) => Promise<string | null>;
   },
 ): { check(): Promise<void>; soon(): void; stop(): void } {
   const read = options.read ?? ((s) => lastReply(s));
+  const lastIn = options.lastSessionIn ?? ((cwd) => lastSessionIn(cwd));
   const upstream =
     options.upstream ??
     ((cwd) =>
@@ -152,6 +180,8 @@ export function watchAgents(
   const pushedAt = new Map<string, string | null>();
   // Checks in a row a todo's session was missing: one alone may be a session still starting.
   const missing = new Map<string, number>();
+  // Ended todos whose last answer was read (again after the session ran once more).
+  const lastRead = new Set<string>();
   // A check while one runs waits for that one instead of starting a second.
   let running: Promise<void> | null = null;
   const check = () => (running ??= run().finally(() => (running = null)));
@@ -179,12 +209,29 @@ export function watchAgents(
           // Gone without a PR (crashed, stopped elsewhere, reboot): the todo must not look busy.
           const n = (missing.get(todo.id) ?? 0) + 1;
           missing.set(todo.id, n);
-          if (n >= 2 && !ended) {
-            core.items.updateTodo(todo.id, { agentEnded: true, agentWaiting: null }, 'claude');
-            prChanged = true;
+          if (n < 2) continue;
+          // Its last answer, from the session that ran last: else "Claude pausiert" shows nothing
+          // of where it stopped (it was only read while the session waited). Once per daemon run.
+          let reply: string | null = null;
+          if (!lastRead.has(todo.id)) {
+            lastRead.add(todo.id);
+            const worktree = todo.meta?.agentWorktree;
+            const last =
+              sessions
+                .filter((x) => x.name === name)
+                .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))[0] ??
+              (typeof worktree === 'string' ? lastIn(worktree) : null);
+            reply = last ? read(last) : null;
           }
+          const patch = {
+            ...(!ended && { agentEnded: true, agentWaiting: null }),
+            ...(reply && reply !== todo.meta?.agentReply && { agentReply: reply }),
+          };
+          if (Object.keys(patch).length) core.items.updateTodo(todo.id, patch, 'claude');
+          if (!ended) prChanged = true;
           continue;
         }
+        lastRead.delete(todo.id);
         missing.delete(todo.id);
         if (ended) core.items.updateTodo(todo.id, { agentEnded: null }, 'claude'); // resumed
         // Mid-turn question or permission prompt: without a hint the user would wait forever.

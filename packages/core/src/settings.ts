@@ -60,6 +60,14 @@ export const settingsSchema = z.object({
         .record(z.string().trim().min(1).max(100), projectName)
         .refine((m) => Object.keys(m).length <= 500, 'too many BSM prefixes')
         .default({}),
+      /**
+       * Projects outside the projects folder: name → local folder of a TFVC working copy. Agents
+       * work in a TFVC workspace of their own next to it and shelve instead of opening a PR.
+       */
+      projectFolders: z
+        .record(projectName, z.string().trim().min(3).max(260))
+        .refine((m) => Object.keys(m).length <= 50, 'too many project folders')
+        .default({}),
     })
     .prefault({}),
   /** Fallback when TFS is not configured: PRs from notification mails in an Outlook folder. */
@@ -120,6 +128,7 @@ export const settingsPatchSchema = z.strictObject({
       hiddenProjects: z.array(z.string()),
       otmaProjects: z.record(z.string(), z.string()),
       bsmProjects: z.record(z.string(), z.string()),
+      projectFolders: z.record(z.string(), z.string()),
     })
     .partial()
     .optional(),

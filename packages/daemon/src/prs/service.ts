@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   ForbiddenOperationError,
   NotFoundError,
@@ -23,6 +23,8 @@ import {
   agentSessionName,
   claudeAgentsCli,
   claudeStopCli,
+  OWN_WINDOW_MESSAGE,
+  runsInOwnWindow,
   type ListAgentSessions,
   type StopAgentSession,
 } from './agents.js';
@@ -184,6 +186,10 @@ function ticketSection(
   ];
 }
 
+/** What the agent does: analyse the tickets and propose a solution, or implement it with a PR. */
+export const AGENT_WORK = ['analysis', 'implement'] as const;
+export type AgentWork = (typeof AGENT_WORK)[number];
+
 /**
  * Task for the claude CLI agent; the script appends worktree and target branch. The sources
  * come in order of precedence: the developer's instruction, the OTMA ticket (internal
@@ -194,6 +200,9 @@ export function agentPrompt(
   project: string,
   tickets: TicketContents = {},
   hasAccount = false,
+  work?: AgentWork,
+  /** TFVC project: the agent shelves its change (this shelveset name) instead of opening a PR. */
+  shelveset?: string,
 ): string {
   // Scope of commits and the PR title: the BSM key, else the OTMA number.
   const key = [todo.bsmUrl, todo.otmaUrl]
@@ -237,7 +246,12 @@ export function agentPrompt(
     ),
     ...ticketSection('### 3. BSM-Ticket (Kunde)', 'BSM', 'BSM-TICKET', todo.bsmUrl, tickets.bsm),
     '',
-    ...(notes ? implementSteps(todo, project, key, scope) : ANALYSIS_STEPS),
+    // Without a given kind of work, an instruction means implementing, none means analysing.
+    ...((work ?? (notes ? 'implement' : 'analysis')) === 'implement'
+      ? shelveset
+        ? shelveSteps(key, scope, shelveset)
+        : implementSteps(todo, project, key, scope)
+      : ANALYSIS_STEPS),
   ].join('\n');
 }
 
@@ -294,6 +308,33 @@ const ANALYSIS_STEPS = [
     ESTIMATE +
     ' Diese Antwort sieht der Entwickler in BRSOrganizer.',
 ];
+
+/** Implementation in a TFVC project: the change ends up in a shelveset, there is no git and no PR. */
+function shelveSteps(key: string | undefined, scope: string, shelveset: string) {
+  return [
+    '## Vorgehen',
+    '',
+    'Verlangt die Anweisung des Entwicklers nur eine Analyse (oder eine Schätzung), setz ' +
+      'nichts um: Analysiere wie beschrieben, ändere keine Dateien, lege kein Shelveset an, und ' +
+      'antworte mit der Analyse samt ' +
+      ESTIMATE +
+      ' Sonst:',
+    '',
+    '1. Verschaff dir aus den Informationen oben ein Bild der Aufgabe, beachte dabei die ' +
+      'Priorität der Quellen.',
+    '2. Analysiere die Anforderung im Code dieses Ordners und setze eine Lösung um. Der Ordner ' +
+      'ist ein lokaler TFVC-Workspace (Team Foundation Version Control, kein git): Dateien sind ' +
+      'direkt bearbeitbar, TF.exe (Pfad unten) erkennt Änderungen. Neue Dateien nimmst du mit ' +
+      '`tf add`, gelöschte mit `tf delete` auf.',
+    `3. Lege die Änderungen als Shelveset \`${shelveset}\` an: ` +
+      `\`tf shelve ${shelveset} /replace /noprompt "/comment:<typ>${scope}: <kurze Beschreibung auf Englisch>"\` ` +
+      'im Ordner unten (<typ> ist feat, fix oder chore' +
+      (key ? `, z. B. \`fix${scope}: Show predefined mail recipients\`` : '') +
+      '). Checke nichts ein (kein `tf checkin`), es gibt keinen Pull Request.',
+    '4. Antworte zum Schluss mit einer kurzen Zusammenfassung der Änderung und dem Namen des ' +
+      'Shelvesets. Diese Antwort sieht der Entwickler in BRSOrganizer.',
+  ];
+}
 
 /** Steps of an implementation (the developer gave an instruction). */
 function implementSteps(todo: Item, project: string, key: string | undefined, scope: string) {
@@ -555,7 +596,17 @@ export class PrWorkspace {
       throw new ForbiddenOperationError('the agent still works in it – cancel it first');
     }
     let result = { branch: null as string | null, branchDeleted: false };
-    if (existsSync(worktree)) {
+    if (existsSync(join(worktree, '$tf'))) {
+      // TFVC project: the workspace goes too; the agent's work is in its shelveset.
+      const run = await this.deps.launcher.runHidden(this.script('Remove-TfvcWorkspace.ps1'), [
+        '-Path',
+        worktree,
+      ]);
+      if (run.code !== 0) {
+        const reason = /^FEHLER: (.+)$/m.exec(run.stdout)?.[1]?.trim() || `Exit-Code ${run.code}`;
+        throw new HttpError(409, 'worktree', `Workspace nicht entfernt: ${reason}`);
+      }
+    } else if (existsSync(worktree)) {
       try {
         result = await removeWorktree(worktree);
       } catch (err) {
@@ -570,17 +621,34 @@ export class PrWorkspace {
   }
 
   /** Opens the agent's session of a handed-off todo in a visible console (claude attach). */
-  attachAgent(itemId: string): { session: string } {
+  async attachAgent(itemId: string): Promise<{ session: string }> {
     const todo = this.deps.core.items.get(itemId);
     if (todo.type !== 'todo' || typeof todo.meta?.agentBranch !== 'string') {
       throw new ForbiddenOperationError(`item ${itemId} is not handed off to an agent`);
     }
     const session = agentSessionName(itemId);
+    const sessions = await (this.deps.listAgents ?? claudeAgentsCli())().catch(() => []);
+    if (sessions.some((s) => s.name === session && runsInOwnWindow(s))) {
+      throw new ForbiddenOperationError(OWN_WINDOW_MESSAGE);
+    }
+    // A session that never ran (e.g. the trust prompt of its window was closed) starts anew with
+    // its task, kept in the folder handOffTodo wrote it to.
+    const promptFile = join(
+      this.deps.tasksDir ?? tmpdir(),
+      `brsorganizer-agent-${itemId.slice(-6).toLowerCase()}`,
+      'auftrag.md',
+    );
     // An ended session (e.g. after a restart) resumes in this console: it needs the login again.
     this.deps.launcher.runScript(
       `Claude – ${todo.title}`,
       this.script('Open-AgentSession.ps1'),
-      ['-Name', session],
+      [
+        '-Name',
+        session,
+        // Resumes the newest transcript there when the session is no longer listed.
+        ...(typeof todo.meta?.agentWorktree === 'string' ? ['-Path', todo.meta.agentWorktree] : []),
+        ...(existsSync(promptFile) ? ['-PromptFile', promptFile] : []),
+      ],
       this.accountEnv(),
     );
     this.deps.onAgentOpened?.();
@@ -602,6 +670,9 @@ export class PrWorkspace {
     // claude missing or failing: a new session start reports that in its console.
     const sessions = await (this.deps.listAgents ?? claudeAgentsCli())().catch(() => []);
     const existing = names.find((n) => sessions.some((s) => s.name === n));
+    if (existing && sessions.some((s) => s.name === existing && runsInOwnWindow(s))) {
+      throw new ForbiddenOperationError(OWN_WINDOW_MESSAGE);
+    }
     const script = this.script('Open-AgentSession.ps1');
     const title = `Claude – PR ${ref.id}`;
     if (existing) {
@@ -644,7 +715,7 @@ export class PrWorkspace {
       : undefined;
   }
 
-  async handOffTodo(itemId: string): Promise<{
+  async handOffTodo(itemId: string, work?: AgentWork): Promise<{
     worktree: string;
     branch: string;
     tickets: TicketStatus[];
@@ -665,26 +736,39 @@ export class PrWorkspace {
           '(„Claude pausiert“ anklicken) oder Worktree entfernen.',
       );
     }
-    const root = this.deps.core.settings.get().workspace.projectsRoot;
-    if (!root) throw new ValidationError('no projects folder configured (settings → PR workspace)');
+    const ws = this.deps.core.settings.get().workspace;
+    // Projects with a folder of their own are in TFVC: workspace + shelveset instead of worktree + PR.
+    const tfvcFolder = ws.projectFolders[project];
+    const root = ws.projectsRoot;
+    if (!tfvcFolder && !root) {
+      throw new ValidationError('no projects folder configured (settings → PR workspace)');
+    }
 
     // The project's repo is the one its pull requests live in (folder names may differ).
-    const repos = scanRepos(root);
-    const repo =
-      this.deps.core.items
-        .list({ type: 'pr', limit: 500 })
-        .filter((pr) => pr.meta?.project === project && pr.link)
-        .map((pr) => pullRequestApiUrl(pr.link!))
-        .map((ref) => (ref ? findRepo(repos, ref.repoUrl) : null))
-        .find((r) => r !== null) ??
-      repos.find((r) => r.customer.toLowerCase() === project.toLowerCase()) ??
-      null;
-    if (!repo) throw new NotFoundError(`no repository for project ${project} found below ${root}`);
+    const repos = tfvcFolder ? [] : scanRepos(root);
+    const repo = tfvcFolder
+      ? null
+      : (this.deps.core.items
+          .list({ type: 'pr', limit: 500 })
+          .filter((pr) => pr.meta?.project === project && pr.link)
+          .map((pr) => pullRequestApiUrl(pr.link!))
+          .map((ref) => (ref ? findRepo(repos, ref.repoUrl) : null))
+          .find((r) => r !== null) ??
+        repos.find((r) => r.customer.toLowerCase() === project.toLowerCase()) ??
+        null);
+    if (!tfvcFolder && !repo) {
+      throw new NotFoundError(`no repository for project ${project} found below ${root}`);
+    }
 
     const suffix = todo.id.slice(-6).toLowerCase();
-    // Provisional: the agent renames it after its change, keeping "-<suffix>" (see the sync).
-    const branch = `feature/todo-${suffix}`;
     const name = agentSessionName(itemId);
+    // git: provisional branch, the agent renames it after its change keeping "-<suffix>" (see the
+    // sync). TFVC: the shelveset the agent creates (named like its session).
+    const branch = tfvcFolder ? `shelveset/${name}` : `feature/todo-${suffix}`;
+    // TFVC: a workspace folder next to the project folder (as Start-TodoAgent.ps1 creates it).
+    const worktree = tfvcFolder
+      ? join(dirname(tfvcFolder.replace(/[\\/]+$/, '')), name)
+      : join(repo!.customerDir, name);
 
     // The task and the ticket images go into one folder per todo; the agent reads it, so it stays.
     const taskDir = join(this.deps.tasksDir ?? tmpdir(), `brsorganizer-agent-${suffix}`);
@@ -723,25 +807,27 @@ export class PrWorkspace {
 
     const promptFile = join(taskDir, 'auftrag.md');
     // BOM: Windows PowerShell 5.1 (Add-Content in the script) would read it as ANSI otherwise.
-    writeFileSync(promptFile, '﻿' + agentPrompt(todo, project, contents, !!account), 'utf8');
+    writeFileSync(promptFile, '﻿' + agentPrompt(todo, project, contents, !!account, work, tfvcFolder ? name : undefined), 'utf8');
     // Hidden and awaited: can take minutes (fetch, worktree checkout, BORA references; claude --bg
     // returns at once), and errors reach the app instead of a console window.
     const run = await this.deps.launcher.runHidden(
       this.script('Start-TodoAgent.ps1'),
-      [
-        '-Root',
-        root,
-        '-Project',
-        repo.customer,
-        '-Repo',
-        repo.repoName,
-        '-Name',
-        name,
-        '-Branch',
-        branch,
-        '-PromptFile',
-        promptFile,
-      ],
+      tfvcFolder
+        ? ['-Name', name, '-PromptFile', promptFile, '-TfvcFolder', tfvcFolder]
+        : [
+            '-Root',
+            root,
+            '-Project',
+            repo!.customer,
+            '-Repo',
+            repo!.repoName,
+            '-Name',
+            name,
+            '-Branch',
+            branch,
+            '-PromptFile',
+            promptFile,
+          ],
       env,
     );
     if (run.code !== 0) {
@@ -755,7 +841,7 @@ export class PrWorkspace {
       itemId,
       {
         agentBranch: branch,
-        agentWorktree: join(repo.customerDir, name),
+        agentWorktree: worktree,
         agentReply: null,
         agentWaiting: null,
         agentEnded: null,
@@ -763,7 +849,7 @@ export class PrWorkspace {
       'user',
     );
     return {
-      worktree: join(repo.customerDir, name),
+      worktree,
       branch,
       tickets,
       // background: look in with `claude attach <session>`; window: claude has its own console.

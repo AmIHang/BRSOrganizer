@@ -250,6 +250,16 @@ describe('agent prompt', () => {
     );
   });
 
+  it('analyses or implements as the agent mode says, regardless of the instruction', () => {
+    const core = makeCore();
+    const bare = core.items.addTodo({ title: 'T', bsmUrl: 'STBBRSg0030' }, 'user');
+    const told = core.items.addTodo({ title: 'T', notes: 'tu es' }, 'user');
+    expect(agentPrompt(bare, 'P', {}, false, 'implement')).toContain('Erstelle einen Pull Request');
+    expect(agentPrompt(bare, 'P', {}, false, 'implement')).not.toContain('nur Analyse');
+    expect(agentPrompt(told, 'P', {}, false, 'analysis')).toContain('## Vorgehen: nur Analyse');
+    expect(agentPrompt(told, 'P', {}, false, 'analysis')).not.toContain('Erstelle einen Pull Request');
+  });
+
   it('does not ask the agent to export its chat to the desktop app (never works)', () => {
     const core = makeCore();
     const prompt = agentPrompt(core.items.addTodo({ title: 'T', notes: 'n' }, 'user'), 'P');
@@ -430,6 +440,40 @@ describe('PR workspace via REST', () => {
     ]);
   });
 
+  it('hands a todo of a TFVC project to an agent that shelves instead of opening a PR', async () => {
+    // No projects folder needed: the project has a folder of its own.
+    h.core.settings.update({
+      workspace: { projectFolders: { Altkunde: 'C:\\TFS\\Altkunde\\Main\\' } },
+    });
+    const todo = h.core.items.addTodo({ title: 'T', notes: 'mach es', bsmUrl: 'ALTg0001' }, 'user');
+    h.core.items.updateTodo(todo.id, { project: 'Altkunde' }, 'user');
+    const r = await raw(h.port, {
+      method: 'POST',
+      path: `/api/prs/todos/${todo.id}/agent`,
+      headers: auth,
+    });
+    expect(r.status).toBe(202);
+    const name = `Todo-${todo.id.slice(-6).toLowerCase()}`;
+    expect(r.json()).toMatchObject({
+      worktree: join('C:\\TFS\\Altkunde', name),
+      branch: `shelveset/${name}`,
+      session: name,
+    });
+    const args = launched[0]!.args!;
+    expect(launched[0]!.script).toBe(join('C:\\app\\runtime\\scripts\\pr', 'Start-TodoAgent.ps1'));
+    expect(args).toEqual(['-Name', name, '-PromptFile', args[3], '-TfvcFolder', 'C:\\TFS\\Altkunde\\Main\\']);
+    const prompt = readFileSync(args[3]!, 'utf8');
+    rmSync(dirname(args[3]!), { recursive: true });
+    expect(prompt).toContain(`tf shelve ${name} /replace /noprompt`);
+    expect(prompt).toContain('fix(ALTg0001)');
+    expect(prompt).not.toContain('Erstelle einen Pull Request');
+    expect(prompt).not.toContain('git branch -m');
+    expect(h.core.items.get(todo.id).meta).toMatchObject({
+      agentBranch: `shelveset/${name}`,
+      agentWorktree: join('C:\\TFS\\Altkunde', name),
+    });
+  });
+
   it('hands a todo in a project to an agent in a new worktree of the project repo', async () => {
     h.core.settings.update({ workspace: { projectsRoot: root } });
     const todo = h.core.items.addTodo(
@@ -566,6 +610,27 @@ describe('PR workspace via REST', () => {
     }
   });
 
+  it('says where a session in a window of its own is instead of failing to attach', async () => {
+    const todo = h.core.items.addTodo({ title: 'Fenster' }, 'user');
+    h.core.items.updateTodo(todo.id, { agentBranch: 'feature/x' }, 'user');
+    const name = `Todo-${todo.id.slice(-6).toLowerCase()}`;
+    // As `claude agents --json --all` lists a hand-off that fell back to its own window.
+    agentSessions = [
+      { name, sessionId: 's-000011', cwd: 'C:\\a', status: 'idle', pid: 5, kind: 'interactive' },
+    ];
+    const attach = () =>
+      raw(h.port, { method: 'POST', path: `/api/prs/todos/${todo.id}/agent/attach`, headers: auth });
+    const r = await attach();
+    expect(r.status).toBe(409);
+    expect(JSON.stringify(r.json())).toContain('eigenen Konsolenfenster');
+    expect(launched).toEqual([]);
+
+    // Background session (or an ended one): opened in a console as before.
+    agentSessions = [{ name, sessionId: 's-000011', cwd: 'C:\\a', status: 'idle', pid: 5, kind: 'bg' }];
+    expect((await attach()).status).toBe(202);
+    expect(launched[0]!.args).toEqual(['-Name', name]);
+  });
+
   it('opens the agent session in a console and removes its worktree safely', async () => {
     const git = (cwd: string, ...args: string[]) =>
       execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
@@ -599,7 +664,8 @@ describe('PR workspace via REST', () => {
     expect((await post(`/api/prs/todos/${todo.id}/agent/attach`)).status).toBe(202);
     expect(launched.at(-1)).toMatchObject({
       script: join('C:\\app\\runtime\\scripts\\pr', 'Open-AgentSession.ps1'),
-      args: ['-Name', `Todo-${suffix}`],
+      // The worktree too: an ended session no longer listed resumes from its transcript there.
+      args: ['-Name', `Todo-${suffix}`, '-Path', worktree],
     });
     expect((await remove()).status).toBe(409);
 
@@ -609,9 +675,23 @@ describe('PR workspace via REST', () => {
     h.core.secrets.set('ticket-password', 'geheim');
     expect((await post(`/api/prs/todos/${todo.id}/agent/attach`)).status).toBe(202);
     expect(launched.at(-1)).toMatchObject({
-      args: ['-Name', `Todo-${suffix}`],
+      args: ['-Name', `Todo-${suffix}`, '-Path', worktree],
       env: { BRS_TICKET_USER: 'max', BRS_TICKET_PASSWORD: 'geheim' },
     });
+    // Its task still there: passed on, so a session that never ran starts anew.
+    const taskDir = join(tmpdir(), `brsorganizer-agent-${suffix}`);
+    mkdirSync(taskDir, { recursive: true });
+    writeFileSync(join(taskDir, 'auftrag.md'), 'x');
+    expect((await post(`/api/prs/todos/${todo.id}/agent/attach`)).status).toBe(202);
+    expect(launched.at(-1)!.args).toEqual([
+      '-Name',
+      `Todo-${suffix}`,
+      '-Path',
+      worktree,
+      '-PromptFile',
+      join(taskDir, 'auftrag.md'),
+    ]);
+    rmSync(taskDir, { recursive: true, force: true });
     // A new hand-off would fail at `git worktree add` after deleting the old task: refused.
     h.core.settings.update({ workspace: { projectsRoot: root } });
     h.core.items.updateTodo(todo.id, { project: 'Kunde' }, 'user');

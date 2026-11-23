@@ -17,14 +17,18 @@
 .PARAMETER Name     Worktree folder name (below the customer folder).
 .PARAMETER Branch   New branch for the worktree.
 .PARAMETER PromptFile  File with the task (in TEMP); the agent reads it, so it is kept.
+.PARAMETER TfvcFolder  Project in TFVC instead (mapped local folder): the agent gets a TFVC
+                       workspace of its own in <parent of TfvcFolder><Name> and shelves its
+                       change instead of opening a PR. Root, Project, Repo and Branch are not used.
 #>
 param(
-  [Parameter(Mandatory)][string]$Root,
-  [Parameter(Mandatory)][string]$Project,
-  [Parameter(Mandatory)][string]$Repo,
+  [string]$Root,
+  [string]$Project,
+  [string]$Repo,
   [Parameter(Mandatory)][string]$Name,
-  [Parameter(Mandatory)][string]$Branch,
-  [Parameter(Mandatory)][string]$PromptFile
+  [string]$Branch,
+  [Parameter(Mandatory)][string]$PromptFile,
+  [string]$TfvcFolder
 )
 $ErrorActionPreference = 'Stop'
 
@@ -42,6 +46,45 @@ if (-not $claude) {
   throw 'claude (Claude Code CLI) wurde nicht gefunden - bitte installieren und in den PATH aufnehmen.'
 }
 
+if ($TfvcFolder) {
+  # TFVC: a local workspace of its own, mapped to the project folder's server path. Local, so the
+  # agent edits files without checking them out; no IIS URL or BORA changes (they would be shelved).
+  . (Join-Path $PSScriptRoot 'TfvcCommon.ps1')
+  $tf = Find-TfExe
+  $map = Get-TfvcMapping $tf $TfvcFolder
+  $worktree = Join-Path (Split-Path ([IO.Path]::GetFullPath($TfvcFolder).TrimEnd('\'))) $Name
+  if (Test-Path -LiteralPath $worktree) { throw "Ordner existiert bereits: $worktree" }
+  $ws = Get-AgentWorkspaceName $Name
+  Write-Host "TFVC:     $($map.Server) -> $worktree (Workspace $ws)"
+  $tfRun = {
+    $ErrorActionPreference = 'Continue' # tf writes to stderr; the exit code tells
+    $out = (& $tf @args 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "tf $($args[0]) fehlgeschlagen: $($out.Trim())" }
+  }
+  New-Item -ItemType Directory -Path $worktree | Out-Null
+  Push-Location -LiteralPath $worktree
+  $created = $false
+  try {
+    & $tfRun workspace /new "/collection:$($map.Collection)" /location:local /noprompt "/comment:BRSOrganizer $Name" $ws
+    $created = $true
+    # A new workspace maps $/ to the current folder: replace that with the project's path.
+    & { $ErrorActionPreference = 'Continue'; & $tf workfold /unmap "/workspace:$ws" '$/' 2>&1 | Out-Null }
+    & $tfRun workfold /map "/workspace:$ws" $map.Server $worktree
+    & $tfRun get $worktree /recursive /noprompt
+  } catch {
+    # Leave nothing half set up behind: a retry would stop at "Ordner existiert bereits".
+    Pop-Location
+    if ($created) { & { $ErrorActionPreference = 'Continue'; & $tf workspace /delete "/collection:$($map.Collection)" $ws /noprompt 2>&1 | Out-Null } }
+    cmd /c "rd /s /q `"\\?\$worktree`" 2>nul"
+    throw
+  }
+  Pop-Location
+  Add-Content -LiteralPath $PromptFile -Encoding UTF8 -Value @(
+    '',
+    "Arbeitsverzeichnis: $worktree (lokaler TFVC-Workspace $ws, Serverpfad $($map.Server), Collection $($map.Collection)).",
+    "TF.exe: $tf"
+  )
+} else {
 $repoDir = Join-Path (Join-Path $Root $Project) $Repo
 $worktree = Join-Path (Join-Path $Root $Project) $Name
 if (Test-Path -LiteralPath $worktree) { throw "Ordner existiert bereits: $worktree" }
@@ -104,6 +147,7 @@ Add-Content -LiteralPath $PromptFile -Encoding UTF8 -Value (@(
   "Arbeitsverzeichnis: $worktree (git worktree, Branch $Branch, abgezweigt von $base).",
   "Ziel-Branch des Pull Requests: $target."
 ) + $notes)
+}
 
 # The task travels as a file: multi-line arguments with quotes do not survive PowerShell 5.1
 # native argument passing (or claude.cmd) intact.
