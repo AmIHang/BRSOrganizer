@@ -253,6 +253,8 @@
     }
   }
   let showingReply = $state(false);
+  // A todo's description (often the agent's whole task) only on request: it crowds the list.
+  let showingNotes = $state(false);
   let editingTickets = $state(false);
   let movingProject = $state(false);
 </script>
@@ -417,8 +419,16 @@
           >Antwort</button
         >
       {/if}
+      {#if item.notes && item.type === 'todo' && !held}
+        <button
+          class="chip action"
+          aria-expanded={showingNotes}
+          title={showingNotes ? 'Beschreibung ausblenden' : 'Beschreibung anzeigen'}
+          onclick={() => (showingNotes = !showingNotes)}>Beschreibung</button
+        >
+      {/if}
     </div>
-    {#if item.notes && item.type === 'todo' && !held}
+    {#if item.notes && item.type === 'todo' && !held && showingNotes}
       <div class="notes">{item.notes}</div>
     {/if}
     {#if shownNotice}
