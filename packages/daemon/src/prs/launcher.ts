@@ -81,7 +81,7 @@ export function createWindowsLauncher(onError: (err: Error) => void = () => unde
     runHidden(scriptPath, args, env) {
       const encoded = Buffer.from(hiddenCommand(scriptPath, args), 'utf16le').toString('base64');
       return new Promise((resolve) => {
-        execFile(
+        const child = execFile(
           'powershell.exe',
           [
             '-NoProfile',
@@ -106,6 +106,15 @@ export function createWindowsLauncher(onError: (err: Error) => void = () => unde
               stderr: err && !stderr ? err.message : stderr,
             }),
         );
+        // A process started from the script that outlives it (the `claude daemon` that
+        // `claude --bg` spawns) inherits the output pipes and keeps them open: execFile would only
+        // answer once that ends. So after the exit, read what is left briefly, then close them.
+        child.once('exit', () => {
+          setTimeout(() => {
+            child.stdout?.destroy();
+            child.stderr?.destroy();
+          }, 1000).unref();
+        });
       });
     },
     open(path) {
