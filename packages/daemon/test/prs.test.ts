@@ -257,7 +257,9 @@ describe('agent prompt', () => {
     expect(agentPrompt(bare, 'P', {}, false, 'implement')).toContain('Erstelle einen Pull Request');
     expect(agentPrompt(bare, 'P', {}, false, 'implement')).not.toContain('nur Analyse');
     expect(agentPrompt(told, 'P', {}, false, 'analysis')).toContain('## Vorgehen: nur Analyse');
-    expect(agentPrompt(told, 'P', {}, false, 'analysis')).not.toContain('Erstelle einen Pull Request');
+    expect(agentPrompt(told, 'P', {}, false, 'analysis')).not.toContain(
+      'Erstelle einen Pull Request',
+    );
   });
 
   it('does not ask the agent to export its chat to the desktop app (never works)', () => {
@@ -286,6 +288,8 @@ describe('PR workspace via REST', () => {
   let prStatus: string;
   let workspace: PrWorkspace;
   let agentSessions: AgentSession[];
+  // Folders with a Claude transcript (lastSessionIn).
+  let transcripts: Set<string>;
 
   const pr = () => ({
     pullRequestId: 4393,
@@ -314,6 +318,7 @@ describe('PR workspace via REST', () => {
     prStatus = 'active';
     stopped = [];
     agentSessions = [];
+    transcripts = new Set();
     bsmHttp = {
       runWorkflow: async () => {
         throw new BsmLoginRequiredError();
@@ -355,6 +360,7 @@ describe('PR workspace via REST', () => {
           bsm: (fn) => fn(bsmHttp),
           otma: (fn) => fn(otmaHttp),
           listAgents: async () => agentSessions,
+          lastSessionIn: (cwd) => (transcripts.has(cwd) ? { sessionId: 't', cwd } : null),
           stopAgent: async (name) => {
             stopped.push(name);
           },
@@ -461,7 +467,14 @@ describe('PR workspace via REST', () => {
     });
     const args = launched[0]!.args!;
     expect(launched[0]!.script).toBe(join('C:\\app\\runtime\\scripts\\pr', 'Start-TodoAgent.ps1'));
-    expect(args).toEqual(['-Name', name, '-PromptFile', args[3], '-TfvcFolder', 'C:\\TFS\\Altkunde\\Main\\']);
+    expect(args).toEqual([
+      '-Name',
+      name,
+      '-PromptFile',
+      args[3],
+      '-TfvcFolder',
+      'C:\\TFS\\Altkunde\\Main\\',
+    ]);
     const prompt = readFileSync(args[3]!, 'utf8');
     rmSync(dirname(args[3]!), { recursive: true });
     expect(prompt).toContain(`tf shelve ${name} /replace /noprompt`);
@@ -619,14 +632,20 @@ describe('PR workspace via REST', () => {
       { name, sessionId: 's-000011', cwd: 'C:\\a', status: 'idle', pid: 5, kind: 'interactive' },
     ];
     const attach = () =>
-      raw(h.port, { method: 'POST', path: `/api/prs/todos/${todo.id}/agent/attach`, headers: auth });
+      raw(h.port, {
+        method: 'POST',
+        path: `/api/prs/todos/${todo.id}/agent/attach`,
+        headers: auth,
+      });
     const r = await attach();
     expect(r.status).toBe(409);
     expect(JSON.stringify(r.json())).toContain('eigenen Konsolenfenster');
     expect(launched).toEqual([]);
 
     // Background session (or an ended one): opened in a console as before.
-    agentSessions = [{ name, sessionId: 's-000011', cwd: 'C:\\a', status: 'idle', pid: 5, kind: 'bg' }];
+    agentSessions = [
+      { name, sessionId: 's-000011', cwd: 'C:\\a', status: 'idle', pid: 5, kind: 'bg' },
+    ];
     expect((await attach()).status).toBe(202);
     expect(launched[0]!.args).toEqual(['-Name', name]);
   });
@@ -929,6 +948,14 @@ describe('PR workspace via REST', () => {
     expect((await call('POST', '/claude')).json()).toEqual({ session: name, started: false });
     expect(launched.at(-1)!.args).toEqual(['-Name', name]);
     expect(pr).toBe(prId());
+
+    // That chat ended and is no longer listed: resumed from its transcript in the worktree,
+    // not replaced by a new PR session.
+    agentSessions = [];
+    h.core.items.updateTodo(todo.id, { agentWorktree: clone }, 'user');
+    transcripts.add(clone);
+    expect((await call('POST', '/claude')).json()).toEqual({ session: name, started: false });
+    expect(launched.at(-1)!.args).toEqual(['-Name', name, '-Path', clone]);
   });
 
   it('cleans up once per item when it leaves the list, not while it is open', async () => {

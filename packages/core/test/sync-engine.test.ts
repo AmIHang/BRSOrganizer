@@ -65,6 +65,45 @@ describe('SyncEngine', () => {
     expect(core.items.get(todo.id).meta).toMatchObject({ prItemId: byExt('renamed').id });
   });
 
+  it('adopts the one PR naming the todo ticket when the branch lost the suffix', async () => {
+    const todo = core.items.addTodo({ title: 'WTU', bsmUrl: 'FTBRSg0052' }, 'user');
+    const other = core.items.addTodo({ title: 'Same ticket', bsmUrl: 'FTBRSg0052' }, 'user');
+    const suffix = todo.id.slice(-6).toLowerCase();
+    core.items.updateTodo(
+      todo.id,
+      { project: 'FlixTrain', agentBranch: `feature/todo-${suffix}` },
+      'user',
+    );
+    const tfs = new StaticSource('tfs', [
+      pr('near', { title: 'fix(FTBRSg00521): other', meta: { project: 'Flixtrain' } }),
+    ]);
+    await core.sync.run(tfs);
+    expect(core.items.get(todo.id).status).toBe('open'); // another ticket
+
+    // Project spelled differently by TFS, ticket in the title.
+    tfs.snapshot.push(
+      pr('mine', {
+        title: 'feat(FTBRSg0052): Stufe C-N',
+        meta: { project: 'Flixtrain', sourceBranch: 'feature/FTBRSg0052-stufe-c-cn' },
+      }),
+    );
+    await core.sync.run(tfs);
+    expect(core.items.get(todo.id)).toMatchObject({
+      status: 'done',
+      meta: { prItemId: byExt('mine').id },
+    });
+    expect(byExt('mine').bsmUrl).toBe(todo.bsmUrl);
+
+    // A second agent todo of that ticket does not take the same PR.
+    core.items.updateTodo(
+      other.id,
+      { project: 'FlixTrain', agentBranch: 'feature/todo-zzzzzz' },
+      'user',
+    );
+    await core.sync.run(tfs);
+    expect(core.items.get(other.id).status).toBe('open');
+  });
+
   it('inserts new items as open, created by sync', async () => {
     const r = await core.sync.run(github);
     expect(r).toMatchObject({ ok: true, added: 2, updated: 0, closed: 0, reopened: 0 });

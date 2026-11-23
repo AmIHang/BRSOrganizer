@@ -23,7 +23,9 @@ import {
   agentSessionName,
   claudeAgentsCli,
   claudeStopCli,
+  lastSessionIn,
   OWN_WINDOW_MESSAGE,
+  type AgentSession,
   runsInOwnWindow,
   type ListAgentSessions,
   type StopAgentSession,
@@ -118,6 +120,8 @@ export interface PrWorkspaceDeps {
   stopAgent?: StopAgentSession;
   /** Test hook; default `claude agents --json --all`. */
   listAgents?: ListAgentSessions;
+  /** Test hook; default: the newest Claude transcript in a folder (`lastSessionIn`). */
+  lastSessionIn?: (cwd: string) => AgentSession | null;
   /**
    * Where each hand-off's task (auftrag.md, ticket images) goes; the agent reads it again when
    * resumed, so not %TEMP% (Storage Sense). Default: the temp folder (tests).
@@ -681,6 +685,17 @@ export class PrWorkspace {
     }
 
     let path = typeof todo?.meta?.agentWorktree === 'string' ? todo.meta.agentWorktree : null;
+    // The todo's chat ended and dropped out of `claude agents`: resumed from its transcript.
+    if (todo && path && existsSync(path) && (this.deps.lastSessionIn ?? lastSessionIn)(path)) {
+      const session = agentSessionName(todo.id);
+      this.deps.launcher.runScript(
+        title,
+        script,
+        ['-Name', session, '-Path', path],
+        this.accountEnv(),
+      );
+      return { session, started: false };
+    }
     if (!path || !existsSync(path)) {
       const { repo } = this.requireLocal(itemId);
       const local = await localCheckout(repo, ref.id);
@@ -715,7 +730,10 @@ export class PrWorkspace {
       : undefined;
   }
 
-  async handOffTodo(itemId: string, work?: AgentWork): Promise<{
+  async handOffTodo(
+    itemId: string,
+    work?: AgentWork,
+  ): Promise<{
     worktree: string;
     branch: string;
     tickets: TicketStatus[];
@@ -807,7 +825,11 @@ export class PrWorkspace {
 
     const promptFile = join(taskDir, 'auftrag.md');
     // BOM: Windows PowerShell 5.1 (Add-Content in the script) would read it as ANSI otherwise.
-    writeFileSync(promptFile, '﻿' + agentPrompt(todo, project, contents, !!account, work, tfvcFolder ? name : undefined), 'utf8');
+    writeFileSync(
+      promptFile,
+      '﻿' + agentPrompt(todo, project, contents, !!account, work, tfvcFolder ? name : undefined),
+      'utf8',
+    );
     // Hidden and awaited: can take minutes (fetch, worktree checkout, BORA references; claude --bg
     // returns at once), and errors reach the app instead of a console window.
     const run = await this.deps.launcher.runHidden(

@@ -153,7 +153,8 @@ export class SyncEngine {
 
   /**
    * A todo handed to an agent (`meta.agentBranch`) becomes its pull request once the PR shows
-   * up: the PR takes over the todo's tickets (unless it has its own) and the todo is done.
+   * up (its branch, else the one PR with its BSM ticket): the PR takes over the todo's tickets
+   * (unless it has its own) and the todo is done.
    * The branch is dropped from the todo, so reopening it does not adopt the PR again.
    */
   adoptAgentTodos(): string[] {
@@ -165,26 +166,51 @@ export class SyncEngine {
         .all();
     const todos = open('todo').filter((t) => typeof t.meta?.agentBranch === 'string');
     if (!todos.length) return [];
-    const prs = open('pr');
+    // A PR another todo already became is not adopted twice (e.g. two todos of one ticket).
+    const taken = new Set(
+      this.db
+        .select()
+        .from(items)
+        .where(eq(items.type, 'todo'))
+        .all()
+        .map((t) => t.meta?.prItemId),
+    );
+    const prs = open('pr').filter((p) => !taken.has(p.id));
     const changed: string[] = [];
     const now = this.clock.now();
+    const lower = (v: unknown) => (typeof v === 'string' ? v.toLowerCase() : null);
 
     this.db.transaction((tx) => {
       for (const todo of todos) {
         const branch = String(todo.meta!.agentBranch).toLowerCase();
         // The agent renames its branch after its change but keeps the todo's id suffix.
         const suffix = `-${todo.id.slice(-6).toLowerCase()}`;
-        const project = todo.meta!.project;
-        const pr = prs.find((p) => {
-          const source =
-            typeof p.meta?.sourceBranch === 'string' ? p.meta.sourceBranch.toLowerCase() : null;
-          return (
-            source !== null &&
-            (source === branch || source.endsWith(suffix)) &&
-            (typeof project !== 'string' || p.meta?.project === project)
-          );
+        // Project names come from the user and from TFS: "FlixTrain" is "Flixtrain".
+        const project = lower(todo.meta!.project);
+        const candidates = prs.filter(
+          (p) => !taken.has(p.id) && (project === null || lower(p.meta?.project) === project),
+        );
+        const byBranch = candidates.find((p) => {
+          const source = lower(p.meta?.sourceBranch);
+          return source !== null && (source === branch || source.endsWith(suffix));
         });
+        // Else the agent dropped the suffix: the one PR naming the todo's BSM ticket (title or
+        // branch, as the agent is told to), or carrying the same ticket.
+        const key = todo.bsmUrl?.split('/').pop();
+        // Whole key only: FTBRSg0052 is not FTBRSg00521. BSM keys are letters, digits, _ and -.
+        const named =
+          key && /^[A-Za-z0-9_-]+$/.test(key)
+            ? new RegExp(`(^|[^a-z0-9])${key}(?![0-9])`, 'i')
+            : null;
+        const byTicket = candidates.filter(
+          (p) =>
+            (todo.bsmUrl !== null && p.bsmUrl === todo.bsmUrl) ||
+            (named !== null &&
+              (named.test(p.title) || named.test(String(p.meta?.sourceBranch ?? '')))),
+        );
+        const pr = byBranch ?? (byTicket.length === 1 ? byTicket[0] : undefined);
         if (!pr) continue;
+        taken.add(pr.id);
         tx.update(items)
           .set({
             bsmUrl: pr.bsmUrl ?? todo.bsmUrl,
