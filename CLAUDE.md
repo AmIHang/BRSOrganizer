@@ -39,6 +39,9 @@ entfernen, damit die echten Credentials unberührt bleiben.
 - Debug-Builds nutzen das Profil `BRSOrganizer-dev` (Datenordner, Credentials, Port 47822) – nie die echte
   Installation.
 - Externe Texte (PR-Titel, Termine) nur als Text rendern (Svelte-Interpolation), nie `{@html}`.
+- Release-Builds laufen als Administrator (`src-tauri/windows/admin.manifest`, nur bei `PROFILE=release`).
+  Links deshalb nur über `openUrl` aus `src/lib/system.ts` öffnen (Explorer → normaler Browser), nie direkt
+  über `plugin-opener`; Autostart ist eine Aufgabe der Aufgabenplanung (`src-tauri/src/system.rs`).
 - Sidecar-Runtime: `pnpm --filter @brsorganizer/app sidecar`; läuft ein Daemon aus dieser Runtime, sperrt er
   `better_sqlite3.node` – vorher `POST /api/shutdown`.
 

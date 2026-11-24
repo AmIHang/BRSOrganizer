@@ -78,8 +78,13 @@ Eintrag entfernen, z. B. `claude mcp remove amineeded --scope user`.
 
 - **Schließen** blendet das Fenster nur aus. Ein-/Ausblenden mit **Strg+Alt+N** oder Klick aufs Tray-Icon.
 - **Tray-Menü:** Öffnen, Jetzt synchronisieren, Beenden.
+- **Als Administrator:** Die installierte App läuft immer mit Adminrechten. So brauchen die IIS-Schritte
+  (Klonen, App-Pool recyceln, Lokal löschen) keine UAC-Abfrage mehr, und Visual Studio startet für die
+  IIS-Web-Projekte gleich als Admin. Ein manueller Start fragt einmal per UAC. Links (Tickets, Web-Apps) öffnen
+  trotzdem im normalen Browser. Startet ein MCP-Client den Daemon vor der App, läuft er ohne Adminrechte, bis
+  er neu startet.
 - **Autostart:** beim ersten Start eingeschaltet, abschaltbar in den Einstellungen. Die App startet dann
-  unsichtbar im Tray.
+  unsichtbar im Tray, über die Aufgabenplanung (Aufgabe `BRSOrganizer`, beim Anmelden, ohne UAC-Abfrage).
 - **Hintergrunddienst (Daemon):** Die App startet ihn, falls er nicht läuft. Er läuft auch nach dem Beenden der
   App weiter, damit Claude und Copilot ihn über MCP erreichen.
 
@@ -302,7 +307,7 @@ also frei wählbar. Geklont wird nach `<Kunde>\PR<Nr>`.
 
 ### Die Punkte an einem PR
 
-**Vor dem Titel – Klon-Stand** (ein Klick führt die passende Aktion aus):
+**Unter dem PR-Symbol – Klon-Stand** (ein Klick führt die passende Aktion aus):
 
 | Punkt       | Bedeutung                                  | Klick           |
 | ----------- | ------------------------------------------ | --------------- |
@@ -311,9 +316,12 @@ also frei wählbar. Geklont wird nach `<Kunde>\PR<Nr>`.
 | grün        | geklont und aktuell                        | Solution öffnen |
 | grau        | Branch existiert auf dem Server nicht mehr | –               |
 
-**Unter dem PR-Symbol – Web-App (hellblau):** erscheint, sobald der Klon Web-Projekte im IIS hat. Bei einer
+**Vor dem Titel – Web-App (hellblau):** erscheint, sobald der Klon Web-Projekte im IIS hat. Bei einer
 Web-App öffnet ein Klick sie direkt im Browser, bei mehreren kommt eine Auswahl der Pfade (z. B.
 `/CommunityAsset-PR4384/`); geöffnet wird nur die gewählte.
+
+**Unter dem Klon-Stand – ↻ App-Pool recyceln:** startet den IIS-App-Pool `PR<Nr>` des Klons neu (z. B. wenn
+die Web-App nach einem Build alte DLLs hält); ein gestoppter Pool wird gestartet.
 
 Der Klon-Stand wird alle 3 Minuten geprüft (mit `git fetch`), nach jeder Aktion sofort.
 

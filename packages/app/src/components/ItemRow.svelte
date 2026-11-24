@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '../lib/system';
   import { api } from '../lib/api';
   import { formatWhen, whenOf } from '../lib/group';
   import type { CloneSync, Item, MenuEntry } from '../lib/types';

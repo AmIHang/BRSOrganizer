@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { openUrl } from '@tauri-apps/plugin-opener';
+  import { openUrl } from '../lib/system';
   import { onMount } from 'svelte';
   import {
     ignoreOtma,

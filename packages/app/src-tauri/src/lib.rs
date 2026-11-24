@@ -1,9 +1,10 @@
 mod daemon;
+mod system;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
-use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
 
 /// Passed by the autostart entry: start in the tray without showing the window.
@@ -41,6 +42,24 @@ async fn connection(app: AppHandle) -> Result<daemon::Connection, String> {
 #[tauri::command]
 fn mcp_paths(app: AppHandle) -> Option<daemon::McpPaths> {
     daemon::mcp_paths(&app)
+}
+
+/// Autostart is a Task Scheduler entry (see `system`), not the Run key of the autostart plugin.
+#[tauri::command]
+fn autostart_enabled() -> bool {
+    system::autostart_enabled()
+}
+
+#[tauri::command]
+async fn set_autostart(on: bool) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || system::set_autostart(on, HIDDEN_ARG))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    system::open_url(&url)
 }
 
 #[tauri::command]
@@ -107,6 +126,17 @@ pub fn run() {
                 }
             }
 
+            // Before running as administrator, autostart was the Run key, which cannot start an
+            // elevated app: move it to the Task Scheduler. (The plugin only stays for this.)
+            if !cfg!(debug_assertions) && app.autolaunch().is_enabled().unwrap_or(false) {
+                match system::set_autostart(true, HIDDEN_ARG) {
+                    Ok(()) => {
+                        let _ = app.autolaunch().disable();
+                    }
+                    Err(e) => eprintln!("autostart: {e}"),
+                }
+            }
+
             if !std::env::args().any(|a| a == HIDDEN_ARG) {
                 show_main(app.handle());
             }
@@ -127,7 +157,14 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![connection, mcp_paths, hotkey_label])
+        .invoke_handler(tauri::generate_handler![
+            connection,
+            mcp_paths,
+            hotkey_label,
+            autostart_enabled,
+            set_autostart,
+            open_url
+        ])
         .run(tauri::generate_context!())
         .expect("error while running BRSOrganizer");
 }

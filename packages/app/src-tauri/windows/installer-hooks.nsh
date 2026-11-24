@@ -25,4 +25,7 @@
 
 !macro NSIS_HOOK_PREUNINSTALL
   !insertmacro BRS_STOP_PROCESSES
+  ; Autostart entry of the app (Task Scheduler, the app runs as administrator).
+  nsExec::Exec 'schtasks /Delete /TN "BRSOrganizer" /F'
+  Pop $0
 !macroend

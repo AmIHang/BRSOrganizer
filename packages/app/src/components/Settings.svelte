@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
+  import { disable, enable, isEnabled } from '../lib/system';
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import {

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { listen } from '@tauri-apps/api/event';
-  import { openUrl } from '@tauri-apps/plugin-opener';
-  import { enable, isEnabled } from '@tauri-apps/plugin-autostart';
+  import { enable, isEnabled, openUrl } from './lib/system';
   import { onMount } from 'svelte';
   import ItemRow from './components/ItemRow.svelte';
   import CustomerFilter from './components/CustomerFilter.svelte';
