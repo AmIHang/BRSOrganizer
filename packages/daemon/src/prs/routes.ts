@@ -77,6 +77,10 @@ export function prRouter(workspace: PrWorkspace, scheduler: Scheduler): Router {
     res.status(202).json(await workspace.removeLocal(itemId(req)));
   });
 
+  r.post('/:id/recycle', async (req, res) => {
+    res.json(await workspace.recycleAppPool(itemId(req)));
+  });
+
   r.post('/:id/open', async (req, res) => {
     const { target } = body(z.object({ target: z.enum(['solution', 'folder']) }), req.body);
     await workspace.open(itemId(req), target);

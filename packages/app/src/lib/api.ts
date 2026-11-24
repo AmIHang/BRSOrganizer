@@ -156,6 +156,8 @@ export const api = {
         'POST',
         `/api/prs/${id}/remove-local`,
       ),
+    /** Recycles the clone's IIS app pool (UAC); resolves once done. */
+    recycleAppPool: (id: string) => request<{ pool: string }>('POST', `/api/prs/${id}/recycle`),
     open: (id: string, target: 'solution' | 'folder') =>
       request<void>('POST', `/api/prs/${id}/open`, { target }),
     complete: (id: string, approve: boolean) =>

@@ -139,6 +139,25 @@
     webUrls.map((url) => ({ label: webPath(url), title: url, onclick: () => void openUrl(url) })),
   );
 
+  /** Only a clone with web apps has an app pool (PR<Nr>). */
+  const canRecycle = $derived(
+    manageable && item.status === 'open' && sync?.cloned === true && webUrls.length > 0,
+  );
+
+  let recycling = $state(false);
+  async function recycleAppPool() {
+    if (recycling) return;
+    recycling = true;
+    try {
+      const r = await api.pr.recycleAppPool(item.id);
+      flash(`App-Pool ${r.pool} recycelt.`);
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e), true);
+    } finally {
+      recycling = false;
+    }
+  }
+
   async function openSolution() {
     try {
       await api.pr.open(item.id, 'solution');
@@ -282,22 +301,8 @@
       <span class="kind" title={item.type === 'pr' ? 'Pull Request' : 'Termin'}>
         {item.type === 'pr' ? '⇄' : '◷'}
       </span>
-      <!-- Web app: under the PR icon (not on hold: the row stays one line high). -->
-      {#if webUrls.length && !held}
-        <RowMenu
-          entries={webEntries}
-          title={webUrls.length === 1 ? `Web-App öffnen: ${webUrls[0]}` : `Web-App wählen (${webUrls.length})`}
-          align="left"
-          dot
-        />
-      {/if}
-    </div>
-  {/if}
-
-  <div class="body">
-    <!-- Clone/update dot before the title, as its own column: wrapped title lines stay aligned with the text. -->
-    <div class="title" class:with-dot={!!(manageable && sync)}>
-      {#if manageable && sync}
+      <!-- Clone/update dot under the PR icon (not on hold: the row stays one line high). -->
+      {#if manageable && sync && !held}
         {#if !sync.cloned}
           <button
             class="dot clone"
@@ -324,6 +329,45 @@
             onclick={openSolution}
           ></button>
         {/if}
+      {/if}
+      <!-- Below it: recycle the clone's app pool. -->
+      {#if canRecycle && !held}
+        <button
+          class="recycle"
+          class:busy={recycling}
+          disabled={recycling}
+          title={recycling ? 'App-Pool wird recycelt …' : 'IIS-App-Pool dieses Klons recyceln (Adminrechte, UAC)'}
+          aria-label="App-Pool recyceln"
+          onclick={() => void recycleAppPool()}
+        >
+          <!-- Drawn, not a glyph: font metrics put glyphs off-center. -->
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path
+              d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      {/if}
+    </div>
+  {/if}
+
+  <div class="body">
+    <!-- Web app dot before the title, as its own column: wrapped title lines stay aligned with the text. -->
+    <div class="title" class:with-dot={webUrls.length > 0}>
+      {#if webUrls.length}
+        <span class="dot-slot">
+          <RowMenu
+            entries={webEntries}
+            title={webUrls.length === 1 ? `Web-App öffnen: ${webUrls[0]}` : `Web-App wählen (${webUrls.length})`}
+            align="left"
+            dot
+          />
+        </span>
       {/if}
       <span class="title-text">
         {#if item.link}
@@ -599,6 +643,32 @@
     filter: brightness(1.1);
     text-decoration: underline;
   }
+  /* Web app dot before the title. Flex, not line-height 0: the centering below needs 1lh. */
+  .dot-slot {
+    display: flex;
+  }
+  .recycle {
+    all: unset;
+    display: flex;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 50%;
+  }
+  .recycle:hover:not(:disabled) {
+    color: #54aeff;
+  }
+  .recycle:focus-visible {
+    outline: 2px solid var(--accent);
+  }
+  .recycle.busy {
+    cursor: default;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
   /* Left column: type icon, below it the local-clone status dot (PRs only). */
   .lead {
     width: 16px;
@@ -680,7 +750,7 @@
     gap: 6px;
   }
   /* Centered on the first title line (12px dot). */
-  .title.with-dot > .dot {
+  .title.with-dot > .dot-slot {
     flex-shrink: 0;
     margin-top: calc((1lh - 12px) / 2);
   }

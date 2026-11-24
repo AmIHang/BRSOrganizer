@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import {
   ForbiddenOperationError,
   NotFoundError,
@@ -989,6 +989,29 @@ export class PrWorkspace {
       `Klon ${checkout.clonePath} und App-Pool PR${ref.id} werden gelöscht (UAC bestätigen).`,
     );
     return done;
+  }
+
+  /**
+   * Recycles the checkout's IIS app pool (`PR<id>`, UAC), e.g. after a build the running web app
+   * does not pick up. Hidden and awaited, so the outcome reaches the app.
+   */
+  async recycleAppPool(itemId: string): Promise<{ pool: string }> {
+    const { ref, repo } = this.requireLocal(itemId);
+    const local = await localCheckout(repo, ref.id);
+    if (!local.cloned) throw new NotFoundError(`PR ${ref.id} is not cloned yet`);
+    if (!local.managed) {
+      throw new ForbiddenOperationError(`${local.clonePath} was not created by the clone script`);
+    }
+    const pool = basename(local.clonePath);
+    const run = await this.deps.launcher.runHidden(this.script('Restart-PrAppPool.ps1'), [
+      '-Pool',
+      pool,
+    ]);
+    if (run.code !== 0) {
+      const reason = /^FEHLER: (.+)$/m.exec(run.stdout)?.[1]?.trim() || `Exit-Code ${run.code}`;
+      throw new HttpError(502, 'iis', `App-Pool ${pool} nicht recycelt: ${reason}`);
+    }
+    return { pool };
   }
 
   async open(itemId: string, target: 'solution' | 'folder'): Promise<void> {

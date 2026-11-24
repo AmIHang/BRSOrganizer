@@ -831,6 +831,35 @@ describe('PR workspace via REST', () => {
     ]);
   });
 
+  it('recycles the app pool of a clone made by the script', async () => {
+    h.core.settings.update({ workspace: { projectsRoot: root } });
+    expect((await call('POST', '/recycle')).status).toBe(404); // not cloned
+
+    makeRepo(join(root, 'Community', 'PR4393'), REPO_URL, false);
+    expect((await call('POST', '/recycle')).status).toBe(409); // foreign folder
+
+    writeFileSync(join(root, 'Community', 'PR4393', '.git', 'clone-branch'), 'x');
+    const ok = await call('POST', '/recycle');
+    expect(ok.status).toBe(200);
+    expect(ok.json<{ pool: string }>()).toEqual({ pool: 'PR4393' });
+    expect(launched).toEqual([
+      {
+        kind: 'script',
+        script: join('C:\\app\\runtime\\scripts\\pr', 'Restart-PrAppPool.ps1'),
+        args: ['-Pool', 'PR4393'],
+      },
+    ]);
+
+    hidden = {
+      code: 1,
+      stdout: 'FEHLER: Der Vorgang wurde durch den Benutzer abgebrochen\n',
+      stderr: '',
+    };
+    const failed = await call('POST', '/recycle');
+    expect(failed.status).toBe(502);
+    expect(failed.body).toContain('Der Vorgang wurde durch den Benutzer abgebrochen');
+  });
+
   it('removes checkout, app pool and agent worktree once the PR leaves the list', async () => {
     h.core.settings.update({ workspace: { projectsRoot: root } });
     const pr = prId();

@@ -6,12 +6,13 @@
     -Action Setup : App-Pool <Pool> anlegen (Identitaet = Benutzer/Passwort eines vorhandenen Pools, z.B. dem
                     Pool der Original-App) und die Web-Apps aus -AppsFile (JSON) unter "Default Web Site" anlegen.
     -Action Remove: Alle Apps im App-Pool <Pool> und den Pool selbst loeschen, optional danach -DeletePath loeschen.
+    -Action Recycle: App-Pool <Pool> recyceln (neuer Worker-Prozess, z.B. nach einem Build).
 
     Das Passwort wird ueber Microsoft.Web.Administration direkt von Pool zu Pool kopiert - es wird weder
     angezeigt noch auf der Kommandozeile uebergeben.
 #>
 param(
-    [Parameter(Mandatory)][ValidateSet('Setup', 'Remove')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('Setup', 'Remove', 'Recycle')][string]$Action,
     [Parameter(Mandatory)][string]$Pool,
     [string]$AppsFile,
     [string]$DeletePath,
@@ -129,6 +130,13 @@ try {
             $app.ApplicationPoolName = $Pool
         }
         $sm.CommitChanges()
+    }
+
+    if ($Action -eq 'Recycle') {
+        $appPool = $sm.ApplicationPools[$Pool]
+        if (-not $appPool) { throw "App-Pool $Pool existiert nicht." }
+        if ("$($appPool.State)" -eq 'Started') { $null = $appPool.Recycle(); Write-Host "App-Pool $Pool recycelt" }
+        else { $was = "$($appPool.State)"; $null = $appPool.Start(); Write-Host "App-Pool $Pool gestartet (war $was)" }
     }
 
     if ($Action -eq 'Remove') {

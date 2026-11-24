@@ -6,7 +6,8 @@
 | Skript                      | Aufgabe                                                                                                                                                                                  |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Clone-Branch.ps1`          | PR-Branch nach `<Projektordner>\<Kunde>\PR<Nr>` klonen bzw. aktualisieren, IIS, BORA-Referenzen, NuGet, Build                                                                            |
-| `PrIis.ps1`                 | IIS-App-Pool und Web-Apps anlegen/entfernen (Adminrechte, UAC)                                                                                                                           |
+| `PrIis.ps1`                 | IIS-App-Pool und Web-Apps anlegen/entfernen, App-Pool recyceln (Adminrechte, UAC)                                                                                                        |
+| `Restart-PrAppPool.ps1`     | App-Pool `PR<Nr>` eines Klons recyceln (startet `PrIis.ps1 -Action Recycle` mit UAC)                                                                                                     |
 | `Set-IisUrls.ps1`           | IIS-URLs der Web-Projekte mit Suffix `-<Name>` (von Clone-Branch und Start-TodoAgent genutzt)                                                                                            |
 | `Update-BoraReferences.ps1` | BORA-Modulreferenzen mit `_refcache` holen (von Clone-Branch und Start-TodoAgent genutzt)                                                                                                |
 | `Remove-PrClone.ps1`        | Klon samt App-Pool löschen (nur Ordner mit Markierung `.git\clone-branch`)                                                                                                               |
