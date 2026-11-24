@@ -126,6 +126,7 @@
     ticket={takingOver}
     {projects}
     {mapping}
+    {items}
     onclose={() => (takingOver = null)}
     oncreated={onchanged}
   />

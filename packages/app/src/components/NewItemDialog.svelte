@@ -1,11 +1,13 @@
 <script lang="ts">
-  import type { NewItem } from '../lib/types';
+  import type { Item, NewItem } from '../lib/types';
   import { findOtma, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
+  import { openPrsForTicket } from '../lib/tickets';
 
   let {
     open,
     project = null,
     mapping,
+    items,
     oncreate,
     onclose,
   }: {
@@ -14,6 +16,8 @@
     project?: string | null;
     /** BSM customer / OTMA project → project: linked tickets suggest their project. */
     mapping: ProjectMaps;
+    /** Open items: a ticket whose PR is already open gets a warning. */
+    items: Item[];
     oncreate: (item: NewItem) => Promise<void>;
     onclose: () => void;
   } = $props();
@@ -71,6 +75,10 @@
   $effect(() => {
     takeOffer = !!offer && !project;
   });
+
+  const existingPrs = $derived(
+    type === 'todo' ? openPrsForTicket(items, bsm, findOtma(otma)?.url ?? otma) : [],
+  );
 
   // Todos: a title or a ticket (the daemon then takes the ticket's title); events: title and start.
   const canSubmit = $derived(
@@ -202,6 +210,12 @@
       {/if}
     {/if}
 
+    {#if existingPrs.length}
+      <p class="warn" role="alert">
+        Für dieses Ticket gibt es schon einen offenen PR:
+        {existingPrs.map((p) => `#${p.meta?.number ?? '?'} ${p.title}`).join(', ')}
+      </p>
+    {/if}
     {#if error}<p class="error">{error}</p>{/if}
 
     <div class="buttons">
@@ -304,5 +318,11 @@
   .error {
     margin: 0;
     font-size: 12px;
+  }
+  .warn {
+    margin: 0;
+    font-size: 12px;
+    color: #d29922;
+    overflow-wrap: anywhere;
   }
 </style>

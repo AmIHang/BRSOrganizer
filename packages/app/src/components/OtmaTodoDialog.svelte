@@ -2,12 +2,14 @@
   import { untrack } from 'svelte';
   import { agentModeCreated, startHandOff } from '../lib/handoff.svelte';
   import { otmaToTodo, suggestProject, type ProjectMaps } from '../lib/otma.svelte';
-  import type { OtmaTicket } from '../lib/types';
+  import { openPrsForTicket } from '../lib/tickets';
+  import type { Item, OtmaTicket } from '../lib/types';
 
   let {
     ticket,
     projects,
     mapping,
+    items,
     onclose,
     oncreated,
   }: {
@@ -16,9 +18,13 @@
     projects: string[];
     /** BSM customer / OTMA project → customer folder. */
     mapping: ProjectMaps;
+    /** Open items: a ticket whose PR is already open gets a warning. */
+    items: Item[];
     onclose: () => void;
     oncreated: () => void;
   } = $props();
+
+  const existingPrs = $derived(openPrsForTicket(items, ticket.bsm, ticket.url));
 
   let dialog = $state<HTMLDialogElement | null>(null);
   // Preselected from the mappings; a mapped folder that is gone stays selectable.
@@ -85,6 +91,12 @@
         {/each}
       </select>
     </label>
+    {#if existingPrs.length}
+      <p class="warn" role="alert">
+        Für dieses Ticket gibt es schon einen offenen PR:
+        {existingPrs.map((p) => `#${p.meta?.number ?? '?'} ${p.title}`).join(', ')}
+      </p>
+    {/if}
     {#if error}<p class="error">{error}</p>{/if}
     <div class="buttons">
       <button type="button" onclick={onclose}>Abbrechen</button>
@@ -142,6 +154,12 @@
   .error {
     margin: 0;
     font-size: 12px;
+  }
+  .warn {
+    margin: 0;
+    font-size: 12px;
+    color: #d29922;
+    overflow-wrap: anywhere;
   }
   .hint {
     margin: 0;

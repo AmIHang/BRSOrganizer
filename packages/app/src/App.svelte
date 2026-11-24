@@ -406,6 +406,7 @@
     open={creating}
     project={creatingProject}
     mapping={projectMaps}
+    {items}
     oncreate={createItem}
     onclose={() => {
       creating = false;
