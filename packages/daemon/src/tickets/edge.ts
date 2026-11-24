@@ -31,7 +31,9 @@ function killEdge(profileDir: string): Promise<void> {
   const script =
     'Get-CimInstance Win32_Process -Filter "Name=\'msedge.exe\'" | ' +
     'Where-Object { $_.CommandLine -and $_.CommandLine.Contains($env:BRS_EDGE_PROFILE) } | ' +
-    'ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }';
+    'ForEach-Object { Stop-Process -Id $_.ProcessId -Force -PassThru -ErrorAction SilentlyContinue } | ' +
+    // Stop-Process returns before the process is gone; the profile lock is freed only then.
+    'Wait-Process -Timeout 15 -ErrorAction SilentlyContinue';
   return new Promise((resolve) =>
     execFile(
       'powershell.exe',
@@ -109,18 +111,20 @@ export function edgeTicketSessions(options: EdgeBsmOptions): { bsm: BsmSession; 
         headless,
         ...(headless ? {} : { viewport: null }),
       });
-    let ctx: BrowserContext;
-    try {
-      ctx = await open();
-    } catch (err) {
-      // A leftover Edge still holds the profile: one that was still shutting down after a hung
-      // close, or one of a daemon that was killed. Runs are serialized, so it is never in use.
-      if (!(err instanceof Error && /ProcessSingleton|already in use/i.test(err.message)))
-        throw err;
-      log('Edge profile still in use, ending the leftover Edge');
-      await killEdge(options.profileDir);
-      await sleep(1_000);
-      ctx = await open();
+    let ctx: BrowserContext | undefined;
+    // A leftover Edge still holds the profile: one that was still shutting down after a hung
+    // close, or one of a daemon that was killed. Runs are serialized, so it is never in use.
+    // After a hung close the lock was seen to outlive one kill: retry with growing pauses (~15 s).
+    for (let attempt = 0; !ctx; attempt++) {
+      try {
+        ctx = await open();
+      } catch (err) {
+        const locked = err instanceof Error && /ProcessSingleton|already in use/i.test(err.message);
+        if (!locked || attempt === 3) throw err;
+        log('Edge profile still in use, ending the leftover Edge', { attempt });
+        await killEdge(options.profileDir);
+        await sleep(1_000 * 2 ** attempt);
+      }
     }
     const now = Date.now() / 1000;
     const valid = sessionCookies.filter((c) => c.expires === -1 || c.expires > now);
