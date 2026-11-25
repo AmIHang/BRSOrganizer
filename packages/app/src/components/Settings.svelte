@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { disable, enable, isEnabled } from '../lib/system';
+  import { applyTheme, savedTheme, type Theme } from '../lib/theme';
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import {
@@ -634,6 +635,17 @@
       <label class="check">
         <input type="checkbox" checked={autostart} onchange={toggleAutostart} />
         Mit Windows starten (im Tray)
+      </label>
+      <label class="inline">
+        Design
+        <select
+          value={savedTheme()}
+          onchange={(e) => applyTheme(e.currentTarget.value as Theme)}
+        >
+          <option value="system">System</option>
+          <option value="light">Hell</option>
+          <option value="dark">Dunkel</option>
+        </select>
       </label>
       {#if hotkey}<p class="muted">Ein-/Ausblenden: <kbd>{hotkey}</kbd></p>{/if}
     </section>

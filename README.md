@@ -483,7 +483,7 @@ Windows-Benachrichtigungen gibt es für:
 | **BSM/OTMA-Account**          | ein Login für beide Systeme                                                                                |
 | **OTMA-Tickets**              | Tab ein/aus; alle ignorieren / wieder anzeigen; Zuordnungen BSM-Kunde → Projekt und OTMA-Projekt → Projekt |
 | **PR-Mails (Outlook)**        | Ersatzquelle für PRs: Ordner, Zeitraum in Tagen                                                            |
-| **Allgemein**                 | Sync-Intervall in Minuten; mit Windows starten; Tastenkürzel                                               |
+| **Allgemein**                 | Sync-Intervall in Minuten; mit Windows starten; Design (System, Hell, Dunkel); Tastenkürzel                |
 | **Letzte Synchronisierungen** | die letzten Läufe je Quelle mit Ergebnis oder Fehler                                                       |
 | **MCP für Claude & Copilot**  | fertige Befehle zum Kopieren                                                                               |
 
